@@ -10,11 +10,11 @@ const RESUBSCRIBED = { endpoint: "E3", keys: { p256dh: "p3", auth: "a3" } };
 
 // load runs sw.js against fakes. The fake server answers putStatus to
 // PUT /v1/subscription and the key "PK" to GET /v1/vapid.
-function load({ putStatus = 204, windows = [] } = {}) {
+function load({ putStatus = 204, windows = [], search = "?server=" + encodeURIComponent("https://gnotif.example") } = {}) {
   const handlers = {};
   const calls = { show: [], open: [], fetch: [], subscribe: [] };
   const self = {
-    location: new URL(`${ORIGIN}/sw.js?server=${encodeURIComponent("https://gnotif.example")}`),
+    location: new URL(`${ORIGIN}/sw.js${search}`),
     registration: {
       showNotification: async (...args) => calls.show.push(args),
       pushManager: {
@@ -149,4 +149,10 @@ test("pushsubscriptionchange fails when the server refuses the new subscription"
   const { handlers } = load({ putStatus: 400 });
   const json = { endpoint: "E2", keys: { p256dh: "p", auth: "a" } };
   await assert.rejects(dispatch(handlers.pushsubscriptionchange, { newSubscription: { toJSON: () => json } }));
+});
+
+test("pushsubscriptionchange fails without a server and makes no request", async () => {
+  const { handlers, calls } = load({ search: "" });
+  await assert.rejects(dispatch(handlers.pushsubscriptionchange, { newSubscription: null, oldSubscription: null }), /server/);
+  assert.equal(calls.fetch.length, 0);
 });

@@ -1,6 +1,21 @@
 // gnotif browser client: subscribes this browser to a gnotif server's
 // pushes and sets which triggers it hears about.
 
+/**
+ * A trigger as GET /v1/triggers returns it.
+ * @typedef {object} Trigger
+ * @property {string} id
+ * @property {string} target realm path the event comes from
+ * @property {string} event
+ * @property {string} filter comma-separated key=value pairs, "" for none
+ * @property {string} param name of the parameter a user opts into, "" for none
+ * @property {string} title
+ * @property {string} body
+ * @property {string} link
+ * @property {string} declarer address that declared the trigger
+ * @property {boolean} verified
+ */
+
 export class GnotifError extends Error {
   /**
    * @param {"unsupported" | "denied" | "inactive" | "server"} code
@@ -51,9 +66,9 @@ export class Gnotif {
     this.#serviceWorker = serviceWorker;
   }
 
-  /** @returns {Promise<any>} the triggers the server offers */
+  /** @returns {Promise<Trigger[]>} the triggers the server offers */
   async triggers() {
-    return this.#request("GET", "/v1/triggers");
+    return /** @type {Trigger[]} */ (await this.#request("GET", "/v1/triggers"));
   }
 
   /**
@@ -70,7 +85,7 @@ export class Gnotif {
     }
     await navigator.serviceWorker.register(`${this.#serviceWorker}?server=${encodeURIComponent(this.#server)}`);
     const reg = await navigator.serviceWorker.ready;
-    const { publicKey } = await this.#request("GET", "/v1/vapid");
+    const { publicKey } = /** @type {{ publicKey: string }} */ (await this.#request("GET", "/v1/vapid"));
     const key = base64UrlToBytes(publicKey);
     let sub = await reg.pushManager.getSubscription();
     if (sub && !sameKey(sub.options.applicationServerKey, key)) {
@@ -119,14 +134,23 @@ export class Gnotif {
     if (!("Notification" in globalThis) || Notification.permission !== "granted") {
       return false;
     }
-    const reg = await navigator.serviceWorker?.ready;
-    return (await reg?.pushManager.getSubscription()) != null;
+    return (await this.#find()) != null;
+  }
+
+  // getRegistration resolves undefined when nothing is registered, where
+  // serviceWorker.ready would never settle.
+  /** @returns {Promise<PushSubscription | null>} */
+  async #find() {
+    if (!("PushManager" in globalThis)) {
+      return null;
+    }
+    const reg = await navigator.serviceWorker?.getRegistration();
+    return (await reg?.pushManager.getSubscription()) ?? null;
   }
 
   /** @returns {Promise<PushSubscription>} */
   async #subscription() {
-    const reg = await navigator.serviceWorker?.ready;
-    const sub = await reg?.pushManager.getSubscription();
+    const sub = await this.#find();
     if (!sub) {
       throw new GnotifError("inactive", "Notifications are not enabled in this browser.");
     }
@@ -137,7 +161,7 @@ export class Gnotif {
    * @param {string} method
    * @param {string} path
    * @param {unknown} [body] sent as JSON
-   * @returns {Promise<any>} the decoded JSON answer, null on 204
+   * @returns {Promise<unknown>} the decoded JSON answer, null on 204
    */
   async #request(method, path, body) {
     /** @type {RequestInit} */

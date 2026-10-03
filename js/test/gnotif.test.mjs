@@ -42,9 +42,7 @@ test("enable throws denied when permission is refused", async (t) => {
 
 test("setOptins sends the endpoint and opt-ins, and surfaces server errors", async (t) => {
   const subscription = { endpoint: "E" };
-  t.after(stubGlobal("navigator", {
-    serviceWorker: { ready: Promise.resolve({ pushManager: { getSubscription: async () => subscription } }) },
-  }));
+  stubBrowser(t, { permission: "granted", subscription });
   const requests = [];
   let answer = { ok: true, status: 204, json: async () => null };
   t.after(stubGlobal("fetch", async (url, init) => {
@@ -65,10 +63,18 @@ test("setOptins sends the endpoint and opt-ins, and surfaces server errors", asy
     err instanceof GnotifError && err.code === "server" && err.message === "unknown trigger");
 });
 
-function stubBrowser(t, { permission, subscription }) {
+// stubBrowser fakes a page that is controlled by a registration holding
+// subscription. Without one, getRegistration resolves undefined and ready
+// never settles, as in a browser.
+function stubBrowser(t, { permission, subscription, registered = true }) {
+  const reg = { pushManager: { getSubscription: async () => subscription } };
   t.after(stubGlobal("navigator", {
-    serviceWorker: { ready: Promise.resolve({ pushManager: { getSubscription: async () => subscription } }) },
+    serviceWorker: {
+      getRegistration: async () => (registered ? reg : undefined),
+      ready: registered ? Promise.resolve(reg) : new Promise(() => {}),
+    },
   }));
+  t.after(stubGlobal("PushManager", function PushManager() {}));
   t.after(stubGlobal("Notification", { permission }));
 }
 
@@ -102,4 +108,31 @@ test("disable unsubscribes the browser even when the server answers 404", async 
   assert.ok(unsubscribed);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].init.method, "DELETE");
+});
+
+test("enabled is false when no service worker registration covers the page", async (t) => {
+  stubBrowser(t, { permission: "granted", subscription: null, registered: false });
+  assert.equal(await new Gnotif({ server: SERVER }).enabled(), false);
+});
+
+test("disable and setOptins reject as inactive when no registration covers the page", async (t) => {
+  stubBrowser(t, { permission: "granted", subscription: null, registered: false });
+  const g = new Gnotif({ server: SERVER });
+  const inactive = (err) => err instanceof GnotifError && err.code === "inactive";
+  await assert.rejects(g.disable(), inactive);
+  await assert.rejects(g.setOptins([]), inactive);
+});
+
+test("enabled is false without the Push API", async (t) => {
+  stubBrowser(t, { permission: "granted", subscription: { endpoint: "E" } });
+  t.after(stubGlobal("PushManager", undefined));
+  delete globalThis.PushManager;
+  assert.equal(await new Gnotif({ server: SERVER }).enabled(), false);
+});
+
+test("triggers returns the server's list", async (t) => {
+  const list = [{ id: "t1", target: "gno.land/r/demo/game", event: "TurnPlayed", filter: "", param: "",
+    title: "Your turn", body: "", link: "/", declarer: "g1game", verified: true }];
+  t.after(stubGlobal("fetch", async () => ({ ok: true, status: 200, json: async () => list })));
+  assert.deepEqual(await new Gnotif({ server: SERVER }).triggers(), list);
 });
