@@ -77,4 +77,4 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - run: make e2e GNO_CHECKOUT=https://github.com/gnolang/gno
+      - run: make e2e

@@ -6,7 +6,7 @@ GNO_ENV = GNOROOT=$(GNOROOT_DIR) GNOHOME=$(GNO_STORE)/gnohome
 ONYX_RPC := https://rpc.onyx.testnets.gno.land:443
 GNO_TEST_FLAGS ?=
 TOOLS := .tools
-GNO_CHECKOUT ?= $(HOME)/code/gnolang/gno
+GNO_CHECKOUT ?= https://github.com/gnolang/gno
 GNO_REF := v1.5.0
 TX_INDEXER_VERSION := v1.3.0
 NS ?=
@@ -75,4 +75,4 @@ clean: ## Remove built tools, deploy copies and the demo's copied scripts
 	rm -f $(DEMO_JS)
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## / : /'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## / : /'

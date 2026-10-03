@@ -177,7 +177,7 @@ Run the chain, tx-indexer, gnotifd and the demo on your machine, each in its own
 1. Build gnodev, gnokey and tx-indexer into `.tools/`:
 
    ```sh
-   make tools GNO_CHECKOUT=https://github.com/gnolang/gno
+   make tools
    ```
 
 2. Make two player keys in a throwaway keybase. gnokey asks for a passphrase for each:

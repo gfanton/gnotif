@@ -110,7 +110,7 @@ make gno-deps
 make test
 ```
 
-`make gno-deps` fetches the realms' dependencies from onyx, once. `make e2e GNO_CHECKOUT=https://github.com/gnolang/gno` runs the realms, tx-indexer and gnotifd together on a local chain. `make help` lists every target.
+`make gno-deps` fetches the realms' dependencies from onyx, once. `make e2e` runs the realms, tx-indexer and gnotifd together on a local chain. `make help` lists every target.
 
 ## Status
 
