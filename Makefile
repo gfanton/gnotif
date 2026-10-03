@@ -11,8 +11,9 @@ GNO_REF := v1.5.0
 TX_INDEXER_VERSION := v1.3.0
 NS ?=
 REALMS := gnotif/v0 pingpong/v0
+DEMO_JS := demo/gnotif.js demo/sw.js
 
-.PHONY: all test gno-test gno-lint gno-deps go-test js-test tools e2e deploy-pkgs clean help
+.PHONY: all test gno-test gno-lint gno-deps go-test js-test tools e2e demo deploy-pkgs clean help
 
 all: test ## Run every test (default)
 
@@ -52,6 +53,12 @@ tools: $(TOOLS)/gnodev $(TOOLS)/gnokey $(TOOLS)/tx-indexer ## Build gnodev, gnok
 e2e: tools ## Run the local end-to-end test
 	GNOTIF_TOOLS=$(abspath $(TOOLS)) GNOTIF_REALMS=$(abspath gno/r) go test -tags e2e -count=1 -v ./e2e/
 
+$(DEMO_JS): demo/%.js: js/src/%.js
+	cp $< $@
+
+demo: $(DEMO_JS) ## Serve the demo dapp on http://localhost:3000
+	python3 -m http.server 3000 --bind 127.0.0.1 --directory demo
+
 deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>, without tests
 	test -n "$(NS)" || { echo "deploy-pkgs: set NS=gno.land/r/<namespace>" >&2; exit 1; }
 	rm -rf $(TOOLS)/deploy
@@ -63,8 +70,9 @@ deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>
 		sed 's|gno.land/r/dev|$(NS)|g' "$$f" > "$$f.tmp" && mv "$$f.tmp" "$$f" || exit 1; \
 	done
 
-clean: ## Remove built tools and deploy copies
+clean: ## Remove built tools, deploy copies and the demo's copied scripts
 	rm -rf $(TOOLS)
+	rm -f $(DEMO_JS)
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## / : /'
