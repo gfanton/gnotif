@@ -1,0 +1,9 @@
+{"data":{
+  "latestBlockHeight":15,
+  "getTransactions":[
+    {"hash":"aGFzaDE=","block_height":11,"index":0,"response":{"events":[
+      {"__typename":"GnoEvent","type":"TriggerDeclared","pkg_path":"gno.land/r/dev/gnotif/v0","attrs":[{"key":"id","value":"0000001"}]}]}},
+    {"hash":"aGFzaDI=","block_height":12,"index":1,"response":{"events":[
+      {"__typename":"StorageDepositEvent"},
+      {"__typename":"GnoEvent","type":"TurnPlayed","pkg_path":"gno.land/r/demo/game","attrs":[{"key":"game","value":"7"},{"key":"next","value":"g1bob"}]}]}}],
+  "getBlocks":[{"height":11,"time":"2026-10-01T12:00:00Z"},{"height":12,"time":"2026-10-01T12:00:05.5Z"}]}}
