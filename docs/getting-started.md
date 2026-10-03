@@ -73,7 +73,7 @@ The verified mark means "declared by the realm at the target path". It holds bec
 
 | Field | Meaning | Rule |
 |---|---|---|
-| `target` | package path of the realm whose events the trigger watches | starts with `gno.land/r/`, at most 256 bytes |
+| `target` | package path of the realm whose events the trigger watches | starts with `gno.land/r/`, followed only by `a-z 0-9 _ - /`; at most 256 bytes |
 | `event` | event type to match | 1 to 64 bytes of `A-Z a-z 0-9 _` |
 | `filter` | fixed `key=value` pairs the event must carry, comma-separated; empty for none | up to 8 pairs; each key 1 to 64 bytes of `A-Z a-z 0-9 _`; each value 1 to 64 bytes without `=` or `,` |
 | `param` | attribute whose value a browser opts in with; empty notifies every browser that opted in | empty, or 1 to 64 bytes of `A-Z a-z 0-9 _` |
@@ -83,7 +83,7 @@ The verified mark means "declared by the realm at the target path". It holds bec
 
 `Declare` panics on the first field that breaks its rule, which reverts the transaction.
 
-Names are limited to identifier characters so that a declarer cannot make a rendered trigger imitate the verified mark. The link is a path because anyone can declare a trigger on any realm: a full URL would let a stranger send a dapp's users to another site. A path always resolves against the origin of the dapp whose page subscribed the browser.
+Names are limited to identifier characters, and the target to the characters of a realm path, so that a declarer cannot make a rendered trigger imitate the verified mark. The link is a path because anyone can declare a trigger on any realm: a full URL would let a stranger send a dapp's users to another site. A path always resolves against the origin of the dapp whose page subscribed the browser.
 
 ### Templates
 

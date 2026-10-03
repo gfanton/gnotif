@@ -19,7 +19,7 @@ gnotifd applies these events only when they come from the package path given wit
 
 The mark rests on the chain refusing deploys under a namespace to anyone but its owner. On onyx, a key deploys under its own address, `gno.land/r/<address>/...`, or under a name it registered. On a chain without that rule, whoever deploys a realm at a path earns the mark for that path.
 
-Anyone can declare a trigger without the mark, on any realm. The registry bounds what such a trigger can do: its names are identifiers, so its rendered text cannot imitate the mark; its link is a path on the dapp's own origin; and the registry's pages sanitize the text a declarer supplied. A dapp's page decides which triggers it offers, usually its own verified ones.
+Anyone can declare a trigger without the mark, on any realm. The registry bounds what such a trigger can do: its names are identifiers and its target holds only the characters of a realm path, so its rendered text cannot imitate the mark; its link is a path on the dapp's own origin; and the registry's pages sanitize the text a declarer supplied. A dapp's page decides which triggers it offers, usually its own verified ones.
 
 ## The watch window
 

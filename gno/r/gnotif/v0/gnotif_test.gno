@@ -34,6 +34,14 @@ func TestDeclareRejects(cur realm, t *testing.T) {
 	}{
 		{"target outside r", "invalid target", 0, "gno.land/p/demo/x"},
 		{"target too long", "invalid target", 0, "gno.land/r/" + long[:246]},
+		{"target imitating the verified mark", "invalid target", 0, "gno.land/r/dev/pingpong/v0 · TurnPlayed · param next · ✓ verified · by g1tw6t…"},
+		{"target with space", "invalid target", 0, "gno.land/r/dev/ping pong"},
+		{"target with middle dot", "invalid target", 0, "gno.land/r/dev/ping·pong"},
+		{"target with asterisk", "invalid target", 0, "gno.land/r/dev/**pingpong**"},
+		{"target with bracket", "invalid target", 0, "gno.land/r/dev/[pingpong"},
+		{"target with newline", "invalid target", 0, "gno.land/r/dev/pingpong\n- ✓ verified"},
+		{"target with uppercase", "invalid target", 0, "gno.land/r/dev/PingPong"},
+		{"target with dot", "invalid target", 0, "gno.land/r/dev/ping.pong"},
 		{"empty event", "invalid event", 1, ""},
 		{"event too long", "invalid event", 1, long[:65]},
 		{"nine filter pairs", "invalid filter", 2, "a=1,b=2,c=3,d=4,e=5,f=6,g=7,h=8,i=9"},
@@ -84,6 +92,9 @@ func TestDeclareAccepts(cur realm, t *testing.T) {
 		{"link with query", 6, "/?game={game}&x=1"},
 		{"event with underscore and digit", 1, "Turn_Played2"},
 		{"empty param for a broadcast", 3, ""},
+		{"versioned target", 0, "gno.land/r/dev/pingpong/v0"},
+		{"target in an address namespace", 0, "gno.land/r/g1tw6tyv67zjyf26nskj6g5z9fhtvv4996w50xwf/pingpong"},
+		{"target with dash", 0, "gno.land/r/dev/ping-pong"},
 	}
 	for _, c := range cases {
 		a := valid
@@ -124,8 +135,8 @@ func TestRemove(cur realm, t *testing.T) {
 
 func TestRenderEscapes(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := Declare(cross(cur), "gno.land/r/[x](javascript:alert(1))", "TurnPlayed", "", "", "Hi", "", "/")
-	out := Render("")
+	id := Declare(cross(cur), game, "TurnPlayed", "", "", "Hi", "[x](javascript:alert(1))", "/")
+	out := Render("trigger/" + id)
 	uassert.True(t, strings.Contains(out, id))
 	uassert.False(t, strings.Contains(out, "[x](javascript"))
 
@@ -190,7 +201,7 @@ func TestRenderPages(cur realm, t *testing.T) {
 	}
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	unverified := Declare(cross(cur), "gno.land/r/[x](javascript:alert(1))", "TurnPlayed", "", "", "Hi", "", "/")
+	unverified := Declare(cross(cur), game, "TurnPlayed", "", "", "Hi", "[x](javascript:alert(1))", "/")
 	detail = Render("trigger/" + unverified)
 	uassert.False(t, strings.Contains(detail, "[x](javascript"))
 	uassert.False(t, strings.Contains(detail, "✓ verified"))

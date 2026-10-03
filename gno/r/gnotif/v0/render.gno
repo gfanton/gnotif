@@ -22,11 +22,11 @@ func Render(path string) string {
 		}
 		return renderPage(n)
 	case strings.HasPrefix(path, "trigger/"):
-		id := strings.TrimPrefix(path, "trigger/")
-		if !triggers.Has(id) {
+		v := triggers.Get(strings.TrimPrefix(path, "trigger/"))
+		if v == nil {
 			return "Not found."
 		}
-		return renderTrigger(triggers.Get(id).(*Trigger))
+		return renderTrigger(v.(*Trigger))
 	}
 	return "Not found."
 }

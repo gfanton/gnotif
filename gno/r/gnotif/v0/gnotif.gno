@@ -83,7 +83,7 @@ func Remove(cur realm, id string) {
 
 func validate(target, event, filter, param, title, body, link string) {
 	switch {
-	case !strings.HasPrefix(target, targetPrefix) || len(target) > maxTarget:
+	case !validTarget(target):
 		panic("invalid target")
 	case !validName(event, 1, maxName):
 		panic("invalid event")
@@ -102,6 +102,21 @@ func validate(target, event, filter, param, title, body, link string) {
 
 func sized(s string, lo, hi int) bool {
 	return len(s) >= lo && len(s) <= hi
+}
+
+// validTarget accepts after the prefix only the bytes the chain allows in a
+// realm path, so a rendered target cannot imitate the verified mark.
+func validTarget(target string) bool {
+	if !strings.HasPrefix(target, targetPrefix) || len(target) > maxTarget {
+		return false
+	}
+	for i := len(targetPrefix); i < len(target); i++ {
+		c := target[i]
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' || c == '-' || c == '/') {
+			return false
+		}
+	}
+	return true
 }
 
 // validName accepts identifier bytes only, so a name cannot carry spaces or
