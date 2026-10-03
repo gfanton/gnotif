@@ -6,6 +6,7 @@ package pingpong
 import (
 	"chain"
 	"strconv"
+	"strings"
 
 	"gno.land/p/nt/avl/v0"
 	"gno.land/p/nt/seqid/v0"
@@ -40,7 +41,9 @@ func load(id string) *Game {
 // first once opponent accepts.
 func NewGame(cur realm, opponent address) string {
 	caller := cur.Previous().Address()
-	if !opponent.IsValid() {
+	// IsValid accepts all-uppercase bech32, but a caller's address is always
+	// lowercase, so an uppercase opponent could never accept.
+	if !opponent.IsValid() || opponent.String() != strings.ToLower(opponent.String()) {
 		panic("invalid opponent")
 	}
 	if opponent == caller {

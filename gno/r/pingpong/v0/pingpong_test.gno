@@ -47,6 +47,8 @@ func TestNewGame(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsWithMessage(t, cur, "invalid opponent", func() { NewGame(cross(cur), address("not-an-address")) })
 	uassert.AbortsWithMessage(t, cur, "cannot play against yourself", func() { NewGame(cross(cur), alice) })
+	uassert.AbortsWithMessage(t, cur, "invalid opponent", func() { NewGame(cross(cur), address(strings.ToUpper(alice.String()))) })
+	uassert.AbortsWithMessage(t, cur, "invalid opponent", func() { NewGame(cross(cur), address(strings.ToUpper(bob.String()))) })
 	uassert.Equal(t, 0, games.Size())
 
 	id := NewGame(cross(cur), bob)
