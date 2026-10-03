@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"gno.land/p/nt/markdown/sanitize/v0"
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 )
@@ -137,4 +138,54 @@ func TestRenderEscapes(cur realm, t *testing.T) {
 		}
 	}
 	t.Fatalf("no line for trigger %s", verified)
+}
+
+func TestRenderPages(cur realm, t *testing.T) {
+	var old []string
+	triggers.Iterate("", "", func(id string, _ any) bool {
+		old = append(old, id)
+		return false
+	})
+	for _, id := range old {
+		triggers.Remove(id)
+	}
+
+	testing.SetRealm(testing.NewCodeRealm(game))
+	ids := make([]string, 51) // oldest first
+	for i := range ids {
+		ids[i] = Declare(cross(cur), game, "TurnPlayed", "mode=ranked", "next", "Your turn", "Game {game}", "/?game={game}")
+	}
+	oldest, newest := ids[0], ids[50]
+
+	page1 := Render("")
+	uassert.Equal(t, page1, Render("page/1"))
+	uassert.True(t, strings.Contains(page1, newest))
+	uassert.True(t, strings.Contains(page1, ids[1]))
+	uassert.False(t, strings.Contains(page1, oldest))
+	uassert.True(t, strings.Index(page1, newest) < strings.Index(page1, ids[49]), "newest first")
+	uassert.True(t, strings.Contains(page1, ":page/2)"))
+
+	page2 := Render("page/2")
+	uassert.True(t, strings.Contains(page2, oldest))
+	uassert.False(t, strings.Contains(page2, ids[1]))
+	uassert.False(t, strings.Contains(page2, ":page/3)"))
+
+	uassert.True(t, strings.Contains(Render("page/3"), "No triggers on this page."))
+	for _, p := range []string{"page/0", "page/-1", "page/x", "nope", "trigger/zzz"} {
+		uassert.Equal(t, "Not found.", Render(p), p)
+	}
+
+	triggers.Remove(newest)
+	uassert.False(t, strings.Contains(Render(""), ":page/2)"))
+
+	detail := Render("trigger/" + oldest)
+	for _, want := range []string{oldest, game, "TurnPlayed", "mode=ranked", "next", "Your turn", "Game {game}", "/?game={game}", "✓ verified"} {
+		uassert.True(t, strings.Contains(detail, sanitize.InlineText(want)), want)
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	unverified := Declare(cross(cur), "gno.land/r/[x](javascript:alert(1))", "TurnPlayed", "", "", "Hi", "", "/")
+	detail = Render("trigger/" + unverified)
+	uassert.False(t, strings.Contains(detail, "[x](javascript"))
+	uassert.False(t, strings.Contains(detail, "✓ verified"))
 }
