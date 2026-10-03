@@ -32,7 +32,7 @@ export class GnotifError extends Error {
 
 /**
  * @param {string} s unpadded base64url text
- * @returns {Uint8Array<ArrayBuffer>}
+ * @returns {Uint8Array}
  */
 export function base64UrlToBytes(s) {
   const b64 = s.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(s.length / 4) * 4, "=");
@@ -92,7 +92,7 @@ export class Gnotif {
       await sub.unsubscribe();
       sub = null;
     }
-    sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array(key) });
     const json = sub.toJSON();
     await this.#request("PUT", "/v1/subscription", json);
     return json;
