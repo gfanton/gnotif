@@ -2,19 +2,33 @@
 // pushes and sets which triggers it hears about.
 
 export class GnotifError extends Error {
-  // code: "unsupported", "denied", "inactive" or "server"
-  constructor(code, message) {
+  /**
+   * @param {"unsupported" | "denied" | "inactive" | "server"} code
+   * @param {string} message
+   * @param {number} [status] HTTP status of a "server" error
+   */
+  constructor(code, message, status) {
     super(message);
+    this.status = status;
     this.name = "GnotifError";
     this.code = code;
   }
 }
 
+/**
+ * @param {string} s unpadded base64url text
+ * @returns {Uint8Array<ArrayBuffer>}
+ */
 export function base64UrlToBytes(s) {
   const b64 = s.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(s.length / 4) * 4, "=");
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 }
 
+/**
+ * @param {ArrayBuffer | null | undefined} a
+ * @param {Uint8Array} b
+ * @returns {boolean}
+ */
 export function sameKey(a, b) {
   if (!a) {
     return false;
@@ -27,17 +41,26 @@ export class Gnotif {
   #server;
   #serviceWorker;
 
+  /**
+   * @param {object} options
+   * @param {string} options.server base URL of the gnotif server
+   * @param {string} [options.serviceWorker] URL of the dapp's copy of sw.js
+   */
   constructor({ server, serviceWorker = "/sw.js" }) {
     this.#server = server.replace(/\/$/, "");
     this.#serviceWorker = serviceWorker;
   }
 
+  /** @returns {Promise<any>} the triggers the server offers */
   async triggers() {
     return this.#request("GET", "/v1/triggers");
   }
 
-  // enable must run from a user gesture: browsers refuse or hide a
-  // permission prompt otherwise.
+  /**
+   * Subscribes this browser and registers it with the server. Must run from
+   * a user gesture: browsers refuse or hide a permission prompt otherwise.
+   * @returns {Promise<PushSubscriptionJSON>}
+   */
   async enable() {
     if (!("serviceWorker" in navigator) || !("PushManager" in globalThis) || !("Notification" in globalThis)) {
       throw new GnotifError("unsupported", "This browser has no Push API.");
@@ -60,17 +83,47 @@ export class Gnotif {
     return json;
   }
 
+  /**
+   * @param {{ trigger: string, value: string }[]} optins replaces this
+   *   browser's opt-ins
+   * @returns {Promise<void>}
+   */
   async setOptins(optins) {
     const sub = await this.#subscription();
     await this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins });
   }
 
+  /**
+   * Unsubscribes this browser first, then tells the server; a server that
+   * no longer knows the subscription (404) is not an error.
+   * @returns {Promise<void>}
+   */
   async disable() {
     const sub = await this.#subscription();
-    await this.#request("DELETE", "/v1/subscription", { endpoint: sub.endpoint });
     await sub.unsubscribe();
+    try {
+      await this.#request("DELETE", "/v1/subscription", { endpoint: sub.endpoint });
+    } catch (err) {
+      if (!(err instanceof GnotifError && err.status === 404)) {
+        throw err;
+      }
+    }
   }
 
+  /**
+   * Reports whether this browser holds a push subscription and still has
+   * notification permission.
+   * @returns {Promise<boolean>}
+   */
+  async enabled() {
+    if (!("Notification" in globalThis) || Notification.permission !== "granted") {
+      return false;
+    }
+    const reg = await navigator.serviceWorker?.ready;
+    return (await reg?.pushManager.getSubscription()) != null;
+  }
+
+  /** @returns {Promise<PushSubscription>} */
   async #subscription() {
     const reg = await navigator.serviceWorker?.ready;
     const sub = await reg?.pushManager.getSubscription();
@@ -80,7 +133,14 @@ export class Gnotif {
     return sub;
   }
 
+  /**
+   * @param {string} method
+   * @param {string} path
+   * @param {unknown} [body] sent as JSON
+   * @returns {Promise<any>} the decoded JSON answer, null on 204
+   */
   async #request(method, path, body) {
+    /** @type {RequestInit} */
     const init = { method };
     if (body !== undefined) {
       init.headers = { "Content-Type": "application/json" };
@@ -94,7 +154,7 @@ export class Gnotif {
       } catch {
         // keep the status message
       }
-      throw new GnotifError("server", message);
+      throw new GnotifError("server", message, res.status);
     }
     return res.status === 204 ? null : res.json();
   }

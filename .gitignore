@@ -1,2 +1,4 @@
 .tools/
 gnotif.db*
+js/types/
+node_modules/

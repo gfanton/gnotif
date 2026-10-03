@@ -64,3 +64,42 @@ test("setOptins sends the endpoint and opt-ins, and surfaces server errors", asy
   await assert.rejects(g.setOptins(optins), (err) =>
     err instanceof GnotifError && err.code === "server" && err.message === "unknown trigger");
 });
+
+function stubBrowser(t, { permission, subscription }) {
+  t.after(stubGlobal("navigator", {
+    serviceWorker: { ready: Promise.resolve({ pushManager: { getSubscription: async () => subscription } }) },
+  }));
+  t.after(stubGlobal("Notification", { permission }));
+}
+
+test("enabled is true with a subscription and granted permission", async (t) => {
+  stubBrowser(t, { permission: "granted", subscription: { endpoint: "E" } });
+  assert.equal(await new Gnotif({ server: SERVER }).enabled(), true);
+});
+
+test("enabled is false without a subscription", async (t) => {
+  stubBrowser(t, { permission: "granted", subscription: null });
+  assert.equal(await new Gnotif({ server: SERVER }).enabled(), false);
+});
+
+test("enabled is false when permission was revoked while a subscription exists", async (t) => {
+  for (const permission of ["denied", "default"]) {
+    stubBrowser(t, { permission, subscription: { endpoint: "E" } });
+    assert.equal(await new Gnotif({ server: SERVER }).enabled(), false, permission);
+  }
+});
+
+test("disable unsubscribes the browser even when the server answers 404", async (t) => {
+  let unsubscribed = false;
+  const subscription = { endpoint: "E", unsubscribe: async () => { unsubscribed = true; return true; } };
+  stubBrowser(t, { permission: "granted", subscription });
+  const requests = [];
+  t.after(stubGlobal("fetch", async (url, init) => {
+    requests.push({ url, init });
+    return { ok: false, status: 404, json: async () => ({ error: "unknown subscription" }) };
+  }));
+  await new Gnotif({ server: SERVER }).disable();
+  assert.ok(unsubscribed);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].init.method, "DELETE");
+});

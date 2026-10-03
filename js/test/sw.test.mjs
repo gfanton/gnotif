@@ -10,7 +10,7 @@ const RESUBSCRIBED = { endpoint: "E3", keys: { p256dh: "p3", auth: "a3" } };
 
 // load runs sw.js against fakes. The fake server answers putStatus to
 // PUT /v1/subscription and the key "PK" to GET /v1/vapid.
-function load({ putStatus = 204 } = {}) {
+function load({ putStatus = 204, windows = [] } = {}) {
   const handlers = {};
   const calls = { show: [], open: [], fetch: [], subscribe: [] };
   const self = {
@@ -24,7 +24,7 @@ function load({ putStatus = 204 } = {}) {
         },
       },
     },
-    clients: { matchAll: async () => [], openWindow: async (url) => calls.open.push(url) },
+    clients: { matchAll: async () => windows, openWindow: async (url) => calls.open.push(url) },
     addEventListener: (type, fn) => { handlers[type] = fn; },
   };
   const fetch = async (url, init) => {
@@ -101,6 +101,20 @@ test("notificationclick never leaves the worker's origin", async () => {
   });
   assert.ok(closed);
   assert.deepEqual(calls.open, [`${ORIGIN}/`]);
+});
+
+test("notificationclick focuses an open tab before navigating it", async () => {
+  const order = [];
+  const client = {
+    url: `${ORIGIN}/other`,
+    focus: async () => { order.push("focus"); },
+    navigate: async (url) => { order.push(`navigate ${url}`); },
+  };
+  const { handlers } = load({ windows: [client] });
+  await dispatch(handlers.notificationclick, {
+    notification: { data: { link: "/?game=7" }, close: () => {} },
+  });
+  assert.deepEqual(order, ["focus", `navigate ${ORIGIN}/?game=7`]);
 });
 
 test("pushsubscriptionchange registers the new subscription with the server", async () => {

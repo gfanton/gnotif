@@ -1,0 +1,29 @@
+{
+  "name": "gnotif",
+  "version": "0.0.0",
+  "description": "Browser client and service worker for gnotif, which turns gno.land realm events into Web Push notifications",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/gnotif.d.ts",
+      "default": "./src/gnotif.js"
+    },
+    "./sw.js": "./src/sw.js"
+  },
+  "files": [
+    "src",
+    "types"
+  ],
+  "scripts": {
+    "test": "node --test 'test/*.test.mjs'",
+    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
+    "types": "tsc --emitDeclarationOnly --outDir types"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}
