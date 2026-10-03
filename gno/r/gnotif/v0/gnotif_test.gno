@@ -50,6 +50,18 @@ func TestDeclareRejects(cur realm, t *testing.T) {
 		{"backslash link", "invalid link", 6, "/\\evil.com"},
 		{"absolute link", "invalid link", 6, "https://evil.com"},
 		{"link too long", "invalid link", 6, "/" + long},
+		{"link with tab", "invalid link", 6, "/\t/evil.example"},
+		{"link with newline", "invalid link", 6, "/\n/evil.example"},
+		{"link with carriage return", "invalid link", 6, "/\r/evil.example"},
+		{"link with DEL", "invalid link", 6, "/x\x7f"},
+		{"link with inner backslash", "invalid link", 6, "/a\\b"},
+		{"link with trailing tab", "invalid link", 6, "/ok\t"},
+		{"event with space", "invalid event", 1, "Turn Played"},
+		{"event with dash", "invalid event", 1, "Turn-Played"},
+		{"event imitating the verified mark", "invalid event", 1, "TurnPlayed · ✓ verified"},
+		{"param with space", "invalid param", 3, "next player"},
+		{"filter key with space", "invalid filter", 2, "mode x=ranked"},
+		{"filter key with dash", "invalid filter", 2, "mo-de=ranked"},
 	}
 	for _, c := range cases {
 		a := valid
@@ -57,6 +69,26 @@ func TestDeclareRejects(cur realm, t *testing.T) {
 		uassert.AbortsWithMessage(t, cur, c.msg, func() {
 			Declare(cross(cur), a[0], a[1], a[2], a[3], a[4], a[5], a[6])
 		}, c.name)
+	}
+}
+
+func TestDeclareAccepts(cur realm, t *testing.T) {
+	valid := [7]string{game, "TurnPlayed", "mode=ranked", "next", "Your turn", "Game {game}", "/?game={game}"}
+	cases := []struct {
+		name  string
+		field int // index into valid: target, event, filter, param, title, body, link
+		value string
+	}{
+		{"link with placeholder path", 6, "/{game}"},
+		{"link with query", 6, "/?game={game}&x=1"},
+		{"event with underscore and digit", 1, "Turn_Played2"},
+		{"empty param for a broadcast", 3, ""},
+	}
+	for _, c := range cases {
+		a := valid
+		a[c.field] = c.value
+		id := Declare(cross(cur), a[0], a[1], a[2], a[3], a[4], a[5], a[6])
+		uassert.True(t, triggers.Has(id), c.name)
 	}
 }
 
@@ -91,7 +123,7 @@ func TestRemove(cur realm, t *testing.T) {
 
 func TestRenderEscapes(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := Declare(cross(cur), game, "[x](javascript:alert(1))", "", "", "Hi", "", "/")
+	id := Declare(cross(cur), "gno.land/r/[x](javascript:alert(1))", "TurnPlayed", "", "", "Hi", "", "/")
 	out := Render("")
 	uassert.True(t, strings.Contains(out, id))
 	uassert.False(t, strings.Contains(out, "[x](javascript"))

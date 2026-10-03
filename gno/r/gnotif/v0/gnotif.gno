@@ -85,11 +85,11 @@ func validate(target, event, filter, param, title, body, link string) {
 	switch {
 	case !strings.HasPrefix(target, targetPrefix) || len(target) > maxTarget:
 		panic("invalid target")
-	case !sized(event, 1, maxName):
+	case !validName(event, 1, maxName):
 		panic("invalid event")
 	case !validFilter(filter):
 		panic("invalid filter")
-	case !sized(param, 0, maxName):
+	case !validName(param, 0, maxName):
 		panic("invalid param")
 	case !sized(title, 1, maxName):
 		panic("invalid title")
@@ -104,6 +104,21 @@ func sized(s string, lo, hi int) bool {
 	return len(s) >= lo && len(s) <= hi
 }
 
+// validName accepts identifier bytes only, so a name cannot carry spaces or
+// symbols that imitate the verified mark in rendered output.
+func validName(s string, lo, hi int) bool {
+	if !sized(s, lo, hi) {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_') {
+			return false
+		}
+	}
+	return true
+}
+
 func validFilter(filter string) bool {
 	if filter == "" {
 		return true
@@ -114,7 +129,7 @@ func validFilter(filter string) bool {
 	}
 	for _, pair := range pairs {
 		key, value, ok := strings.Cut(pair, "=")
-		if !ok || !sized(key, 1, maxName) || !sized(value, 1, maxName) || strings.Contains(value, "=") {
+		if !ok || !validName(key, 1, maxName) || !sized(value, 1, maxName) || strings.Contains(value, "=") {
 			return false
 		}
 	}
@@ -122,10 +137,17 @@ func validFilter(filter string) bool {
 }
 
 // validLink accepts only a path, so a click always stays on the dapp's origin.
-// "//host" and "/\host" start with a slash yet resolve to another host.
+// "//host" starts with a slash yet resolves to another host. A URL parser
+// drops tab, LF and CR and reads a backslash as a slash, so "/\t/host" and
+// "/\host" would do the same; control bytes and backslashes are refused.
 func validLink(link string) bool {
-	return sized(link, 1, maxLink) &&
-		strings.HasPrefix(link, "/") &&
-		!strings.HasPrefix(link, "//") &&
-		!strings.HasPrefix(link, "/\\")
+	if !sized(link, 1, maxLink) || !strings.HasPrefix(link, "/") || strings.HasPrefix(link, "//") {
+		return false
+	}
+	for i := 0; i < len(link); i++ {
+		if c := link[i]; c < 0x20 || c == 0x7f || c == '\\' {
+			return false
+		}
+	}
+	return true
 }
