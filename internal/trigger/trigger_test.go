@@ -148,6 +148,12 @@ func TestRender(t *testing.T) {
 		"long link": {with(func(tr *Trigger) { tr.Link = "/{x}" }), pairs("x", strings.Repeat("a", 2000)), func(t *testing.T, n Notification) {
 			assert.Equal(t, "/", n.Link)
 		}},
+		"protocol-relative link from a missing attribute": {with(func(tr *Trigger) { tr.Link = "/{nope}/evil.example" }), nil, func(t *testing.T, n Notification) {
+			assert.Equal(t, "/", n.Link)
+		}},
+		"protocol-relative link from an empty attribute": {with(func(tr *Trigger) { tr.Link = "/{nope}/evil.example" }), pairs("nope", ""), func(t *testing.T, n Notification) {
+			assert.Equal(t, "/", n.Link)
+		}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -91,7 +91,7 @@ In `title`, `body` and `link`, `{key}` stands for the value of the event's attri
 
 - A missing attribute renders as an empty string, and a `{` without a closing `}` is copied as is.
 - In `link`, every value is escaped as one path segment, with Go's `url.PathEscape`: it cannot carry `/`, `?` or `#`, so it cannot add a path segment or a host. It can still carry `&`, `=` and `+`, so in a query string a value can add a parameter. `/?game={game}` renders as `/?game=0000001`.
-- gnotifd cuts a rendered title to 64 bytes and a rendered body to 255 bytes, at a character boundary. A rendered link longer than 1,024 bytes becomes `/`.
+- gnotifd cuts a rendered title to 64 bytes and a rendered body to 255 bytes, at a character boundary. A rendered link longer than 1,024 bytes, or one that starts with `//` because a value was empty, becomes `/`.
 
 ### Matching
 

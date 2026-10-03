@@ -99,4 +99,5 @@ Any server built on the registry, gnotifd or another, must:
 - apply `TriggerDeclared` and `TriggerRemoved` only from events whose package path is the registry's;
 - match a trigger's target and event type exactly, and skip an event that lacks the trigger's param attribute;
 - percent-escape every attribute value it fills into a link, so a value cannot add a path segment or a host;
+- fall back to `/` when a filled-in link starts with `//`;
 - leave the final origin check to the client: the service worker opens a link only when it resolves to the dapp's own origin.

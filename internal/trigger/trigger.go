@@ -138,10 +138,11 @@ func (t Trigger) Matches(e Event) bool {
 	return true
 }
 
-// Render fills the trigger's templates with e's attributes.
+// Render fills the trigger's templates with e's attributes. A link that starts
+// with "//", which a browser reads as another host, is replaced by "/".
 func (t Trigger) Render(e Event) Notification {
 	link := expand(t.Link, e, url.PathEscape)
-	if len(link) > MaxLink {
+	if len(link) > MaxLink || strings.HasPrefix(link, "//") {
 		link = "/"
 	}
 	return Notification{
