@@ -122,6 +122,7 @@ func (w *Watcher) tick(ctx context.Context) error {
 	// same URL, can report a height below the stored bound. The window above
 	// that height is incomplete: lower the bound and read it later.
 	if batch.Latest < end {
+		w.cfg.Log.Warn("indexer behind stored bound", "latest", batch.Latest, "bound", cur.Bound)
 		return w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
 			return tx.SetCursor(store.Cursor{HeightDone: cur.HeightDone, Bound: batch.Latest})
 		})

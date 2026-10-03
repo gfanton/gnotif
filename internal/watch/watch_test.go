@@ -409,6 +409,7 @@ func TestIndexerBehindBound(t *testing.T) {
 	h.fake.set(func(f *fakeIndexer) { f.latest = 10 })
 	h.tick(t)
 	assert.Equal(t, store.Cursor{HeightDone: 9, Bound: 10}, h.cursor(t), "the cursor must not pass the indexer's height")
+	assert.Contains(t, h.log.String(), `msg="indexer behind stored bound" latest=10 bound=12`)
 
 	h.fake.add(11, turn("7", "g1bob"))
 	h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
