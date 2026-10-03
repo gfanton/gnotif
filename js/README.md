@@ -61,7 +61,8 @@ It throws a `GnotifError` with code:
   notifications for the site, permission is `denied`, and `enable()`
   throws `denied` at once without a prompt. Only the browser's site
   settings lift the block.
-- `server` when the server refuses the subscription.
+- `server` when the server answers an error, to the request for its
+  VAPID key (`GET /v1/vapid`) or to the subscription.
 
 ### `setOptins(optins)`
 

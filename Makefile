@@ -1,5 +1,5 @@
 SHELL := /bin/sh
-GNO_STORE ?= $(HOME)/.cache/gno-toolchains/onyx-1
+GNO_STORE ?= $(HOME)/.cache/gno-toolchains/onyx
 GNO ?= $(GNO_STORE)/gno
 GNOROOT_DIR = $(shell go env GOMODCACHE)/github.com/gnolang/gno@$(shell go version -m $(GNO) | awk '$$1 == "mod" {print $$3}')
 GNO_ENV = GNOROOT=$(GNOROOT_DIR) GNOHOME=$(GNO_STORE)/gnohome

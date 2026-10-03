@@ -90,7 +90,7 @@ Names are limited to identifier characters so that a declarer cannot make a rend
 In `title`, `body` and `link`, `{key}` stands for the value of the event's attribute `key`.
 
 - A missing attribute renders as an empty string, and a `{` without a closing `}` is copied as is.
-- In `link`, every value is percent-escaped, so a value cannot add a path segment or a host. `/?game={game}` renders as `/?game=0000001`.
+- In `link`, every value is escaped as one path segment, with Go's `url.PathEscape`: it cannot carry `/`, `?` or `#`, so it cannot add a path segment or a host. It can still carry `&`, `=` and `+`, so in a query string a value can add a parameter. `/?game={game}` renders as `/?game=0000001`.
 - gnotifd cuts a rendered title to 64 bytes and a rendered body to 255 bytes, at a character boundary. A rendered link longer than 1,024 bytes becomes `/`.
 
 ### Matching
@@ -133,6 +133,9 @@ const gnotif = new Gnotif({ server: "https://gnotif.example" });
 const yourTurn = (await gnotif.triggers()).find(
   (t) => t.target === "gno.land/r/dev/pingpong/v0" && t.event === "TurnPlayed" && t.verified,
 );
+if (yourTurn === undefined) {
+  throw new Error("This gnotif server does not offer pingpong's trigger.");
+}
 
 button.addEventListener("click", async () => {
   try {
@@ -148,11 +151,11 @@ button.addEventListener("click", async () => {
 });
 ```
 
-- Find a trigger by its target, event and verified mark rather than by id: each registry numbers its own triggers.
+- Find a trigger by its target, event and verified mark rather than by id: each registry numbers its own triggers. A server reading another registry, or one where the realm never declared its trigger, offers none.
 - `enable()` asks for notification permission, so call it from a click. It registers `sw.js`, subscribes the browser with the server's key and registers the subscription with the server.
 - `setOptins()` replaces the browser's whole set of opt-ins. A trigger with a param takes a value, and one without takes `""`.
 - The server has no route that reads opt-ins back. Keep the set your page last sent, and send the whole set again on each change.
-- A click on the notification opens the trigger's link on the dapp's origin, here `/?game=0000001`, or focuses a tab of the dapp that is already open ([the client's README](../js/README.md#notifications)). Read the link from `location.search` to greet the player.
+- A click on the notification opens the trigger's link on the dapp's origin, here `/?game=0000001`, or focuses a tab of the dapp that is already open ([the client's README](../js/README.md#notifications)). Read the link from `location.search` to greet the player, and treat every value in it as untrusted input.
 - `enabled()` says whether this browser is subscribed and still allowed to show notifications, and `disable()` turns notifications off.
 
 [The client's README](../js/README.md) documents each method and its errors.
@@ -200,12 +203,14 @@ Run the chain, tx-indexer, gnotifd and the demo on your machine, each in its own
 5. Start gnotifd on the indexer:
 
    ```sh
-   go run ./cmd/gnotifd keygen > .tools/vapid.env
+   (umask 077; go run ./cmd/gnotifd keygen > .tools/vapid.env)
    set -a; . ./.tools/vapid.env; set +a
    go run ./cmd/gnotifd -indexer http://127.0.0.1:8546/graphql/query \
      -registry gno.land/r/dev/gnotif/v0 -start-height 1 -max-age 1h \
-     -vapid-subject https://gno.land/r/dev/gnotif/v0 -db .tools/gnotif.db
+     -vapid-subject <contact> -db .tools/gnotif.db
    ```
+
+   `<contact>` is where push services can reach you: any email address or https URL of yours works.
 
 6. Declare pingpong's trigger, then open a game and accept it. Replace `<player2 address>` with the address `gnokey list` printed:
 

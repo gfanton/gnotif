@@ -1,12 +1,12 @@
 # Deploying the realms
 
-The realms deploy to onyx (`onyx-1`) through gnomcp, in a fixed order: the registry, then pingpong, then a call to pingpong's `DeclareTriggers`. The repository's realms sit under the placeholder namespace `gno.land/r/dev`, and `make deploy-pkgs` writes copies under yours.
+The realms deploy to onyx (`onyx-1`) through gnomcp, a Gno MCP server that gives an AI client tools to read and write a gno.land chain, in a fixed order: the registry, then pingpong, then a call to pingpong's `DeclareTriggers`. The repository's realms sit under the placeholder namespace `gno.land/r/dev`, and `make deploy-pkgs` writes copies under yours.
 
 ## Before you start
 
 - **A namespace the deploying key owns.** On onyx a key deploys under its own address, `gno.land/r/<address>`, or under a name it registered. The chain refuses a deploy under anyone else's namespace, and the [verified mark](how-it-works.md#what-the-verified-mark-means) relies on that.
 - **gnomcp connected to onyx.** `gno_status` reports the chain id, `onyx-1`.
-- **gnomcp's agent key, never a personal key.** Every deploy and call is public, with the address that signed it.
+- **gnomcp's agent key, never a personal key.** The agent key is the key gnomcp holds and signs with: `gno_key_address` shows it, and `gno_key_generate` makes one on a testnet. Every deploy and call is public, with the address that signed it.
 - **Funds for the storage deposits.** `gno_faucet_fund` funds the agent key on onyx.
 
 ## 1. Write the deploy copies
@@ -29,23 +29,18 @@ find .tools/deploy -type f
 
 onyx parks every new package until an automatic approver type-checks it and enables it. A package that fails the check stays parked, and the chain reports it exactly like one still waiting. A dry run does not type-check either. Lint the copies with the gno release onyx runs before deploying them.
 
-Read the release from the node:
+The Makefile's toolchain is that release: CI pins it as `GNO_VERSION` in [ci.yml](../.github/workflows/ci.yml), and the README's [Develop](../README.md#develop) section installs it with the realms' dependencies. Check that onyx still runs it:
 
 ```sh
 curl -s https://rpc.onyx.testnets.gno.land/status | grep build_version
 ```
 
-Install that release, here `v1.5.0`, into a toolchain store of its own, apart from the one `make test` reads, and fetch the realms' dependencies from onyx into it:
+When onyx reports another release, move the pin to it and pass the realm tests with it before deploying.
+
+Then lint the copies with the Makefile's toolchain, as one workspace, so that pingpong's import of the registry resolves to the copy beside it. `store` is the Makefile's `GNO_STORE`:
 
 ```sh
 store=$HOME/.cache/gno-toolchains/onyx
-GOBIN=$store go install github.com/gnolang/gno/gnovm/cmd/gno@v1.5.0
-make gno-deps GNO_STORE=$store
-```
-
-Then lint the copies as one workspace, so that pingpong's import of the registry resolves to the copy beside it:
-
-```sh
 gnoroot="$(go env GOMODCACHE)/github.com/gnolang/gno@$(go version -m "$store/gno" | awk '$1 == "mod" {print $3}')"
 touch .tools/deploy/gnowork.toml
 (cd .tools/deploy && GNOROOT="$gnoroot" GNOHOME="$store/gnohome" "$store/gno" lint ./...)

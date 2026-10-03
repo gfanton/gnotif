@@ -15,7 +15,7 @@ Or run the [container image](#run-the-container-image).
 ## Make the VAPID keys
 
 ```sh
-gnotifd keygen > vapid.env
+(umask 077; gnotifd keygen > vapid.env)
 ```
 
 `keygen` prints a new key pair as two environment variables, which gnotifd reads at start:
@@ -31,17 +31,19 @@ Load them into the shell that starts gnotifd:
 set -a; . ./vapid.env; set +a
 ```
 
-Keep the pair for the life of the server, and keep the private key secret. A browser subscribes with the server's public key, and a push service accepts a push only when it is signed with the key that subscription was made with. A new pair leaves every stored subscription unable to receive pushes until its page calls `enable()` again, which subscribes anew when the server's key changed.
+Keep the pair for the life of the server, and keep the private key secret: the `umask` makes `vapid.env` readable by its owner only, and it belongs outside any source checkout. A browser subscribes with the server's public key, and a push service accepts a push only when it is signed with the key that subscription was made with. A new pair leaves every stored subscription unable to receive pushes until its page calls `enable()` again, which subscribes anew when the server's key changed.
 
 ## Start gnotifd
 
 ```sh
 gnotifd -indexer https://indexer.onyx.testnets.gno.land/graphql/query \
   -registry gno.land/r/<namespace>/gnotif/v0 -start-height <height> \
-  -vapid-subject https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0
+  -vapid-subject <contact>
 ```
 
-gnotifd listens on `127.0.0.1:8080` and writes `gnotif.db` in the current directory. It logs to standard error. On SIGINT or SIGTERM it lets both loops finish their current step and shuts the HTTP server down.
+`<contact>` is an email address or https URL where push services can reach you, such as `ops@example.org`.
+
+gnotifd listens on `127.0.0.1:8080` and writes `gnotif.db` in the current directory. It logs to standard error. On SIGINT or SIGTERM it cancels the watch loop's request and transaction in progress, so the cursor stays where it was. The delivery loop finishes the push in flight and records its outcome. The HTTP server shuts down, waiting up to 10 seconds for open requests.
 
 Dapp pages call gnotifd from their own origins, and a page served over https cannot call a plain http URL on another host, so put gnotifd behind a reverse proxy that terminates TLS.
 
@@ -51,7 +53,7 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 |---|---|---|
 | `-indexer` | required | tx-indexer GraphQL URL |
 | `-registry` | required | package path of the gnotif registry realm |
-| `-vapid-subject` | required | contact email or https URL sent to push services |
+| `-vapid-subject` | required | email address or https URL where push services can reach the operator |
 | `-start-height` | none | height to read from on the first start, at or before the registry's deploy |
 | `-listen` | `127.0.0.1:8080` | HTTP listen address |
 | `-db` | `gnotif.db` | SQLite database file |
@@ -61,7 +63,7 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 
 `gnotifd -h` prints the flags with their defaults. Durations take Go's syntax, such as `30s`, `10m` or `1h`. The VAPID keys come only from `GNOTIF_VAPID_PUBLIC_KEY` and `GNOTIF_VAPID_PRIVATE_KEY`, and every other setting only from flags.
 
-Give `-vapid-subject` without a `mailto:` prefix: gnotifd removes one, since the push library adds it and Apple's push service refuses a doubled prefix.
+A `mailto:` prefix on `-vapid-subject` is removed: the push library adds its own, and Apple's push service refuses a doubled prefix.
 
 ## The indexer and the start height
 
@@ -112,7 +114,7 @@ docker run -d --name gnotifd -p 127.0.0.1:8080:8080 -v gnotif-data:/data --env-f
   gnotifd -db /data/gnotif.db -listen 0.0.0.0:8080 \
   -indexer https://indexer.onyx.testnets.gno.land/graphql/query \
   -registry gno.land/r/<namespace>/gnotif/v0 -start-height <height> \
-  -vapid-subject https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0
+  -vapid-subject <contact>
 ```
 
 `--env-file` reads the `vapid.env` that `gnotifd keygen` wrote.

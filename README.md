@@ -64,6 +64,9 @@ These steps use the repository's placeholder paths under `gno.land/r/dev`. A dep
    const yourTurn = (await gnotif.triggers()).find(
      (t) => t.target === "gno.land/r/dev/pingpong/v0" && t.event === "TurnPlayed" && t.verified,
    );
+   if (yourTurn === undefined) {
+     throw new Error("This gnotif server does not offer pingpong's trigger.");
+   }
 
    button.addEventListener("click", async () => {
      await gnotif.enable();
@@ -79,14 +82,14 @@ These steps use the repository's placeholder paths under `gno.land/r/dev`. A dep
 
 ```sh
 go install github.com/gfanton/gnotif/cmd/gnotifd@latest
-gnotifd keygen > vapid.env
+(umask 077; gnotifd keygen > vapid.env)
 set -a; . ./vapid.env; set +a
 gnotifd -indexer https://indexer.onyx.testnets.gno.land/graphql/query \
   -registry gno.land/r/<namespace>/gnotif/v0 -start-height <height> \
-  -vapid-subject https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0
+  -vapid-subject <contact>
 ```
 
-gnotifd serves its API on `127.0.0.1:8080` and keeps its state in `gnotif.db`. `-start-height` is a height at or before the registry's deploy, and only the first start needs it. [Running gnotifd](docs/running-gnotifd.md) covers the flags, the keys, the push service allowlist and the container image.
+`vapid.env` holds the private key that signs every push: keep it outside any source checkout. `<contact>` is an email address or https URL where push services can reach you, such as `ops@example.org`. gnotifd serves its API on `127.0.0.1:8080` and keeps its state in `gnotif.db`. `-start-height` is a height at or before the registry's deploy, and only the first start needs it. [Running gnotifd](docs/running-gnotifd.md) covers the flags, the keys, the push service allowlist and the container image.
 
 ## Documentation
 
@@ -99,10 +102,10 @@ gnotifd serves its API on `127.0.0.1:8080` and keeps its state in `gnotif.db`. `
 
 ## Develop
 
-`make test` runs the realm tests, the Go tests and the browser client's tests. It needs Go, Node.js and the gno toolchain that CI pins, installed where the Makefile looks for it:
+`make test` runs the realm tests, the Go tests and the browser client's tests. It needs Go, Node.js and the gno toolchain of the release onyx runs, which CI pins as `GNO_VERSION` in [ci.yml](.github/workflows/ci.yml). Install that release into the Makefile's toolchain store, `GNO_STORE`, replacing `<GNO_VERSION>` with the pin:
 
 ```sh
-GOBIN=$HOME/.cache/gno-toolchains/onyx-1 go install github.com/gnolang/gno/gnovm/cmd/gno@v1.5.1-0.20260928125126-5cdbc25fcde0
+GOBIN=$HOME/.cache/gno-toolchains/onyx go install github.com/gnolang/gno/gnovm/cmd/gno@<GNO_VERSION>
 make gno-deps
 make test
 ```
