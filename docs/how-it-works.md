@@ -34,7 +34,7 @@ A window is bounded by the height the indexer reported on the previous poll, nev
 
 Every `-poll` interval, 5 seconds by default, the watch loop runs one tick:
 
-1. When `bound` is not above `height_done`, it asks the indexer for its latest height, stores it as `bound`, and stops.
+1. When `bound` is not above `height_done`, it asks the indexer for its latest height, stores it as `bound`, and stops. When that height is below `height_done`, the indexer is behind, and gnotifd logs a warning.
 2. Otherwise the window is the heights above `height_done` up to the smaller of `bound` and `height_done` plus the window size. The window size is 1,000 blocks. A failed tick halves it, down to one block, and a successful tick restores it, since the indexer refuses a query that would return too many transactions.
 3. One query asks for the successful transactions in the window that carry an event from the registry or from a watched realm, in chain order, and for the times of those blocks. The watched realms are the distinct targets of the triggers stored when the window starts.
 4. When the indexer reports a latest height below the end of the window, it is behind: it re-synced from scratch, or another instance answers behind the same URL. gnotifd logs a warning, lowers `bound`, and reads the window later.

@@ -96,6 +96,9 @@ func (w *Watcher) tick(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		if latest < cur.HeightDone {
+			w.cfg.Log.Warn("indexer behind stored bound", "latest", latest, "height_done", cur.HeightDone)
+		}
 		return w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
 			return tx.SetCursor(store.Cursor{HeightDone: cur.HeightDone, Bound: latest})
 		})

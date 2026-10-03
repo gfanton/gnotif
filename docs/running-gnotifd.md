@@ -75,7 +75,7 @@ A `mailto:` prefix on `-vapid-subject` is removed: the push library adds its own
 
 While it catches up, gnotifd skips realm events older than `-max-age`, so a restart after downtime sends no burst of stale notifications. It always applies the registry's events. Against a chain that makes blocks only on transactions, such as a local gnodev, raise `-max-age`, to `1h` for instance: the first block after a quiet spell can carry an old time.
 
-When the indexer reports a height below what gnotifd already stored, gnotifd logs `indexer behind stored bound` and waits for it. That happens when the indexer re-syncs from scratch, or when several indexers answer behind one URL.
+When the indexer reports a height below what gnotifd already stored, gnotifd logs `indexer behind stored bound` on every poll until the indexer catches up, and waits for it. That happens when the indexer re-syncs from scratch, or when several indexers answer behind one URL.
 
 ## The push service allowlist
 

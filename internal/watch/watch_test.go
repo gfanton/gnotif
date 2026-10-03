@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -417,6 +418,23 @@ func TestIndexerBehindBound(t *testing.T) {
 	h.tick(t)
 	assert.Equal(t, int64(12), h.cursor(t).HeightDone)
 	assert.Len(t, h.due(t), 1)
+
+	// An indexer that re-synced from scratch stays below height_done for
+	// several ticks, and every one of them must warn.
+	const warning = `msg="indexer behind stored bound"`
+	h.log.Reset()
+	h.setCursor(t, store.Cursor{HeightDone: 100, Bound: 120})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 5 })
+	for i := 1; i <= 3; i++ {
+		h.tick(t)
+		assert.Equal(t, i, strings.Count(h.log.String(), warning), "warnings after tick %d", i)
+		assert.Equal(t, int64(100), h.cursor(t).HeightDone)
+	}
+	assert.Contains(t, h.log.String(), warning+" latest=5 height_done=100")
+
+	h.fake.set(func(f *fakeIndexer) { f.latest = 130 })
+	h.tick(t)
+	assert.Equal(t, 3, strings.Count(h.log.String(), warning), "no warning once the indexer is past height_done")
 }
 
 func TestRunStopsOnCancel(t *testing.T) {
