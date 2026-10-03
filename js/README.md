@@ -24,34 +24,111 @@ assets by module path. Copy it again after each upgrade.
 ## Use
 
 ```js
-import { Gnotif } from "gnotif";
+import { Gnotif, GnotifError } from "gnotif";
 
 const gnotif = new Gnotif({ server: "https://gnotif.example", serviceWorker: "/sw.js" });
 ```
 
-`serviceWorker` is the URL of the copy on the dapp's origin and defaults
-to `/sw.js`.
+`server` is the base URL of the gnotif server. `serviceWorker` is the URL
+of the copy on the dapp's origin and defaults to `/sw.js`.
 
-- `triggers()` returns the triggers the server offers.
-- `enable()` asks for notification permission, subscribes the browser and
-  registers it with the server. Call it from a user gesture such as a
-  click, or the browser may hide the permission prompt. It throws a
-  `GnotifError` with code `unsupported`, `denied` or `server`.
-- `setOptins(optins)` replaces the browser's opt-ins, a list of
-  `{ trigger, value }`. It throws `GnotifError` with code `inactive` when
-  the browser is not subscribed.
-- `enabled()` returns `true` when the browser holds a push subscription
-  and notification permission is granted. It returns `false` after the
-  user revokes permission, so offer `enable()` again.
-- `disable()` unsubscribes the browser and removes the subscription from
-  the server. A server that no longer knows the subscription is not an
-  error.
+### `triggers()`
 
-Notification clicks focus an open tab of the dapp and navigate it to the
-notification's link, or open a new tab. Links to other origins open the
-dapp's root.
+Resolves the triggers the server offers. Each has `id`, `target`,
+`event`, `filter`, `param`, `title`, `body`, `link`, `declarer` and
+`verified`.
 
-Types ship with the package as `.d.ts` files.
+### `enable()`
+
+Subscribes the browser and registers it with the server, and resolves
+the subscription as `PushSubscriptionJSON`. Call it from a user gesture
+such as a click, or the browser may refuse or hide the permission
+prompt. In order, it:
+
+1. asks for notification permission;
+2. registers the service worker as `sw.js?server=<server>`, which tells
+   it where to send a renewed subscription;
+3. subscribes with the server's VAPID key, replacing a subscription made
+   with another key;
+4. sends the subscription to the server.
+
+It throws a `GnotifError` with code:
+
+- `unsupported` when the browser has no service worker, Push or
+  Notification API.
+- `denied` when permission is not granted. The browser asks the user
+  only while permission is `default`. Once the user has blocked
+  notifications for the site, permission is `denied`, and `enable()`
+  throws `denied` at once without a prompt. Only the browser's site
+  settings lift the block.
+- `server` when the server refuses the subscription.
+
+### `setOptins(optins)`
+
+Replaces the browser's opt-ins with `optins`, a list of
+`{ trigger, value }`, where `value` is `""` for a trigger without a
+param. It throws a `GnotifError` with code `inactive` when the browser
+holds no push subscription, and `server` when the server refuses the
+set: status 400 for an opt-in that breaks a rule, 404 when the server
+does not know the subscription, which `enable()` registers again.
+
+The server cannot read opt-ins back, so keep the set you last sent.
+
+### `enabled()`
+
+Resolves `true` when the browser holds a push subscription and
+notification permission is granted. It resolves `false` after the user
+revokes permission, even though the subscription remains. Offer
+`enable()` again then: it prompts when permission went back to
+`default`, and throws `denied` when the user blocked notifications.
+
+### `disable()`
+
+Unsubscribes the browser first, then asks the server to delete the
+subscription. A 404, which means the server does not know the
+subscription, is not an error. It throws a `GnotifError` with code
+`inactive` when the browser holds no push subscription. On any other
+server error it throws `server`, and the browser is already
+unsubscribed: the server keeps the subscription until a push to it
+comes back expired.
+
+## Errors
+
+`GnotifError` has three fields:
+
+- `code`: `"unsupported"`, `"denied"`, `"inactive"` or `"server"`;
+- `message`: for `server`, the server's error text when it sent one,
+  otherwise `gnotif server answered <status>`;
+- `status`: the HTTP status of a `server` error, `undefined` for the
+  other codes.
+
+A network failure, or a failure inside the browser's Push API, rejects
+with the browser's own error rather than a `GnotifError`.
+
+## Notifications
+
+`sw.js` shows every push with its title and body. A notification
+replaces an earlier one with the same link. A push without a usable
+payload still shows "New activity", because Safari revokes a
+subscription whose pushes show nothing.
+
+A click resolves the notification's link against the dapp's origin, and
+opens the dapp's root instead when the link lands on another origin.
+
+- With a tab of the dapp open, it focuses the first such tab, and
+  navigates it to the link when the service worker controls that tab. A
+  tab is controlled when it loaded after the service worker activated.
+  `sw.js` never claims open tabs, so the tab where `enable()` first ran
+  stays uncontrolled until it reloads, and a click only focuses it.
+- With no tab of the dapp open, it opens one at the link.
+
+When the browser renews its push subscription, `sw.js` sends the new one
+to the server in place of the old, so the opt-ins carry over.
+
+## Types
+
+Types ship with the package as `.d.ts` files, including the `Trigger`
+type that `triggers()` resolves.
 
 ## License
 

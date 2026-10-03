@@ -1,5 +1,5 @@
 // Package server wires gnotifd: the store, the watch loop, the delivery
-// loop, and an HTTP server for the subscription API and the browser files.
+// loop, and an HTTP server for the /v1 subscription API.
 package server
 
 import (
