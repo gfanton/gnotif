@@ -163,7 +163,8 @@ func TestRenderPages(cur realm, t *testing.T) {
 	uassert.True(t, strings.Contains(page1, ids[1]))
 	uassert.False(t, strings.Contains(page1, oldest))
 	uassert.True(t, strings.Index(page1, newest) < strings.Index(page1, ids[49]), "newest first")
-	uassert.True(t, strings.Contains(page1, ":page/2)"))
+	uassert.True(t, strings.Contains(page1, "(/r/dev/gnotif/v0:page/2)"))
+	uassert.True(t, strings.Contains(page1, "(/r/dev/gnotif/v0:trigger/"+newest+")"))
 
 	page2 := Render("page/2")
 	uassert.True(t, strings.Contains(page2, oldest))
@@ -171,6 +172,11 @@ func TestRenderPages(cur realm, t *testing.T) {
 	uassert.False(t, strings.Contains(page2, ":page/3)"))
 
 	uassert.True(t, strings.Contains(Render("page/3"), "No triggers on this page."))
+	for _, p := range []string{"page/3", "page/9223372036854775807", "page/184467440737095518"} {
+		out := Render(p)
+		uassert.True(t, strings.Contains(out, "No triggers on this page."), p)
+		uassert.False(t, strings.Contains(out, ":page/"), p)
+	}
 	for _, p := range []string{"page/0", "page/-1", "page/x", "nope", "trigger/zzz"} {
 		uassert.Equal(t, "Not found.", Render(p), p)
 	}

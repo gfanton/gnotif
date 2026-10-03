@@ -13,5 +13,5 @@ func main(cur realm) {
 // Output:
 // # gnotif triggers
 //
-// - [**0000002**](/r/demo/main:trigger/0000002) gno\.land/r/demo/other · Moved · by g1e8cq4xmeza97f78c2kd6lzwf8hnyet34me44mu
-// - [**0000001**](/r/demo/main:trigger/0000001) gno\.land/r/demo/main · TurnPlayed · param next · ✓ verified · by g1e8cq4xmeza97f78c2kd6lzwf8hnyet34me44mu
+// - [**0000002**](/r/dev/gnotif/v0:trigger/0000002) gno\.land/r/demo/other · Moved · by g1e8cq4xmeza97f78c2kd6lzwf8hnyet34me44mu
+// - [**0000001**](/r/dev/gnotif/v0:trigger/0000001) gno\.land/r/demo/main · TurnPlayed · param next · ✓ verified · by g1e8cq4xmeza97f78c2kd6lzwf8hnyet34me44mu
