@@ -1,6 +1,7 @@
 package subscribe
 
 import (
+	"crypto/ecdh"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -51,6 +52,11 @@ func checkKey(name, value string, size int) error {
 	if err != nil || len(b) != size {
 		return fmt.Errorf("%s must be %d bytes in base64url", name, size)
 	}
+	if name == "p256dh" {
+		if _, err := ecdh.P256().NewPublicKey(b); err != nil {
+			return errors.New("p256dh must be a P-256 public key")
+		}
+	}
 	return nil
 }
 
@@ -70,8 +76,8 @@ func checkOptins(optins []optinJSON, triggers map[string]trigger.Trigger) error 
 		case len(o.Value) > maxValue:
 			return fmt.Errorf("value longer than %d bytes", maxValue)
 		case o.Value != strings.TrimSpace(o.Value):
-			// Event attributes never carry surrounding spaces, so such a
-			// value would be stored and never match.
+			// A value with surrounding white space never equals an event
+			// attribute.
 			return errors.New("value has leading or trailing white space")
 		}
 	}

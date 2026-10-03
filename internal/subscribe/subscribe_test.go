@@ -2,6 +2,8 @@ package subscribe
 
 import (
 	"context"
+	"crypto/ecdh"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -20,9 +22,17 @@ import (
 )
 
 var (
-	validP256dh = base64.RawURLEncoding.EncodeToString(make([]byte, 65))
+	validP256dh = newP256dh()
 	validAuth   = base64.RawURLEncoding.EncodeToString(make([]byte, 16))
 )
+
+func newP256dh() string {
+	key, err := ecdh.P256().GenerateKey(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	return base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes())
+}
 
 const fcm = "https://fcm.googleapis.com/fcm/send/abc"
 
@@ -122,6 +132,7 @@ func TestPutSubscription(t *testing.T) {
 		"bare wildcard suffix": {subscription("https://notify.windows.com/x", validP256dh, validAuth), http.StatusBadRequest},
 		"endpoint too long":    {subscription(fcm+strings.Repeat("a", 1001-len(fcm)), validP256dh, validAuth), http.StatusBadRequest},
 		"short p256dh":         {subscription(fcm, base64.RawURLEncoding.EncodeToString(make([]byte, 64)), validAuth), http.StatusBadRequest},
+		"p256dh off the curve": {subscription(fcm, base64.RawURLEncoding.EncodeToString(append([]byte{0x04}, make([]byte, 64)...)), validAuth), http.StatusBadRequest},
 		"short auth":           {subscription(fcm, validP256dh, base64.RawURLEncoding.EncodeToString(make([]byte, 15))), http.StatusBadRequest},
 		"body too large":       {subscription(fcm+strings.Repeat("a", 9000), validP256dh, validAuth), http.StatusRequestEntityTooLarge},
 	}
