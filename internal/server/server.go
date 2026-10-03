@@ -96,13 +96,7 @@ func Run(ctx context.Context, cfg Config) error {
 		PushHosts: cfg.PushHosts,
 		Log:       cfg.Log,
 	}))
-	srv := &http.Server{
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
+	srv := newHTTPServer(cfg, mux)
 
 	loopCtx, stop := context.WithCancel(ctx)
 	defer stop()
@@ -132,4 +126,15 @@ func Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("shut down: %w", shutdownErr)
 	}
 	return nil
+}
+
+func newHTTPServer(cfg Config, h http.Handler) *http.Server {
+	return &http.Server{
+		Handler:           h,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		ErrorLog:          slog.NewLogLogger(cfg.Log.Handler(), slog.LevelWarn),
+	}
 }

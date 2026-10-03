@@ -43,6 +43,10 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return 0
 	}
 	cfg, err := parseConfig(args, getenv)
+	if help, ok := errors.AsType[helpRequest](err); ok {
+		fmt.Fprint(stderr, "Usage:\n  gnotifd keygen\n  gnotifd [flags]\n\nkeygen prints a new VAPID key pair as environment variables.\n\nFlags:\n", help.flags)
+		return 0
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, "gnotifd:", err)
 		return 2
@@ -56,6 +60,11 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	}
 	return 0
 }
+
+// helpRequest reports that -h was given; flags holds the formatted flag list.
+type helpRequest struct{ flags string }
+
+func (helpRequest) Error() string { return flag.ErrHelp.Error() }
 
 func parseConfig(args []string, getenv func(string) string) (server.Config, error) {
 	fs := flag.NewFlagSet("gnotifd", flag.ContinueOnError)
@@ -72,7 +81,19 @@ func parseConfig(args []string, getenv func(string) string) (server.Config, erro
 	fs.StringVar(&cfg.VAPIDSubject, "vapid-subject", "", "contact email or https URL sent to push services (required)")
 	fs.StringVar(&pushHosts, "push-hosts", strings.Join(subscribe.DefaultPushHosts, ","), "comma-separated push service hosts")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			var flags strings.Builder
+			fs.SetOutput(&flags)
+			fs.PrintDefaults()
+			return server.Config{}, helpRequest{flags.String()}
+		}
 		return server.Config{}, err
+	}
+	if cfg.Poll <= 0 {
+		return server.Config{}, errors.New("-poll must be positive")
+	}
+	if cfg.MaxAge < 0 {
+		return server.Config{}, errors.New("-max-age must not be negative")
 	}
 
 	// webpush-go adds "mailto:" to a subject that is not an https URL; a

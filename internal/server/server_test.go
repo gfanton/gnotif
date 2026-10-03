@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -120,4 +121,19 @@ func TestRootNotServed(t *testing.T) {
 
 	resp, _ := get(t, base+"/")
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestServerErrorLogUsesSlog(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{Log: slog.New(slog.NewTextHandler(&buf, nil))}
+	srv := newHTTPServer(cfg, http.NotFoundHandler())
+
+	srv.ErrorLog.Print("tls: handshake failed")
+	assert.Contains(t, buf.String(), "level=WARN")
+	assert.Contains(t, buf.String(), "tls: handshake failed")
+
+	assert.Equal(t, 5*time.Second, srv.ReadHeaderTimeout)
+	assert.Equal(t, 10*time.Second, srv.ReadTimeout)
+	assert.Equal(t, 10*time.Second, srv.WriteTimeout)
+	assert.Equal(t, 60*time.Second, srv.IdleTimeout)
 }

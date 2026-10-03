@@ -67,6 +67,20 @@ func TestParseConfig(t *testing.T) {
 		})
 	}
 
+	invalid := map[string]struct {
+		args []string
+		want string
+	}{
+		"zero poll":        {[]string{"-poll", "0"}, "-poll must be positive"},
+		"negative max-age": {[]string{"-max-age", "-1s"}, "-max-age must not be negative"},
+	}
+	for name, tc := range invalid {
+		t.Run(name, func(t *testing.T) {
+			_, err := parseConfig(append(tc.args, requiredArgs...), env(""))
+			assert.EqualError(t, err, tc.want)
+		})
+	}
+
 	t.Run("mailto subject", func(t *testing.T) {
 		args := append([]string{"-vapid-subject", "mailto:ops@gnotif.example"}, without("-vapid-subject")...)
 		cfg, err := parseConfig(args, env(""))
@@ -106,4 +120,12 @@ func TestUsageErrorExitsTwo(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	assert.Equal(t, 2, run(nil, env(""), &stdout, &stderr))
 	assert.Contains(t, stderr.String(), "-indexer")
+}
+
+func TestHelp(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	require.Equal(t, 0, run([]string{"-h"}, env(""), &stdout, &stderr))
+	for _, want := range []string{"-listen", "-indexer", "-registry", "-start-height", "-db", "-poll", "-max-age", "-vapid-subject", "-push-hosts", "keygen"} {
+		assert.Contains(t, stderr.String(), want)
+	}
 }
