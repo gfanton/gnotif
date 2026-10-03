@@ -122,6 +122,9 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 	})
 
 	s.call("devtest", "NewGame", s.addrs["player2"])
+	s.call("player2", "Accept", "0000001")
+	require.Never(t, func() bool { return count() > 0 }, 3*time.Second, 100*time.Millisecond, "a push arrived before anyone played")
+
 	s.call("devtest", "Play", "0000001") // player2's turn: push 1
 	s.call("player2", "Play", "0000001") // devtest's turn: no push
 	s.call("devtest", "Play", "0000001") // player2's turn: push 2
