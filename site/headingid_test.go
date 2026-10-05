@@ -10,11 +10,12 @@ import (
 
 func TestSlug(t *testing.T) {
 	cases := map[string]struct{ in, want string }{
-		"numbered heading": {"4. Deploy the registry", "4-deploy-the-registry"},
-		"code heading":     {"triggers()", "triggers"},
-		"apostrophe":       {"Triggers come from the registry's events", "triggers-come-from-the-registrys-events"},
-		"hyphen kept":      {"Set the opt-ins", "set-the-opt-ins"},
-		"spaces collapse":  {"  HTTP  API ", "http-api"},
+		"numbered heading":     {"4. Deploy the registry", "4-deploy-the-registry"},
+		"code heading":         {"triggers()", "triggers"},
+		"apostrophe":           {"Triggers come from the registry's events", "triggers-come-from-the-registrys-events"},
+		"hyphen kept":          {"Set the opt-ins", "set-the-opt-ins"},
+		"one hyphen per space": {"  HTTP  API ", "http--api"},
+		"ampersand dropped":    {"Fields & templates", "fields--templates"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

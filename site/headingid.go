@@ -9,20 +9,16 @@ import (
 )
 
 // slug turns a heading's text into the id GitHub would give it: lowercase,
-// letters, digits, hyphens and underscores kept, each run of spaces one hyphen.
+// letters, digits, hyphens and underscores kept, every space a hyphen, all
+// other characters dropped.
 func slug(text string) string {
 	var b strings.Builder
 	b.Grow(len(text))
-	pendingHyphen := false
 	for _, r := range strings.TrimSpace(text) {
 		switch {
 		case r == ' ':
-			pendingHyphen = true
+			b.WriteByte('-')
 		case unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_':
-			if pendingHyphen {
-				b.WriteByte('-')
-				pendingHyphen = false
-			}
 			b.WriteRune(unicode.ToLower(r))
 		}
 	}

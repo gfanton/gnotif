@@ -41,21 +41,24 @@ func renderPage(root string, p Page) (Rendered, error) {
 		return Rendered{}, fmt.Errorf("render %s: %w", p.Source, err)
 	}
 	md := newMarkdown(p.Source)
-	ctx := parser.NewContext(parser.WithIDs(newGithubIDs()))
-	doc := md.Parser().Parse(text.NewReader(src), parser.WithContext(ctx))
+	doc := md.Parser().Parse(text.NewReader(src))
 
+	// IDs come from the rendered heading text, as GitHub derives them.
+	ids := newGithubIDs()
 	var headings []Heading
 	titleDropped := false
 	for n := doc.FirstChild(); n != nil; {
 		next := n.NextSibling()
 		if h, ok := n.(*ast.Heading); ok {
+			text := nodeText(h, src)
+			id := string(ids.Generate([]byte(text), ast.KindHeading))
+			h.SetAttributeString("id", []byte(id))
 			switch {
 			case h.Level == 1 && !titleDropped:
 				doc.RemoveChild(doc, h)
 				titleDropped = true
 			case h.Level == 2 || h.Level == 3:
-				id, _ := h.AttributeString("id")
-				headings = append(headings, Heading{Level: h.Level, ID: string(id.([]byte)), Text: nodeText(h, src)})
+				headings = append(headings, Heading{Level: h.Level, ID: id, Text: text})
 			}
 		}
 		n = next
@@ -78,7 +81,6 @@ func newMarkdown(source string) goldmark.Markdown {
 			),
 		),
 		goldmark.WithParserOptions(
-			parser.WithAutoHeadingID(),
 			parser.WithASTTransformers(util.Prioritized(&linkRewriter{source: source, pages: pages}, 100)),
 		),
 	)

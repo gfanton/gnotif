@@ -69,6 +69,18 @@ func TestRenderPageNoH1(t *testing.T) {
 	assert.Equal(t, "Only a section", r.Headings[0].Text)
 }
 
+func TestRenderPageHeadingWithLink(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "docs"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "docs", "z.md"), []byte("# Z\n\n## See [the API](http-api.md)\n"), 0o644))
+
+	r, err := renderPage(root, Page{Title: "Z", Source: "docs/z.md", Slug: "z"})
+	require.NoError(t, err)
+	require.NotEmpty(t, r.Headings)
+	assert.Equal(t, Heading{Level: 2, ID: "see-the-api", Text: "See the API"}, r.Headings[0])
+	assert.Contains(t, string(r.Body), `<h2 id="see-the-api">`)
+}
+
 func TestHighlight(t *testing.T) {
 	out, err := highlight("js", "const x = 1;")
 	require.NoError(t, err)
