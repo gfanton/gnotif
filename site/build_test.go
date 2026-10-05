@@ -89,6 +89,7 @@ func TestBuildLanding(t *testing.T) {
 	assert.Contains(t, html, `<section class="flow-section" id="how">`)
 	assert.Contains(t, html, `class="scroll-hint"`)
 	assert.Contains(t, html, `<a class="wordmark" href="/" aria-label="gnotif">`)
+	assert.Contains(t, html, `<span class="tag">testnet</span>`, "the network tag sits beside the wordmark")
 	assert.Contains(t, html, `>HTTP API</a>`)
 	assert.Contains(t, html, `>npm install gnotif</code>`)
 
