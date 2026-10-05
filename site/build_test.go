@@ -108,3 +108,13 @@ var tagPattern = regexp.MustCompile(`<[^>]+>`)
 func stripTags(html string) string {
 	return tagPattern.ReplaceAllString(html, "")
 }
+
+func TestBuildDocsSidebarListOutsideMenu(t *testing.T) {
+	out := buildSite(t)
+	html := readOut(t, out, "docs/getting-started/index.html")
+	list := strings.Index(html, `<ul class="sidebar-list">`)
+	menu := strings.Index(html, `<details class="sidebar-menu">`)
+	require.Greater(t, list, -1, "a page list that no <details> can hide")
+	require.Greater(t, menu, -1)
+	assert.Less(t, list, menu, "the always-visible list comes before the phone menu")
+}

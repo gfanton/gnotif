@@ -2,6 +2,10 @@
 {{define "content"}}
 <div class="docs">
   <nav class="sidebar" aria-label="Documentation">
+    <ul class="sidebar-list">
+      {{range .Pages}}<li><a{{if eq . $.Page}} aria-current="page"{{end}} href="{{.URL}}">{{.Title}}</a></li>
+      {{end}}
+    </ul>
     <details class="sidebar-menu">
       <summary>Documentation</summary>
       <ul>
@@ -9,7 +13,7 @@
         {{end}}
       </ul>
     </details>
-    <p class="sidebar-foot">v0 · onyx-1 · <a href="{{.Site.RepoURL}}/blob/main/{{.Page.Source}}">Edit on GitHub</a></p>
+    <p class="sidebar-foot">v0 · onyx-1<br><a href="{{.Site.RepoURL}}/blob/main/{{.Page.Source}}">Edit on GitHub</a></p>
   </nav>
   <article class="content">
     {{if .Rendered.Headings}}

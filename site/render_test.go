@@ -79,3 +79,13 @@ func TestHighlight(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(out), "x")
 }
+
+func TestRenderPageKeepsAllContent(t *testing.T) {
+	for _, p := range pages {
+		t.Run(p.Slug, func(t *testing.T) {
+			r, err := renderPage(repoRoot, p)
+			require.NoError(t, err)
+			assert.NotContains(t, string(r.Body), "raw HTML omitted")
+		})
+	}
+}
