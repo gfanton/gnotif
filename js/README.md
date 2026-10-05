@@ -94,12 +94,14 @@ It throws a `GnotifError` with code:
 ### `setOptins(optins)`
 
 Keeps `optins`, a list of `{ trigger, value }` where `value` is `""` for
-a trigger without a param, as the set both channels use, and sends it
-to the server for push when the browser holds a push subscription.
-Without one, it only keeps the set, for a later `enable()`. It throws a
-`GnotifError` with code `server` when the server refuses the set:
-status 400 for an opt-in that breaks a rule, 404 when the server does
-not know the subscription. Call `enable()` to register it again.
+a trigger without a param, as the set both channels use. It sends the
+set to the live connection when one is open, and to the server for push
+when the browser holds a push subscription, and resolves once each has
+accepted it. With neither, it only keeps the set, for a later
+`enable()` or `connect()`. It throws a `GnotifError` with code `server`
+when the server refuses the set: for push, status 400 for an opt-in
+that breaks a rule and 404 when the server does not know the
+subscription, which `enable()` registers again.
 
 The server cannot read opt-ins back, so keep the set you last sent.
 
@@ -118,6 +120,54 @@ subscription. A 404, which means the server does not know the
 subscription, is not an error. It throws a `GnotifError` with code
 `inactive` when the browser holds no push subscription, and `server` on
 any other server error.
+
+## Live updates
+
+An open page can receive its notifications as they happen, with no
+permission prompt and no service worker:
+
+```js
+const off = gnotif.on("notification", (n) => show(n));
+gnotif.on("reconnect", () => refreshFromChain());
+
+await gnotif.setOptins(optins);
+await gnotif.connect();
+```
+
+### `on(event, handler)`
+
+Calls `handler` on every event of that name, and returns a function
+that removes it. A handler that throws is reported with
+`console.error`, and the other handlers still run.
+
+| Event | The handler receives | When |
+|---|---|---|
+| `notification` | `trigger`, `value`, `title`, `body`, `link`, `height`, `tx` and `attrs` | a live notification arrives |
+| `disconnect` | nothing | the connection dropped and is retrying |
+| `reconnect` | nothing | it is back, with the set sent again |
+| `error` | a `GnotifError` | a live failure no promise waits on, such as the set refused after a reconnect |
+
+`link` arrives resolved against the page's origin, and as the origin's
+root when it would land on another origin. `attrs` lists the event's
+attributes as `{ key, value }`, and `height` and `tx` name the
+transaction that emitted it.
+
+A notification is a hint: read the state the page shows from the chain.
+Nothing is replayed after a drop, so read it again on `reconnect`.
+
+### `connect()`
+
+Opens the live connection with the set `setOptins` kept, and resolves
+once the server accepts it. It sends that set, address included, to the
+server, so call it when the user asks for live updates. It throws a
+`GnotifError` with code `server` when the server refuses the set or the
+connection cannot open, and does not retry then. After a drop, the
+connection comes back by itself.
+
+### `disconnect()`
+
+Closes the live connection and stops reconnecting. A `connect()` still
+waiting rejects with code `inactive`.
 
 ## Errors
 
@@ -153,7 +203,8 @@ to the server in place of the old, so the opt-ins carry over.
 ## Types
 
 Types ship with the package as `.d.ts` files, including the `Trigger`
-type that `triggers()` resolves.
+type that `triggers()` resolves, `Optin`, and the `LiveNotification`
+that `notification` handlers receive.
 
 ## License
 

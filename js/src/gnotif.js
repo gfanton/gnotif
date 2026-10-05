@@ -1,5 +1,6 @@
 // gnotif browser client: subscribes this browser to a gnotif server's
-// pushes and sets which triggers it hears about.
+// pushes, holds an open page's live connection, and sets which triggers
+// both hear about.
 
 /**
  * A trigger as GET /v1/triggers returns it.
@@ -22,6 +23,84 @@
  * @property {string} trigger trigger id
  * @property {string} value the param value, "" for a trigger without a param
  */
+
+/**
+ * A notification as the live connection delivers it.
+ * @typedef {object} LiveNotification
+ * @property {string} trigger trigger id
+ * @property {string} value the opted-in param value, "" for none
+ * @property {string} title
+ * @property {string} body
+ * @property {string} link absolute URL on the page's origin
+ * @property {number} height block height of the event
+ * @property {string} tx hash of the transaction that emitted the event
+ * @property {{ key: string, value: string }[]} attrs the event's attributes, in order
+ */
+
+/**
+ * What each event's handler receives.
+ * @typedef {object} GnotifEvents
+ * @property {LiveNotification} notification a live notification arrived
+ * @property {undefined} disconnect the live connection dropped and is retrying
+ * @property {undefined} reconnect it is back; notifications in between were missed
+ * @property {GnotifError} error a live failure no promise waits on
+ */
+
+const PING = '{"type":"ping"}';
+const PING_INTERVAL = 30_000;
+const PONG_TIMEOUT = 10_000;
+const BACKOFF_MIN = 1_000;
+const BACKOFF_MAX = 30_000;
+
+/**
+ * @param {unknown} v
+ * @returns {v is Record<string, unknown>}
+ */
+function isRecord(v) {
+  return typeof v === "object" && v !== null;
+}
+
+/**
+ * @param {unknown} v
+ * @returns {v is { key: string, value: string }}
+ */
+function isAttr(v) {
+  return isRecord(v) && typeof v.key === "string" && typeof v.value === "string";
+}
+
+// sameOriginLink resolves link against origin, and gives the origin's root
+// for a link that lands on another origin, such as "//host" or "/\host".
+/**
+ * @param {string} link
+ * @param {string} origin
+ * @returns {string}
+ */
+function sameOriginLink(link, origin) {
+  try {
+    const url = new URL(link, origin);
+    if (url.origin === origin) {
+      return url.href;
+    }
+  } catch {
+    // an unparsable link opens the root
+  }
+  return origin + "/";
+}
+
+/**
+ * @param {Record<string, unknown>} f a decoded notification frame
+ * @param {string} origin the page's origin
+ * @returns {LiveNotification | null} null when a field is missing or mistyped
+ */
+function liveNotification(f, origin) {
+  const { trigger, value, title, body, link, height, tx, attrs } = f;
+  if (typeof trigger !== "string" || typeof value !== "string" || typeof title !== "string" ||
+    typeof body !== "string" || typeof link !== "string" || typeof height !== "number" ||
+    typeof tx !== "string" || !Array.isArray(attrs) || !attrs.every(isAttr)) {
+    return null;
+  }
+  return { trigger, value, title, body, link: sameOriginLink(link, origin), height, tx, attrs };
+}
 
 export class GnotifError extends Error {
   /**
@@ -69,6 +148,29 @@ export class Gnotif {
   #icon;
   /** @type {Optin[] | null} the set every channel uses, null until setOptins */
   #optins = null;
+  /** @type {{ [K in keyof GnotifEvents]: Set<(arg: GnotifEvents[K]) => void> }} */
+  #handlers = { notification: new Set(), disconnect: new Set(), reconnect: new Set(), error: new Set() };
+
+  // ---- Live connection state
+  /** @type {WebSocket | null} */
+  #ws = null;
+  #wanted = false; // connect() was called and disconnect() was not
+  #reconnecting = false; // dropped after its set was accepted, and retrying
+  #attempt = 0; // retries since the last accepted set
+  /** @type {{ promise: Promise<void>, resolve: () => void, reject: (err: GnotifError) => void } | null} */
+  #connecting = null;
+  #gen = 0; // counts setOptins calls
+  #sentGen = 0; // the generation of the optins frame last sent
+  #inFlight = false; // an optins frame awaits its reply
+  #dirty = false; // the kept set changed while a frame was in flight
+  /** @type {{ gen: number, resolve: () => void, reject: (err: GnotifError) => void }[]} */
+  #waiters = [];
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  #retry;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  #pong;
+  /** @type {ReturnType<typeof setInterval> | undefined} */
+  #ping;
 
   /**
    * @param {object} [options]
@@ -153,17 +255,79 @@ export class Gnotif {
   }
 
   /**
-   * Keeps optins as the set every channel uses, and sends it to the server
-   * for push when this browser is subscribed.
+   * Keeps optins as the set every channel uses, and sends it to the live
+   * connection when one is open, and to the server for push when this
+   * browser is subscribed. Resolves once each has accepted it.
    * @param {Optin[]} optins replaces the previous set
    * @returns {Promise<void>}
    */
   async setOptins(optins) {
     this.#optins = optins;
-    const sub = await this.#find();
-    if (sub) {
-      await this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins });
+    const gen = ++this.#gen;
+    /** @type {Promise<unknown>[]} */
+    const pending = [];
+    if (this.#wanted) {
+      pending.push(new Promise((resolve, reject) => {
+        this.#waiters.push({ gen, resolve: () => resolve(undefined), reject });
+      }));
+      this.#send();
     }
+    pending.push(this.#find().then((sub) =>
+      sub ? this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins }) : null));
+    await Promise.all(pending);
+  }
+
+  /**
+   * Calls handler on every event of that name until the returned function
+   * runs.
+   * @template {keyof GnotifEvents} K
+   * @param {K} event
+   * @param {(arg: GnotifEvents[K]) => void} handler
+   * @returns {() => void} removes the handler
+   */
+  on(event, handler) {
+    const handlers = this.#handlers[event];
+    handlers.add(handler);
+    return () => {
+      handlers.delete(handler);
+    };
+  }
+
+  /**
+   * Opens the live connection with the kept set, and resolves once the
+   * server accepts it. The set, address included, goes to the server:
+   * call this when the user asks for live updates. After a drop the
+   * connection comes back by itself, firing disconnect and reconnect.
+   * @returns {Promise<void>}
+   */
+  connect() {
+    if (this.#connecting) {
+      return this.#connecting.promise;
+    }
+    if (this.#wanted) {
+      return Promise.resolve();
+    }
+    this.#wanted = true;
+    /** @type {() => void} */
+    let resolve = () => {};
+    /** @type {(err: GnotifError) => void} */
+    let reject = () => {};
+    /** @type {Promise<void>} */
+    const promise = new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    this.#connecting = { promise, resolve, reject };
+    this.#open();
+    return promise;
+  }
+
+  /** Closes the live connection and stops reconnecting. */
+  disconnect() {
+    if (!this.#wanted) {
+      return;
+    }
+    this.#stop(new GnotifError("inactive", "Live connection closed."));
   }
 
   /**
@@ -193,6 +357,179 @@ export class Gnotif {
       return false;
     }
     return (await this.#find()) != null;
+  }
+
+  /**
+   * Ends the live channel: no socket, no timers, no retries, and every
+   * waiting promise rejected with err.
+   * @param {GnotifError} err
+   */
+  #stop(err) {
+    const ws = this.#ws;
+    this.#ws = null;
+    this.#wanted = false;
+    this.#reconnecting = false;
+    this.#attempt = 0;
+    this.#inFlight = false;
+    this.#dirty = false;
+    clearTimeout(this.#retry);
+    clearTimeout(this.#pong);
+    clearInterval(this.#ping);
+    ws?.close(1000);
+    this.#connecting?.reject(err);
+    this.#connecting = null;
+    for (const w of this.#waiters.splice(0)) {
+      w.reject(err);
+    }
+  }
+
+  #open() {
+    const ws = new WebSocket(this.#server.replace(/^http/, "ws") + "/v1/stream");
+    this.#ws = ws;
+    ws.addEventListener("open", () => {
+      if (ws !== this.#ws) {
+        return;
+      }
+      this.#send();
+      this.#ping = setInterval(() => {
+        ws.send(PING);
+        clearTimeout(this.#pong);
+        this.#pong = setTimeout(() => ws.close(), PONG_TIMEOUT);
+      }, PING_INTERVAL);
+    });
+    ws.addEventListener("message", (e) => {
+      if (ws === this.#ws && typeof e.data === "string") {
+        this.#onFrame(e.data);
+      }
+    });
+    ws.addEventListener("close", () => {
+      if (ws === this.#ws) {
+        this.#onClose();
+      }
+    });
+  }
+
+  // #send sends the kept set when the socket is open and no frame awaits
+  // its reply; otherwise the open, or that reply, sends it.
+  #send() {
+    const ws = this.#ws;
+    if (ws === null || ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    if (this.#inFlight) {
+      this.#dirty = true;
+      return;
+    }
+    this.#inFlight = true;
+    this.#dirty = false;
+    this.#sentGen = this.#gen;
+    ws.send(JSON.stringify({ type: "optins", optins: this.#optins ?? [] }));
+  }
+
+  /** @param {string} text */
+  #onFrame(text) {
+    /** @type {unknown} */
+    let frame;
+    try {
+      frame = JSON.parse(text);
+    } catch {
+      return;
+    }
+    if (!isRecord(frame)) {
+      return;
+    }
+    switch (frame.type) {
+      case "pong":
+        clearTimeout(this.#pong);
+        return;
+      case "optins":
+        this.#onReply(null);
+        return;
+      case "error":
+        this.#onReply(typeof frame.error === "string" ? frame.error : "gnotif server refused the opt-ins");
+        return;
+      case "notification": {
+        const n = liveNotification(frame, location.origin);
+        if (n) {
+          this.#emit("notification", n);
+        }
+        return;
+      }
+      default:
+        // A server may add frame types; this client ignores the ones it
+        // does not know.
+        return;
+    }
+  }
+
+  /** @param {string | null} err the server's refusal, null when it accepted */
+  #onReply(err) {
+    this.#inFlight = false;
+    const settled = this.#waiters.filter((w) => w.gen <= this.#sentGen);
+    this.#waiters = this.#waiters.filter((w) => w.gen > this.#sentGen);
+    if (err === null) {
+      this.#attempt = 0;
+      const connecting = this.#connecting;
+      this.#connecting = null;
+      connecting?.resolve();
+      if (this.#reconnecting) {
+        this.#reconnecting = false;
+        this.#emit("reconnect", undefined);
+      }
+      for (const w of settled) {
+        w.resolve();
+      }
+    } else {
+      const e = new GnotifError("server", err);
+      if (this.#connecting) {
+        // The first set was refused: there is nothing to keep open.
+        this.#stop(e);
+        return;
+      }
+      this.#reconnecting = false;
+      for (const w of settled) {
+        w.reject(e);
+      }
+      if (settled.length === 0) {
+        this.#emit("error", e);
+      }
+    }
+    if (this.#dirty) {
+      this.#send();
+    }
+  }
+
+  #onClose() {
+    this.#ws = null;
+    this.#inFlight = false;
+    clearInterval(this.#ping);
+    clearTimeout(this.#pong);
+    if (this.#connecting) {
+      this.#stop(new GnotifError("server", "The live connection closed before the server accepted the opt-ins."));
+      return;
+    }
+    if (!this.#reconnecting) {
+      this.#reconnecting = true;
+      this.#emit("disconnect", undefined);
+    }
+    const delay = Math.min(BACKOFF_MAX, BACKOFF_MIN * 2 ** this.#attempt) * (0.5 + Math.random() / 2);
+    this.#attempt++;
+    this.#retry = setTimeout(() => this.#open(), delay);
+  }
+
+  /**
+   * @template {keyof GnotifEvents} K
+   * @param {K} event
+   * @param {GnotifEvents[K]} arg
+   */
+  #emit(event, arg) {
+    for (const handler of [...this.#handlers[event]]) {
+      try {
+        handler(arg);
+      } catch (err) {
+        console.error(err);
+      }
+    }
   }
 
   // getRegistration resolves undefined when nothing is registered, where
