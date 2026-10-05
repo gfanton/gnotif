@@ -68,7 +68,8 @@
 
 <script>
 (function () {
-  var stage = document.querySelector('.signal .stage');
+  var hero = document.querySelector('.hero');
+  var stage = hero.querySelector('.stage');
   var scenes = stage.querySelectorAll('.scene');
   var dots = document.querySelectorAll('.scene-dots li');
   var hint = document.querySelector('.scroll-hint');
@@ -79,11 +80,22 @@
     var max = 0;
     scenes.forEach(function (sc) { max = Math.max(max, sc.offsetHeight); });
     stage.style.minHeight = max + 'px';
+    var dot = stage.querySelector('.scene.active .sig-dot').getBoundingClientRect();
+    var box = hero.getBoundingClientRect();
+    hero.style.setProperty('--echo-x', (dot.left + dot.width / 2 - box.left) + 'px');
+    hero.style.setProperty('--echo-y', (dot.top + dot.height / 2 - box.top) + 'px');
   }
   size();
   addEventListener('resize', size);
 
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // The ring leaves the dot when it lights, 1.9s into each example.
+  function echo() {
+    if (reduced) return;
+    setTimeout(function () { hero.classList.add('echo'); }, 1900);
+  }
+  hero.addEventListener('animationend', function (e) { if (e.animationName === 'echo') hero.classList.remove('echo'); });
+  echo();
   if (hint) {
     setTimeout(function () { hint.classList.add('show'); }, reduced ? 0 : 5500);
     addEventListener('scroll', function () { if (scrollY > 40) hint.classList.add('gone'); }, { passive: true });
@@ -97,6 +109,7 @@
       old.classList.remove('active', 'leaving');
       i = (i + 1) % scenes.length;
       scenes[i].classList.add('active'); dots[i].classList.add('on');
+      size(); echo();
     }, 380);
   }, 5600);
 })();

@@ -8,6 +8,7 @@
   --color-text-muted: oklch(0.66 0.012 75);
   --color-line: oklch(0.30 0.01 70);
   --color-indicator: oklch(0.78 0.16 70);
+  --color-indicator-echo: oklch(0.78 0.16 70 / 0.7);
   --color-on-indicator: oklch(0.17 0.01 70);
 
   --font-display: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -48,6 +49,7 @@
     --color-text-muted: oklch(0.45 0.014 70);
     --color-line: oklch(0.87 0.01 80);
     --color-indicator: oklch(0.64 0.16 62);
+    --color-indicator-echo: oklch(0.64 0.16 62 / 0.55);
     --color-on-indicator: oklch(0.15 0.01 62);
   }
 }
@@ -92,7 +94,7 @@ ul, ol { margin: 0; padding-left: 1.25em; }
   .wordmark .dot::after { animation: none; }
   .sig-line, .scene.active .sig-line { clip-path: none; animation: none; }
   .sig-dot .indicator, .sig-dot::before { opacity: 1; animation: none; }
-  .scene.active .sig-dot .indicator::after, .scene.active .sig-pulse { animation: none; }
+  .scene.active .sig-dot .indicator::after, .scene.active .sig-pulse, .hero.echo::before { animation: none; }
   .sig-out .toast, .scene.active .toast { opacity: 1; animation: none; }
   .scroll-hint svg { animation: none; }
 }
@@ -120,7 +122,11 @@ ul, ol { margin: 0; padding-left: 1.25em; }
 main > section { padding: var(--space-16) var(--gutter); max-width: 1280px; margin-inline: auto; }
 main > section + section { border-top: 1px solid var(--color-line); }
 
-.hero { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: var(--space-12); min-height: calc(100svh - 5.5rem); padding-block: var(--space-12) var(--space-16); }
+.hero { position: relative; overflow: clip; isolation: isolate; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: var(--space-12); min-height: calc(100svh - 5.5rem); padding-block: var(--space-12) var(--space-16); }
+/* The echo: one hairline ring leaves the dot as it lights and fades across the hero, behind everything. */
+.hero::before { content: ""; position: absolute; left: var(--echo-x, 50%); top: var(--echo-y, 50%); width: 0; height: 0; border-radius: 50%; border: 1px solid var(--color-indicator-echo); transform: translate(-50%, -50%); opacity: 0; pointer-events: none; z-index: -1; }
+.hero.echo::before { animation: echo 4.2s cubic-bezier(0.25, 0.4, 0.5, 1) forwards; }
+@keyframes echo { 0% { width: 0; height: 0; opacity: 1; } 55% { opacity: 0.6; } 100% { width: 130vmax; height: 130vmax; opacity: 0; } }
 .hero h1 { font-size: clamp(2.4rem, 1.4rem + 4.2vw, 4.75rem); line-height: 1.05; }
 .hero h1 .l1, .hero h1 .l2 { display: inline-block; }
 @media (min-width: 1100px) { .hero h1 .l1, .hero h1 .l2 { white-space: nowrap; } }
