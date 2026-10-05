@@ -42,6 +42,15 @@ func TestDeclareRejects(cur realm, t *testing.T) {
 		{"target with newline", "invalid target", 0, "gno.land/r/dev/pingpong\n- ✓ verified"},
 		{"target with uppercase", "invalid target", 0, "gno.land/r/dev/PingPong"},
 		{"target with dot", "invalid target", 0, "gno.land/r/dev/ping.pong"},
+		{"target with no path", "invalid target", 0, "gno.land/r/"},
+		{"target with empty segment", "invalid target", 0, "gno.land/r//x"},
+		{"target with trailing slash", "invalid target", 0, "gno.land/r/x/"},
+		{"target segment starting with digit", "invalid target", 0, "gno.land/r/9x"},
+		{"target with doubled underscore", "invalid target", 0, "gno.land/r/a__b"},
+		{"target segment ending with underscore", "invalid target", 0, "gno.land/r/a_"},
+		{"target segment starting with dash", "invalid target", 0, "gno.land/r/-a"},
+		{"target subsegment starting with dash", "invalid target", 0, "gno.land/r/a/-b"},
+		{"target with mixed separators", "invalid target", 0, "gno.land/r/a-_b"},
 		{"empty event", "invalid event", 1, ""},
 		{"event too long", "invalid event", 1, long[:65]},
 		{"nine filter pairs", "invalid filter", 2, "a=1,b=2,c=3,d=4,e=5,f=6,g=7,h=8,i=9"},
@@ -95,6 +104,10 @@ func TestDeclareAccepts(cur realm, t *testing.T) {
 		{"versioned target", 0, "gno.land/r/dev/pingpong/v0"},
 		{"target in an address namespace", 0, "gno.land/r/g1tw6tyv67zjyf26nskj6g5z9fhtvv4996w50xwf/pingpong"},
 		{"target with dash", 0, "gno.land/r/dev/ping-pong"},
+		{"target with three segments", 0, "gno.land/r/dev/pingpong/v0"},
+		{"target in a full address namespace", 0, "gno.land/r/g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5/gnotif/v0"},
+		{"target with mixed separators between alphanumerics", 0, "gno.land/r/a-b_c/d"},
+		{"target with a single segment", 0, "gno.land/r/user"},
 	}
 	for _, c := range cases {
 		a := valid

@@ -104,19 +104,41 @@ func sized(s string, lo, hi int) bool {
 	return len(s) >= lo && len(s) <= hi
 }
 
-// validTarget accepts after the prefix only the bytes the chain allows in a
-// realm path, so a rendered target cannot imitate the verified mark.
+// validTarget accepts a realm path whose segments each match the chain's
+// Re_name, so a target names a path where a realm can exist.
 func validTarget(target string) bool {
 	if !strings.HasPrefix(target, targetPrefix) || len(target) > maxTarget {
 		return false
 	}
-	for i := len(targetPrefix); i < len(target); i++ {
-		c := target[i]
-		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' || c == '-' || c == '/') {
+	rest := target[len(targetPrefix):]
+	start := 0 // index of the current segment's first byte
+	for i := 0; i <= len(rest); i++ {
+		if i == len(rest) || rest[i] == '/' {
+			if i == start || !isAlnum(rest[i-1]) {
+				return false
+			}
+			start = i + 1
+			continue
+		}
+		c := rest[i]
+		switch {
+		case i == start:
+			if !(c >= 'a' && c <= 'z') {
+				return false
+			}
+		case c == '_' || c == '-':
+			if !isAlnum(rest[i-1]) {
+				return false
+			}
+		case !isAlnum(c):
 			return false
 		}
 	}
 	return true
+}
+
+func isAlnum(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= '0' && c <= '9'
 }
 
 // validName accepts identifier bytes only, so a name cannot carry spaces or

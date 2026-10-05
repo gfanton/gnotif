@@ -73,7 +73,7 @@ The verified mark means "declared by the realm at the target path". It holds bec
 
 | Field | Meaning | Rule |
 |---|---|---|
-| `target` | package path of the realm whose events the trigger watches | starts with `gno.land/r/`, followed only by `a-z 0-9 _ - /`; at most 256 bytes |
+| `target` | package path of the realm whose events the trigger watches | starts with `gno.land/r/`, followed by `/`-separated segments that each start with `a-z`, continue with `a-z 0-9`, and have `_` or `-` only between letters or digits; at most 256 bytes |
 | `event` | event type to match | 1 to 64 bytes of `A-Z a-z 0-9 _` |
 | `filter` | fixed `key=value` pairs the event must carry, comma-separated; empty for none | up to 8 pairs; each key 1 to 64 bytes of `A-Z a-z 0-9 _`; each value 1 to 64 bytes without `=` or `,` |
 | `param` | attribute whose value a browser opts in with; empty notifies every browser that opted in | empty, or 1 to 64 bytes of `A-Z a-z 0-9 _` |
