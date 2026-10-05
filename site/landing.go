@@ -78,7 +78,7 @@ type flowNode struct {
 
 var flow = []flowNode{
 	{Name: "dapp realm", Note: "emits events, declares its trigger", Dashed: true},
-	{Name: "gnotif registry", Note: "holds the triggers, on chain", Dashed: true},
+	{Name: "gnotif registry", Note: "holds the triggers, on chain"},
 	{Name: "tx-indexer", Note: "reads the chain, serves GraphQL"},
 	{Name: "gnotifd", Note: "matches events, one SQLite file"},
 	{Name: "push service", Note: "Web Push, the browser vendor's"},

@@ -15,12 +15,12 @@
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="nav">
-  <a class="wordmark" href="/">gnot<span class="i">ı<span class="dot"></span></span>f</a>
+  <a class="wordmark" href="/" aria-label="gnotif">gnot<span class="i">ı<span class="dot"></span></span>f</a>
   <nav aria-label="Site">
     <a href="/docs/getting-started/">Docs</a>
-    <a href="/docs/http-api/">API</a>
+    <a href="/docs/http-api/">HTTP API</a>
     <a href="{{.Site.RepoURL}}">GitHub</a>
-    <code class="install">npm i gnotif</code>
+    <code class="install">npm install gnotif</code>
   </nav>
 </header>
 <main id="main">{{template "content" .}}</main>
@@ -30,7 +30,7 @@
     <a href="/docs/getting-started/">Docs</a>
     <a href="{{.Site.RepoURL}}">GitHub</a>
     <a href="{{.Site.NpmURL}}">npm</a>
-    <a href="{{.Site.RepoURL}}/blob/main/LICENSE">Apache-2.0</a>
+    <a href="{{.Site.BlobURL}}LICENSE">Apache-2.0</a>
   </nav>
 </footer>
 </body>
