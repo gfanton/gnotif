@@ -49,7 +49,10 @@ func DeclareTriggers(cur realm) {
 
 const gnotif = new Gnotif({ server: "` + serverURL + `" });
 const yourTurn = (await gnotif.triggers()).find(
-  (t) => t.target === "` + pingpongPath + `" && t.event === "TurnPlayed" && t.verified,
+  (t) =>
+    t.target === "` + pingpongPath + `" &&
+    t.event === "TurnPlayed" &&
+    t.verified,
 );
 
 button.addEventListener("click", async () => {
