@@ -60,6 +60,18 @@ func build(root, out string) error {
 		}
 	}
 
+	landingTmpl, err := template.ParseFS(assets, "templates/layout.html", "templates/landing.html")
+	if err != nil {
+		return err
+	}
+	landing, err := newLandingView()
+	if err != nil {
+		return err
+	}
+	if err := writeTemplate(landingTmpl, filepath.Join(out, "index.html"), landing); err != nil {
+		return err
+	}
+
 	redirect := fmt.Sprintf(redirectPage, pages[0].URL(), pages[0].URL(), pages[0].Title)
 	if err := writeFile(filepath.Join(out, "docs", "index.html"), []byte(redirect)); err != nil {
 		return err

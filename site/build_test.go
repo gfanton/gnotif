@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -68,4 +69,42 @@ func TestBuildDocs(t *testing.T) {
 	highlightCSS := readOut(t, out, "highlight.css")
 	assert.Contains(t, highlightCSS, ".chroma")
 	assert.Contains(t, highlightCSS, "@media (prefers-color-scheme: light)")
+}
+
+func TestBuildLanding(t *testing.T) {
+	out := buildSite(t)
+	html := readOut(t, out, "index.html")
+	text := stripTags(html)
+
+	assert.Contains(t, html, "Realm event in.")
+	assert.Contains(t, html, "Browser notification out.")
+	assert.Contains(t, html, `href="/docs/getting-started/" class="button primary">Add it to your dapp`)
+	assert.Contains(t, html, `href="/docs/running-gnotifd/" class="button">Run your own server`)
+	assert.Contains(t, html, "https://gnotif.xyz")
+
+	assert.Contains(t, text, "chain.Emit(")
+	assert.Contains(t, text, "gnotif.Declare(")
+	assert.Contains(t, text, "new Gnotif(")
+	assert.GreaterOrEqual(t, strings.Count(html, `class="chroma"`), 3)
+	for _, anchor := range []string{"#1-emit-an-event", "#2-declare-a-trigger", "#3-add-the-client-to-the-page"} {
+		assert.Contains(t, html, `href="/docs/getting-started/`+anchor+`"`)
+	}
+
+	for _, node := range []string{"dapp realm", "gnotif registry", "tx-indexer", "gnotifd", "push service", "sw.js"} {
+		assert.Contains(t, html, node)
+	}
+	assert.Contains(t, html, "Integrate")
+	assert.Contains(t, html, "Operate")
+	assert.Contains(t, html, "mainnet")
+	assert.NotContains(t, html, "hosted public instance")
+	assert.Contains(t, html, "Your turn")
+	assert.Contains(t, html, "Game 42, turn 7")
+}
+
+var tagPattern = regexp.MustCompile(`<[^>]+>`)
+
+// stripTags leaves the text of an HTML fragment, so code split into
+// highlighting spans can be matched as it reads.
+func stripTags(html string) string {
+	return tagPattern.ReplaceAllString(html, "")
 }

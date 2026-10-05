@@ -1,0 +1,80 @@
+{{define "title"}}gnotif · Web Push for gno.land dapps{{end}}
+{{define "content"}}
+<section class="hero">
+  <div class="hero-text">
+    <h1>Realm event in.<br>Browser notification out.</h1>
+    <p class="lede">Web Push for gno.land dapps, even when the tab is closed. A realm emits an event, a trigger in the registry says who it notifies, gnotifd pushes it to the browser.</p>
+    <p class="actions">
+      <a href="/docs/getting-started/" class="button primary">Add it to your dapp</a>
+      <a href="/docs/running-gnotifd/" class="button">Run your own server</a>
+    </p>
+    <p class="install-line"><span class="prompt">$</span> npm install gnotif</p>
+    <p class="status-line"><span><i class="indicator"></i>{{.Site.ServerURL}} is live</span><span>onyx-1 testnet</span><span>v0</span></p>
+  </div>
+  <div class="hero-media" aria-hidden="true">
+    <div class="log">
+      <div class="log-bar"><b>gnotifd</b><span>indexer.onyx.testnets.gno.land</span><span>height 1 204 388</span></div>
+<pre><span class="ev">TurnPlayed</span>   gno.land/r/dev/pingpong/v0
+  game=42 next=g1k7…x2q turn=7
+<span class="match">▸ match</span>      trigger #3 "Your turn"
+<span class="match">▸ push</span>       1 subscription · fcm.googleapis.com
+<span class="ev">TurnPlayed</span>   gno.land/r/dev/pingpong/v0
+  game=42 next=g1zm…9ra turn=8
+<span class="match">▸ match</span>      trigger #3 "Your turn"
+<span class="match">▸ push</span>       1 subscription · updates.push.services.mozilla.com</pre>
+      <div class="toast">
+        <span class="toast-icon"><i class="indicator"></i></span>
+        <div class="toast-text"><b>Your turn</b><span>Game 42, turn 7</span><small>pingpong · just now</small></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="flow-section">
+  <h2>How it works</h2>
+  <ol class="flow">
+    {{range .Flow}}<li class="node{{if .Dashed}} dashed{{end}}"><b>{{.Name}}</b><span>{{.Note}}</span></li>
+    {{end}}
+  </ol>
+  <p class="flow-note">The page calls gnotifd only to subscribe and to choose its triggers. The notification travels through the browser's push service and is shown by the service worker the dapp serves from its own origin, so it arrives even when no tab of the dapp is open.</p>
+</section>
+
+<section class="steps">
+  <h2>Add notifications to a dapp</h2>
+  {{range $i, $s := .Steps}}
+  <div class="step">
+    <div class="step-text">
+      <p class="eyebrow">{{$s.Step.Label}}</p>
+      <h3>{{$s.Step.Title}}</h3>
+      <p>{{$s.Step.Text}}</p>
+      <a href="{{$s.Step.DocsHref}}">Getting started →</a>
+    </div>
+    {{$s.Code}}
+  </div>
+  {{end}}
+</section>
+
+<section class="roles">
+  <div class="role">
+    <p class="eyebrow">Integrate</p>
+    <h2>Add it to a dapp</h2>
+    <p>The npm package, one service worker file served from your origin, and the triggers your page offers. Nothing to run: the public server at {{.Site.ServerURL}} watches onyx for you.</p>
+    <a href="/docs/getting-started/">Getting started →</a>
+  </div>
+  <div class="role">
+    <p class="eyebrow">Operate</p>
+    <h2>Run your own gnotifd</h2>
+    <p>One binary, one SQLite file, a VAPID key pair and a tx-indexer to read. A container image is published for every release.</p>
+    <a href="/docs/running-gnotifd/">Running gnotifd →</a>
+  </div>
+</section>
+
+<section class="status">
+  <h2>Status</h2>
+  <div>
+    <p>gnotif is at version 0 and targets the onyx testnet (<code>onyx-1</code>). The public server at {{.Site.ServerURL}} runs it with the registry at <code>{{.Registry}}</code>. Version 0 leaves out:</p>
+    <ul>{{range .Status}}<li>{{.}}</li>{{end}}</ul>
+    <p>gnotif does not check that an address a browser opts in with belongs to that browser's user.</p>
+  </div>
+</section>
+{{end}}
