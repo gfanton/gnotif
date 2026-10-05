@@ -11,14 +11,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/coder/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/gfanton/gnotif/internal/delivery"
+	"github.com/gfanton/gnotif/internal/stream"
 	"github.com/gfanton/gnotif/internal/subscribe"
 	"github.com/gfanton/gnotif/internal/watch"
 )
@@ -120,6 +124,92 @@ func TestRootNotServed(t *testing.T) {
 	}, 5*time.Second, 20*time.Millisecond)
 
 	resp, _ := get(t, base+"/")
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+// runServer starts Run and waits until it answers; stop cancels it and
+// returns what Run returned.
+func runServer(t *testing.T, cfg Config) (base string, stop func() error) {
+	t.Helper()
+	base = "http://" + cfg.Listener.Addr().String()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, cfg) }()
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(base + "/v1/vapid")
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, 5*time.Second, 20*time.Millisecond)
+	var once sync.Once
+	var runErr error
+	stop = func() error {
+		once.Do(func() {
+			cancel()
+			select {
+			case runErr = <-done:
+			case <-time.After(15 * time.Second):
+				runErr = errors.New("Run did not return")
+			}
+		})
+		return runErr
+	}
+	t.Cleanup(func() { stop() })
+	return base, stop
+}
+
+func TestServesLiveStream(t *testing.T) {
+	cfg := config(t, 1)
+	cfg.StreamMax = 10
+	base, stop := runServer(t, cfg)
+
+	resp, body := get(t, base+"/v1/stream")
+	assert.Equal(t, http.StatusUpgradeRequired, resp.StatusCode)
+	assert.JSONEq(t, `{"error":"websocket upgrade required"}`, body)
+	assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, base+"/v1/stream", nil)
+	require.NoError(t, err)
+	defer c.CloseNow()
+	exchange := func(frame, want string) {
+		t.Helper()
+		require.NoError(t, c.Write(ctx, websocket.MessageText, []byte(frame)))
+		_, got, err := c.Read(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, want, string(got))
+	}
+	exchange(stream.PingFrame, stream.PongFrame)
+	exchange(`{"type":"optins","optins":[]}`, `{"type":"optins"}`)
+
+	stopped := make(chan error, 1)
+	go func() { stopped <- stop() }()
+	_, _, err = c.Read(ctx)
+	assert.Equal(t, websocket.StatusGoingAway, websocket.CloseStatus(err))
+	assert.NoError(t, <-stopped)
+}
+
+func TestHubListener(t *testing.T) {
+	cfg := config(t, 1)
+	hub, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	cfg.HubListener = hub
+	base, _ := runServer(t, cfg)
+
+	resp, err := http.Post("http://"+hub.Addr().String()+"/message", "text/plain", strings.NewReader(stream.PingFrame))
+	require.NoError(t, err)
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.JSONEq(t, `{"reply":"{\"type\":\"pong\"}"}`, string(body))
+
+	resp, err = http.Post(base+"/message", "text/plain", strings.NewReader(stream.PingFrame))
+	require.NoError(t, err)
+	resp.Body.Close()
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 

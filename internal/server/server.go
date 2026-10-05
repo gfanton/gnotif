@@ -1,5 +1,5 @@
 // Package server wires gnotifd: the store, the watch loop, the delivery
-// loop, and an HTTP server for the /v1 subscription API.
+// loop, the live hub, and an HTTP server for the /v1 API.
 package server
 
 import (
@@ -16,7 +16,9 @@ import (
 	"github.com/gfanton/gnotif/internal/delivery"
 	"github.com/gfanton/gnotif/internal/indexer"
 	"github.com/gfanton/gnotif/internal/store"
+	"github.com/gfanton/gnotif/internal/stream"
 	"github.com/gfanton/gnotif/internal/subscribe"
+	"github.com/gfanton/gnotif/internal/trigger"
 	"github.com/gfanton/gnotif/internal/watch"
 )
 
@@ -24,6 +26,7 @@ const (
 	maxWindow       = 1000
 	pushTTL         = 24 * time.Hour
 	shutdownTimeout = 10 * time.Second
+	publishTimeout  = 5 * time.Second
 )
 
 // Config is gnotifd's configuration.
@@ -40,6 +43,11 @@ type Config struct {
 	PushHosts     []string
 	PushClient    *http.Client // nil: delivery.NewClient()
 	IndexerClient *http.Client // nil: a client with a 30 s timeout
+	StreamMax     int          // most live connections held at once
+	HubListener   net.Listener // nil: listen on HubListen when it is set
+	HubListen     string       // external-hub listener; empty: none
+	Publish       string       // URL receiving each window's matches; empty: none
+	PublishToken  string
 	Log           *slog.Logger
 }
 
@@ -67,6 +75,28 @@ func Run(ctx context.Context, cfg Config) error {
 			return fmt.Errorf("listen on %s: %w", cfg.Listen, err)
 		}
 	}
+	hubLn := cfg.HubListener
+	if hubLn == nil && cfg.HubListen != "" {
+		if hubLn, err = net.Listen("tcp", cfg.HubListen); err != nil {
+			ln.Close()
+			return fmt.Errorf("listen on %s: %w", cfg.HubListen, err)
+		}
+	}
+
+	protocol := stream.Protocol{TriggersByID: st.TriggersByID, Log: cfg.Log}
+	hub := stream.NewHub(stream.HubConfig{Protocol: protocol, Max: cfg.StreamMax, Log: cfg.Log})
+	var publisher *stream.Publisher
+	if cfg.Publish != "" {
+		publisher = stream.NewPublisher(stream.PublisherConfig{
+			URL: cfg.Publish, Token: cfg.PublishToken, Client: &http.Client{}, Timeout: publishTimeout, Log: cfg.Log,
+		})
+	}
+	publish := func(matches []trigger.Match) {
+		hub.Publish(matches)
+		if publisher != nil {
+			publisher.Publish(matches)
+		}
+	}
 
 	now := func() time.Time { return time.Now().UTC() }
 	wake := make(chan struct{}, 1)
@@ -81,6 +111,7 @@ func Run(ctx context.Context, cfg Config) error {
 		Wake:        wake,
 		Now:         now,
 		Log:         cfg.Log,
+		Publish:     publish,
 	})
 	sender := delivery.New(delivery.Config{
 		Store:   st,
@@ -98,28 +129,47 @@ func Run(ctx context.Context, cfg Config) error {
 		Store:     st,
 		PublicKey: cfg.VAPID.Public,
 		PushHosts: cfg.PushHosts,
+		Stream:    hub,
 		Log:       cfg.Log,
 	}))
-	srv := newHTTPServer(cfg, mux)
+	servers := []*http.Server{newHTTPServer(cfg, mux)}
+	listeners := []net.Listener{ln}
+	if hubLn != nil {
+		servers = append(servers, newHTTPServer(cfg, stream.MessageHandler(protocol)))
+		listeners = append(listeners, hubLn)
+	}
 
 	loopCtx, stop := context.WithCancel(ctx)
 	defer stop()
-	serveErr := make(chan error, 1)
+	serveErr := make(chan error, len(servers))
 	var wg sync.WaitGroup
 	wg.Go(func() { watcher.Run(loopCtx) })
 	wg.Go(func() { sender.Run(loopCtx) })
-	wg.Go(func() {
-		if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
-			serveErr <- err
-			stop()
-		}
-	})
+	if publisher != nil {
+		wg.Go(func() { publisher.Run(loopCtx) })
+	}
+	for i, srv := range servers {
+		wg.Go(func() {
+			if err := srv.Serve(listeners[i]); !errors.Is(err, http.ErrServerClosed) {
+				serveErr <- err
+				stop()
+			}
+		})
+	}
 	cfg.Log.Info("gnotifd started", "addr", ln.Addr().String(), "registry", cfg.Registry, "indexer", cfg.Indexer)
+	if hubLn != nil {
+		cfg.Log.Info("external-hub listener started", "addr", hubLn.Addr().String())
+	}
 
 	<-loopCtx.Done()
+	// Shutdown does not track upgraded connections, so the hub closes them.
+	hub.Close()
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
-	shutdownErr := srv.Shutdown(shutdownCtx)
+	var shutdownErr error
+	for _, srv := range servers {
+		shutdownErr = errors.Join(shutdownErr, srv.Shutdown(shutdownCtx))
+	}
 	wg.Wait()
 	select {
 	case err := <-serveErr:

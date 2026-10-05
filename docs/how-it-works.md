@@ -1,6 +1,6 @@
 # How gnotif works
 
-gnotifd is one process with one SQLite file. A watch loop reads realm events from tx-indexer and queues a push for every opt-in an event matches. A delivery loop sends the queued pushes. An HTTP server takes the browsers' subscriptions and opt-ins. The two loops share only the queue, kept in the database, so a slow push service never holds back reading the chain, and a crash between them loses nothing.
+gnotifd is one process with one SQLite file. A watch loop reads realm events from tx-indexer and queues a push for every opt-in an event matches. A delivery loop sends the queued pushes. An HTTP server takes the browsers' subscriptions and opt-ins, and holds the pages' live connections. The two loops share only the queue, kept in the database, so a slow push service never holds back reading the chain, and a crash between them loses nothing.
 
 ```
 +-- gno.land chain --------------------------------+
@@ -89,6 +89,14 @@ A push carries `{"title", "body", "link"}` as JSON, encrypted for the subscripti
 
 The HTTP client waits 10 seconds for a push service and follows no redirects. On shutdown, the push in flight finishes and its outcome is recorded, so a push the service accepted is not sent again on the next start.
 
+## Two channels
+
+A match reaches the browsers in two ways. Push shows an OS notification, even with the dapp's tab closed, and needs the browser's permission and a service worker. A live connection needs neither: an open page sends its opt-ins over a WebSocket and receives the same title, body and link, with the event's attributes ([HTTP API](http-api.md#live-notifications)). A dapp uses either, or both with the same opt-ins.
+
+The watch loop hands every match to the live connections once the database transaction that read it is committed. A live connection hears of a match at most once, and never of one whose transaction rolled back.
+
+A notification is a hint, and the chain holds the truth: a page reads the state it shows from the chain, and reads it again after its live connection reconnects.
+
 ## The service worker
 
 The dapp's `sw.js` shows each push, opens its link on a click, and [hands a renewed subscription to the server](http-api.md#replace-a-rotated-subscription). [The client's README](../js/README.md#notifications) describes how it behaves.
@@ -101,6 +109,8 @@ Any server built on the registry, gnotifd or another, must:
 - match a trigger's target and event type exactly, and skip an event that lacks the trigger's param attribute;
 - percent-escape every attribute value it fills into a link, so a value cannot add a path segment or a host;
 - fall back to `/` when a filled-in link starts with `//`;
+- send a live connection only the matches for its exact opt-ins;
+- give a live notification the same title, body and link as the push of the same match;
 - leave the final origin check to the client: the service worker opens a link only when it resolves to the dapp's own origin.
 
 ## Rules for a new registry version

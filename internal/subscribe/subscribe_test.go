@@ -273,6 +273,26 @@ func TestDeleteSubscription(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, h.do(t, http.MethodDelete, "/v1/subscription", body).Code)
 }
 
+func TestStreamRoute(t *testing.T) {
+	var served int
+	stream := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		served++
+		w.WriteHeader(http.StatusUpgradeRequired)
+	})
+	h := NewHandler(Config{PublicKey: "PK", Stream: stream, Log: slog.New(slog.DiscardHandler)})
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/stream", nil))
+	assert.Equal(t, 1, served)
+	assert.Equal(t, http.StatusUpgradeRequired, rec.Code)
+	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/stream", nil))
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	assert.Equal(t, 1, served)
+}
+
 func TestCORS(t *testing.T) {
 	h := newHarness(t)
 	rec := h.do(t, http.MethodOptions, "/v1/subscription", "")

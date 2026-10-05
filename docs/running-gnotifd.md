@@ -66,8 +66,11 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 | `-poll` | `5s` | indexer poll interval; must be positive |
 | `-max-age` | `10m` | oldest event that still sends a notification; must not be negative |
 | `-push-hosts` | the four hosts in [the allowlist](#the-push-service-allowlist) | comma-separated push service hosts |
+| `-stream-max` | `1000` | most live connections held at once; `0` refuses every one |
+| `-hub-listen` | none | address of the [external-hub](#attach-an-external-hub) listener |
+| `-publish` | none | URL receiving each window's matches for an [external hub](#attach-an-external-hub) |
 
-`gnotifd -h` prints the flags with their defaults. Durations take Go's syntax, such as `30s`, `10m` or `1h`. The VAPID keys come only from `GNOTIF_VAPID_PUBLIC_KEY` and `GNOTIF_VAPID_PRIVATE_KEY`, and every other setting only from flags.
+`gnotifd -h` prints the flags with their defaults. Durations take Go's syntax, such as `30s`, `10m` or `1h`. The VAPID keys come only from `GNOTIF_VAPID_PUBLIC_KEY` and `GNOTIF_VAPID_PRIVATE_KEY`, the publish token only from `GNOTIF_PUBLISH_TOKEN`, and every other setting only from flags.
 
 ## The indexer and the start height
 
@@ -108,6 +111,15 @@ The subscriptions and opt-ins exist only in the database. To start a new databas
 
 gnotifd also refuses a file made by a newer release, with `database was made by a newer gnotifd`. Run the release that made it instead, since a new database drops every subscription. A refused file is left untouched.
 
+## Attach an external hub
+
+gnotifd holds live connections itself. A deployment can hold them in an external hub instead, such as one that keeps idle connections at no cost. gnotifd still builds every frame a client receives, so clients see no difference. Two flags connect the hub:
+
+- `-hub-listen <addr>` opens a second listener with one route, `POST /message`. The hub posts each text frame a client sends, at most 8,192 bytes, and receives `{"reply": "<frame>", "keys": ["<key>", "..."]}`. It sends `reply` to the client as is. `keys` is present when the frame replaced the connection's set, and lists that set. Keep this listener off the public network.
+- `-publish <url>` posts each processed window's matches to the hub as `[{"key": "<key>", "frame": "<frame>"}]`, in chain order, and the hub sends each `frame` to the connections whose keys include `key`. With `GNOTIF_PUBLISH_TOKEN` set, each request carries `Authorization: Bearer <token>`. A request that fails or takes over 5 seconds is logged and dropped, and so is a batch that arrives while 64 wait.
+
+The hub answers the transport itself, with the texts of the [HTTP API](http-api.md#live-notifications): the exact pong to the exact ping, the closes for an oversized or a binary frame, and the 503 answer past its own cap.
+
 ## Run the container image
 
 Build the image from a checkout:
@@ -134,5 +146,5 @@ docker run -d --name gnotifd -p 127.0.0.1:8080:8080 -v gnotif-data:/data --env-f
 ## What version 0 leaves to the operator
 
 - **Health:** there is no health endpoint. `GET /v1/vapid` answers while the HTTP server runs, but says nothing about the watch loop: watch the log for `watch tick failed`.
-- **Abuse limits:** gnotifd has no caps per IP and no send budget per declarer. Anyone can register subscriptions and opt-ins, and a subscription stays until its page deletes it or a push to it comes back expired. Rate-limit `/v1/` at the reverse proxy.
+- **Abuse limits:** gnotifd has no caps per IP and no send budget per declarer. Anyone can register subscriptions and opt-ins, and a subscription stays until its page deletes it or a push to it comes back expired. `-stream-max` caps live connections in total, not per client. Rate-limit `/v1/` at the reverse proxy.
 - **Monitoring:** there are no metrics, only the log. gnotifd logs nothing for a push it sent, nor for a retry after a 429 or 5xx answer. It logs a network failure and a push dropped after a day as warnings, a push the service rejected as an error, and an expired subscription at info level.

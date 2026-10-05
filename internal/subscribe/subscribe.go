@@ -28,6 +28,7 @@ type Config struct {
 	Store     *store.Store
 	PublicKey string // VAPID public key browsers subscribe with
 	PushHosts []string
+	Stream    http.Handler // serves GET /v1/stream; nil serves no live connections
 	Log       *slog.Logger
 }
 
@@ -64,7 +65,8 @@ type handler struct {
 	cfg Config
 }
 
-// NewHandler returns the /v1/ API. Every answer allows any origin.
+// NewHandler returns the /v1/ API, live connections included. Every answer
+// allows any origin.
 func NewHandler(cfg Config) http.Handler {
 	h := &handler{cfg: cfg}
 	mux := http.NewServeMux()
@@ -73,6 +75,9 @@ func NewHandler(cfg Config) http.Handler {
 	mux.HandleFunc("PUT /v1/subscription", h.putSubscription)
 	mux.HandleFunc("PUT /v1/subscription/optins", h.putOptins)
 	mux.HandleFunc("DELETE /v1/subscription", h.deleteSubscription)
+	if cfg.Stream != nil {
+		mux.Handle("GET /v1/stream", cfg.Stream)
+	}
 	mux.HandleFunc("OPTIONS /v1/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
