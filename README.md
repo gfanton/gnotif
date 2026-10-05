@@ -95,10 +95,10 @@ gnotifd -indexer https://indexer.onyx.testnets.gno.land/graphql/query \
 
 - [Getting started](docs/getting-started.md): from realm to page, and the demo on a local chain.
 - [How it works](docs/how-it-works.md): the watch window, storage, delivery outcomes and the rules for gnotif servers.
-- [Running gnotifd](docs/running-gnotifd.md): flags, VAPID keys, the push service allowlist, the indexer and the container image.
-- [HTTP API](docs/http-api.md): the `/v1` endpoints, errors and CORS.
-- [Deploying the realms](docs/deploying-realms.md): deploy copies, linting and the deploy order on onyx.
 - [Browser client](js/README.md): the `gnotif` npm package.
+- [HTTP API](docs/http-api.md): the `/v1` endpoints, errors and CORS.
+- [Running gnotifd](docs/running-gnotifd.md): flags, VAPID keys, the push service allowlist, the indexer and the container image.
+- [Deploying the realms](docs/deploying-realms.md): deploy copies, linting and the deploy order on onyx.
 
 ## Develop
 
@@ -121,7 +121,7 @@ gnotif is at version 0 and targets the onyx testnet (`onyx-1`). A public server 
 - configuration through environment variables, beyond the VAPID keys;
 - mainnet.
 
-gnotif does not check that an address a browser opts in with belongs to that browser's user.
+gnotif does not check that an address a browser opts in with belongs to that browser's user. A notification says only what the event already published on chain.
 
 ## License
 

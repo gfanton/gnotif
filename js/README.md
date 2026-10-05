@@ -71,7 +71,7 @@ Replaces the browser's opt-ins with `optins`, a list of
 param. It throws a `GnotifError` with code `inactive` when the browser
 holds no push subscription, and `server` when the server refuses the
 set: status 400 for an opt-in that breaks a rule, 404 when the server
-does not know the subscription, which `enable()` registers again.
+does not know the subscription. Call `enable()` to register it again.
 
 The server cannot read opt-ins back, so keep the set you last sent.
 

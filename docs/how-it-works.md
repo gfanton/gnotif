@@ -45,7 +45,7 @@ Every `-poll` interval, 5 seconds by default, the watch loop runs one tick:
    - `height_done` becomes the end of the window and `bound` the latest height of this answer.
 6. When the transaction queued pushes, it wakes the delivery loop.
 
-A tick that fails, because the indexer is unreachable, answers with a status other than 200, or returns a GraphQL `errors` array, leaves the cursor in place and logs a warning. A SQLite error rolls the whole window back. Either way the next tick starts again from the same height. A push is queued once per subscription, trigger, transaction and event index, so reading a window twice queues nothing new.
+A tick fails when the indexer is unreachable, answers with a status other than 200, or returns a GraphQL `errors` array. A failed tick leaves the cursor in place and logs a warning. A SQLite error rolls the whole window back. Either way the next tick starts again from the same height. A push is queued once per subscription, trigger, transaction and event index, so reading a window twice queues nothing new.
 
 A block is read on the tick after the one that first reports its height, so a notification leaves gnotifd within two poll intervals of the indexer storing its block.
 

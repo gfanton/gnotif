@@ -92,7 +92,7 @@ The subscription stored at `oldEndpoint` takes the new endpoint and keys, and ke
 
 - `optins` holds at most 50 entries, and `[]` clears the set.
 - Each `trigger` is the id of a trigger the server knows.
-- `value` is the trigger's param value: non-empty when the trigger has a `param`, `""` when it has none. It is at most 4,096 bytes, without leading or trailing white space, since such a value never equals an event attribute.
+- `value` is the trigger's param value: non-empty when the trigger has a `param`, `""` when it has none. It is at most 4,096 bytes. The server refuses leading or trailing white space, since a value that carries it never equals an event attribute.
 - The same trigger and value twice count once.
 
 The server has no route that reads opt-ins back. A page keeps the set it last sent.
