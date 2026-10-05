@@ -74,7 +74,7 @@ pingpong imports the registry, so deploy it only once the registry is `live`. De
 
 Call pingpong's `DeclareTriggers` with `gno_call`. It takes no argument and works once; a second call panics with `triggers already declared`.
 
-After the call, the registry's page lists the trigger with "✓ verified": `gno_render` on `gno.land/r/<namespace>/gnotif/v0`, or https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0 on gnoweb.
+After the call, the registry's page lists the trigger with "✓ verified": `gno_render` on `gno.land/r/<namespace>/gnotif/v0`, or `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0` on gnoweb.
 
 ## 7. Point gnotifd and the demo at the deploy
 
