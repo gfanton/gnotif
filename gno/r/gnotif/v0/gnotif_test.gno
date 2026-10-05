@@ -104,7 +104,7 @@ func TestDeclareAccepts(cur realm, t *testing.T) {
 		{"versioned target", 0, "gno.land/r/dev/pingpong/v0"},
 		{"target in an address namespace", 0, "gno.land/r/g1tw6tyv67zjyf26nskj6g5z9fhtvv4996w50xwf/pingpong"},
 		{"target with dash", 0, "gno.land/r/dev/ping-pong"},
-		{"target with three segments", 0, "gno.land/r/dev/pingpong/v0"},
+		{"target of 256 bytes", 0, "gno.land/r/" + strings.Repeat("a", 245)},
 		{"target in a full address namespace", 0, "gno.land/r/g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5/gnotif/v0"},
 		{"target with mixed separators between alphanumerics", 0, "gno.land/r/a-b_c/d"},
 		{"target with a single segment", 0, "gno.land/r/user"},

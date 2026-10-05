@@ -114,7 +114,7 @@ func validTarget(target string) bool {
 	start := 0 // index of the current segment's first byte
 	for i := 0; i <= len(rest); i++ {
 		if i == len(rest) || rest[i] == '/' {
-			if i == start || !isAlnum(rest[i-1]) {
+			if i == start || !isLowerAlnum(rest[i-1]) {
 				return false
 			}
 			start = i + 1
@@ -127,17 +127,17 @@ func validTarget(target string) bool {
 				return false
 			}
 		case c == '_' || c == '-':
-			if !isAlnum(rest[i-1]) {
+			if !isLowerAlnum(rest[i-1]) {
 				return false
 			}
-		case !isAlnum(c):
+		case !isLowerAlnum(c):
 			return false
 		}
 	}
 	return true
 }
 
-func isAlnum(c byte) bool {
+func isLowerAlnum(c byte) bool {
 	return c >= 'a' && c <= 'z' || c >= '0' && c <= '9'
 }
 
