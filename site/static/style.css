@@ -122,7 +122,8 @@ ul, ol { margin: 0; padding-left: 1.25em; }
 main > section { padding: var(--space-16) var(--gutter); max-width: 1280px; margin-inline: auto; }
 main > section + section { border-top: 1px solid var(--color-line); }
 
-.hero { position: relative; overflow: clip; isolation: isolate; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: var(--space-12); min-height: calc(100svh - 5.5rem); padding-block: var(--space-12) var(--space-16); }
+.hero { position: relative; overflow: clip; isolation: isolate; display: flex; flex-direction: column; justify-content: center; max-width: none; padding-inline: 0; min-height: calc(100svh - 5.5rem); padding-block: var(--space-12) var(--space-16); }
+.hero-inner { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-12); width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: var(--gutter); }
 /* The echo: one hairline ring leaves the dot as it lights and fades across the hero, behind everything. */
 .hero::before { content: ""; position: absolute; left: var(--echo-x, 50%); top: var(--echo-y, 50%); width: 0; height: 0; border-radius: 50%; border: 1px solid var(--color-indicator-echo); transform: translate(-50%, -50%); opacity: 0; pointer-events: none; z-index: -1; }
 .hero.echo::before { animation: echo 4.2s cubic-bezier(0.25, 0.4, 0.5, 1) forwards; }
