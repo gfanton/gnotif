@@ -1,10 +1,14 @@
 package stream
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -179,6 +183,32 @@ func TestHubFrameSizeBoundary(t *testing.T) {
 	c = dial(t, url)
 	send(t, c, frame(MaxFrame+1))
 	assert.Equal(t, websocket.StatusMessageTooBig, closeStatus(t, c))
+}
+
+// A browser reports a close only once the TCP connection ends, so the hub
+// must end it after the close frame, whatever closed the connection.
+func TestHubEndsConnectionAfterOversizedFrame(t *testing.T) {
+	_, url := newTestHub(t, 10)
+	host := strings.TrimPrefix(url, "http://")
+	conn, err := net.Dial("tcp", host)
+	require.NoError(t, err)
+	defer conn.Close()
+	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"+
+		"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n", host)
+	r := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(r, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
+
+	// One masked text frame of MaxFrame+1 bytes, with a zero mask.
+	size := MaxFrame + 1
+	frame := []byte{0x81, 0x80 | 126, byte(size >> 8), byte(size), 0, 0, 0, 0}
+	_, err = conn.Write(append(frame, bytes.Repeat([]byte(" "), size)...))
+	require.NoError(t, err)
+
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(3*time.Second)))
+	_, err = io.ReadAll(r) // the close frame, then the end of the connection
+	assert.NoError(t, err, "the hub left the connection open after closing it")
 }
 
 func TestHubBinaryCloses1003(t *testing.T) {

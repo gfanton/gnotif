@@ -140,6 +140,10 @@ func (h *Hub) index(c *conn, keys []string) {
 }
 
 func (h *Hub) serve(c *conn) {
+	// The library answers some read errors, such as a frame over the limit,
+	// with a close frame only; ending the connection here lets the client
+	// see the close.
+	defer c.ws.CloseNow()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	written := make(chan struct{})
