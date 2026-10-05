@@ -1,0 +1,38 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{template "title" .}}</title>
+<meta name="description" content="Web Push notifications for gno.land dapps, from the events a realm emits.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<link rel="stylesheet" href="/highlight.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <p class="brand"><a class="wordmark" href="/" aria-label="gnotif">gnot<span class="i">ı<span class="dot"></span></span>f</a><span class="tag">testnet</span></p>
+  <nav aria-label="Site">
+    <a href="/docs/getting-started/">Docs</a>
+    <a href="/docs/http-api/">HTTP API</a>
+    <a href="{{.Site.RepoURL}}">GitHub</a>
+    <code class="install">npm install gnotif</code>
+  </nav>
+</header>
+<main id="main">{{template "content" .}}</main>
+<footer class="footer">
+  <span class="wordmark small">gnot<span class="i">ı<span class="dot"></span></span>f</span>
+  <nav aria-label="Footer">
+    <a href="/docs/getting-started/">Docs</a>
+    <a href="{{.Site.RepoURL}}">GitHub</a>
+    <a href="{{.Site.NpmURL}}">npm</a>
+    <a href="{{.Site.BlobURL}}LICENSE">Apache-2.0</a>
+  </nav>
+</footer>
+</body>
+</html>
+{{end}}

@@ -105,7 +105,7 @@ docker build -t gnotifd .
 docker run --rm gnotifd -h
 ```
 
-A release tag `vX.Y.Z` also publishes `ghcr.io/<owner>/gnotifd:X.Y.Z`, built for linux/amd64, where `<owner>` is the GitHub owner of this repository.
+A release tag `vX.Y.Z` also publishes `ghcr.io/gfanton/gnotifd:X.Y.Z`, built for linux/amd64.
 
 The image runs a static gnotifd as a non-root user, with `-db /data/gnotif.db -listen 0.0.0.0:8080` by default and a volume at `/data`. Arguments to `docker run` replace those defaults, so pass `-db` and `-listen` again with your flags:
 

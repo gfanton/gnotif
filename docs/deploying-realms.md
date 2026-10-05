@@ -1,6 +1,6 @@
 # Deploying the realms
 
-The realms deploy to onyx (`onyx-1`) through gnomcp, a Gno MCP server that gives an AI client tools to read and write a gno.land chain, in a fixed order: the registry, then pingpong, then a call to pingpong's `DeclareTriggers`. The repository's realms sit under the placeholder namespace `gno.land/r/dev`, and `make deploy-pkgs` writes copies under yours.
+The realms deploy to onyx (`onyx-1`) in a fixed order: the registry, then pingpong, then a call to pingpong's `DeclareTriggers`. The steps use gnomcp, a Model Context Protocol (MCP) server that gives an AI client tools to read and write a gno.land chain. The repository's realms sit under the placeholder namespace `gno.land/r/dev`, and `make deploy-pkgs` writes copies under yours.
 
 ## Before you start
 
@@ -27,7 +27,7 @@ find .tools/deploy -type f
 
 ## 3. Lint the copies with the chain's toolchain
 
-onyx parks every new package until an automatic approver type-checks it and enables it. A package that fails the check stays parked, and the chain reports it exactly like one still waiting. A dry run does not type-check either. Lint the copies with the gno release onyx runs before deploying them.
+onyx parks every new package until an automatic approver type-checks it and enables it. A package that fails the check stays parked, and the chain reports it exactly like one still waiting. A dry run does not type-check. Lint the copies with the gno release onyx runs before deploying them.
 
 The Makefile's toolchain is that release: CI pins it as `GNO_VERSION` in [ci.yml](../.github/workflows/ci.yml), and the README's [Develop](../README.md#develop) section installs it with the realms' dependencies. Check that onyx still runs it:
 
@@ -74,7 +74,7 @@ pingpong imports the registry, so deploy it only once the registry is `live`. De
 
 Call pingpong's `DeclareTriggers` with `gno_call`. It takes no argument and works once; a second call panics with `triggers already declared`.
 
-After the call, the registry's page lists the trigger with "✓ verified": `gno_render` on `gno.land/r/<namespace>/gnotif/v0`, or https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0 on gnoweb.
+After the call, the registry's page lists the trigger with "✓ verified": `gno_render` on `gno.land/r/<namespace>/gnotif/v0`, or `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0` on gnoweb.
 
 ## 7. Point gnotifd and the demo at the deploy
 

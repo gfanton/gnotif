@@ -61,7 +61,7 @@ func DeclareTriggers(cur realm) {
 ```
 
 - `cross(cur)` makes pingpong the caller the registry sees, so the trigger is verified.
-- `cur.PkgPath()` passes pingpong's own path as the target, which stays right under any deploy path.
+- `cur.PkgPath()` passes pingpong's own path as the target, which stays correct under any deploy path.
 - Anyone may call `DeclareTriggers`, and the `declared` flag makes it run once. Call it once after the deploy.
 - The declarer of this trigger is pingpong's address, so only pingpong could remove it, through a function that calls `gnotif.Remove(cross(cur), id)`. pingpong has none.
 
@@ -128,7 +128,7 @@ Then subscribe the browser and opt it in:
 ```js
 import { Gnotif, GnotifError } from "gnotif";
 
-const gnotif = new Gnotif({ server: "https://gnotif.example" });
+const gnotif = new Gnotif({ server: "https://gnotif.xyz" });
 
 const yourTurn = (await gnotif.triggers()).find(
   (t) => t.target === "gno.land/r/dev/pingpong/v0" && t.event === "TurnPlayed" && t.verified,

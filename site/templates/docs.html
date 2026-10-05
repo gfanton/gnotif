@@ -1,0 +1,39 @@
+{{define "title"}}{{.Page.Title}} · gnotif{{end}}
+{{define "content"}}
+<div class="docs">
+  <nav class="sidebar" aria-label="Documentation">
+    <ul class="sidebar-list">
+      {{range .Pages}}<li><a{{if eq . $.Page}} aria-current="page"{{end}} href="{{.URL}}">{{.Title}}</a></li>
+      {{end}}
+    </ul>
+    <details class="sidebar-menu">
+      <summary>Documentation</summary>
+      <ul>
+        {{range .Pages}}<li><a{{if eq . $.Page}} aria-current="page"{{end}} href="{{.URL}}">{{.Title}}</a></li>
+        {{end}}
+      </ul>
+    </details>
+    <p class="sidebar-foot">v0 · onyx-1<br><a href="{{.Site.EditURL}}{{.Page.Source}}">Edit on GitHub</a></p>
+  </nav>
+  <article class="content">
+    {{if .Rendered.Headings}}
+    <details class="toc toc-inline">
+      <summary>On this page</summary>
+      <ul>{{range .Rendered.Headings}}<li class="level-{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>{{end}}</ul>
+    </details>
+    {{end}}
+    <h1>{{.Page.Title}}</h1>
+    {{.Rendered.Body}}
+    <nav class="pager" aria-label="Pages">
+      {{if .Prev}}<a rel="prev" href="{{.Prev.URL}}"><small>Previous</small>{{.Prev.Title}}</a>{{else}}<span></span>{{end}}
+      {{if .Next}}<a rel="next" href="{{.Next.URL}}"><small>Next</small>{{.Next.Title}}</a>{{end}}
+    </nav>
+  </article>
+  {{if .Rendered.Headings}}
+  <aside class="toc toc-rail" aria-label="On this page">
+    <p class="toc-title">On this page</p>
+    <ul>{{range .Rendered.Headings}}<li class="level-{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>{{end}}</ul>
+  </aside>
+  {{end}}
+</div>
+{{end}}
