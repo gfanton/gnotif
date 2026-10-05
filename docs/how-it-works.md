@@ -89,7 +89,7 @@ The HTTP client waits 10 seconds for a push service and follows no redirects. On
 The dapp serves `sw.js` from its own origin and registers it with the gnotif server's URL in its query string.
 
 - **push:** it shows the notification. A notification replaces any earlier one with the same link, and alerts again. A push without a usable payload still shows "New activity", because Safari revokes a subscription whose pushes show nothing.
-- **click:** it resolves the link against the dapp's origin, and opens the dapp's root instead when the link lands on another origin. With a tab of the dapp open, it focuses the first such tab, and navigates it to the link when the service worker controls that tab; a tab it does not control, such as the one where `enable()` first ran, is only focused. With no tab of the dapp open, it opens one at the link.
+- **click:** it opens the link on the dapp's origin, and opens the service worker's scope instead when the link lands on another origin. With a tab open under that scope, it focuses the first such tab, and navigates it to the link when the service worker controls that tab; a tab it does not control, such as the one where `enable()` first ran, is only focused. With no tab open under the scope, it opens one at the link.
 - **subscription change:** when the browser replaces its push subscription, it sends the new one to the server with the old endpoint as `oldEndpoint`, so the opt-ins carry over ([HTTP API](http-api.md#replace-a-rotated-subscription)).
 
 ## Rules for gnotif servers

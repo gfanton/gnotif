@@ -16,26 +16,27 @@ function parsePayload(text) {
   } catch {
     // fall through to the generic notification
   }
-  return { title: "New activity", body: "", link: "/" };
+  return { title: "New activity", body: "", link: "./" };
 }
 
-// safeLink resolves link against origin and refuses anything that lands on
-// another origin, such as "//host" or "/\host".
+// safeLink resolves link against the worker's scope and refuses anything
+// that lands on another origin, such as "//host" or "/\host": those open
+// the scope instead.
 /**
  * @param {string} link
- * @param {string} origin
+ * @param {string} scope
  * @returns {string}
  */
-function safeLink(link, origin) {
+function safeLink(link, scope) {
   try {
-    const url = new URL(link, origin);
-    if (url.origin === origin) {
+    const url = new URL(link, scope);
+    if (url.origin === new URL(scope).origin) {
       return url.href;
     }
   } catch {
-    // an unparsable link opens the root
+    // an unparsable link opens the scope
   }
-  return origin + "/";
+  return scope;
 }
 
 // Safari revokes a subscription whose pushes show nothing, so every push
@@ -51,11 +52,11 @@ sw.addEventListener("push", (event) => {
 
 sw.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = safeLink(event.notification.data?.link ?? "/", sw.location.origin);
+  const url = safeLink(event.notification.data?.link ?? "./", sw.registration.scope);
   event.waitUntil((async () => {
     const windows = await sw.clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const client of windows) {
-      if (new URL(client.url).origin === sw.location.origin) {
+      if (client.url.startsWith(sw.registration.scope)) {
         // Focus first: a browser may refuse a focus that comes after the
         // navigation finishes.
         await client.focus();

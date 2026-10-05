@@ -4,18 +4,20 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
 const ORIGIN = "https://dapp.example";
-const FALLBACK = { title: "New activity", body: "", link: "/" };
+const FALLBACK = { title: "New activity", body: "", link: "./" };
 
 const RESUBSCRIBED = { endpoint: "E3", keys: { p256dh: "p3", auth: "a3" } };
 
-// load runs sw.js against fakes. The fake server answers putStatus to
-// PUT /v1/subscription and the key "PK" to GET /v1/vapid.
-function load({ putStatus = 204, windows = [], search = "?server=" + encodeURIComponent("https://gnotif.example") } = {}) {
+// load runs sw.js against fakes, registered with scope. The fake server
+// answers putStatus to PUT /v1/subscription and the key "PK" to
+// GET /v1/vapid.
+function load({ putStatus = 204, windows = [], scope = `${ORIGIN}/`, search = "?server=" + encodeURIComponent("https://gnotif.example") } = {}) {
   const handlers = {};
   const calls = { show: [], open: [], fetch: [], subscribe: [] };
   const self = {
-    location: new URL(`${ORIGIN}/sw.js${search}`),
+    location: new URL(`${scope}sw.js${search}`),
     registration: {
+      scope,
       showNotification: async (...args) => calls.show.push(args),
       pushManager: {
         subscribe: async (options) => {
@@ -58,17 +60,21 @@ test("parsePayload falls back on malformed payloads", () => {
   }
 });
 
-test("safeLink keeps links on the worker's origin", () => {
+test("safeLink keeps links on the worker's origin and falls back to its scope", () => {
   const { context } = load();
-  const cases = [
-    ["/?game=7", `${ORIGIN}/?game=7`],
-    ["//evil.com", `${ORIGIN}/`],
-    ["/\\evil.com", `${ORIGIN}/`],
-    ["https://evil.com", `${ORIGIN}/`],
-    ["javascript:alert(1)", `${ORIGIN}/`],
-  ];
-  for (const [link, want] of cases) {
-    assert.equal(context.safeLink(link, ORIGIN), want, link);
+  for (const scope of [`${ORIGIN}/`, `${ORIGIN}/app/`]) {
+    const cases = [
+      ["/?game=7", `${ORIGIN}/?game=7`],
+      ["/app/?game=7", `${ORIGIN}/app/?game=7`],
+      ["./", scope],
+      ["//evil.com", scope],
+      ["/\\evil.com", scope],
+      ["https://evil.com", scope],
+      ["javascript:alert(1)", scope],
+    ];
+    for (const [link, want] of cases) {
+      assert.equal(context.safeLink(link, scope), want, `${link} under ${scope}`);
+    }
   }
 });
 
@@ -115,6 +121,39 @@ test("notificationclick focuses an open tab before navigating it", async () => {
     notification: { data: { link: "/?game=7" }, close: () => {} },
   });
   assert.deepEqual(order, ["focus", `navigate ${ORIGIN}/?game=7`]);
+});
+
+test("notificationclick under a path ignores tabs outside the worker's scope", async () => {
+  const focused = [];
+  const tab = (url) => ({ url, focus: async () => { focused.push(url); }, navigate: async () => {} });
+  const { handlers, calls } = load({ scope: `${ORIGIN}/app/`, windows: [tab(`${ORIGIN}/`), tab(`${ORIGIN}/application`)] });
+  await dispatch(handlers.notificationclick, {
+    notification: { data: { link: "/app/?game=7" }, close: () => {} },
+  });
+  assert.deepEqual(focused, []);
+  assert.deepEqual(calls.open, [`${ORIGIN}/app/?game=7`]);
+});
+
+test("notificationclick under a path focuses a tab inside the worker's scope", async () => {
+  const order = [];
+  const client = {
+    url: `${ORIGIN}/app/other`,
+    focus: async () => { order.push("focus"); },
+    navigate: async (url) => { order.push(`navigate ${url}`); },
+  };
+  const { handlers } = load({ scope: `${ORIGIN}/app/`, windows: [client] });
+  await dispatch(handlers.notificationclick, {
+    notification: { data: { link: "/app/?game=7" }, close: () => {} },
+  });
+  assert.deepEqual(order, ["focus", `navigate ${ORIGIN}/app/?game=7`]);
+});
+
+test("a generic notification opens the worker's scope", async () => {
+  const { handlers, calls } = load({ scope: `${ORIGIN}/app/` });
+  await dispatch(handlers.push, { data: null });
+  const [, options] = calls.show[0];
+  await dispatch(handlers.notificationclick, { notification: { data: options.data, close: () => {} } });
+  assert.deepEqual(calls.open, [`${ORIGIN}/app/`]);
 });
 
 test("pushsubscriptionchange registers the new subscription with the server", async () => {

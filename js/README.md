@@ -30,7 +30,9 @@ const gnotif = new Gnotif({ server: "https://gnotif.xyz", serviceWorker: "/sw.js
 ```
 
 `server` is the base URL of the gnotif server. `serviceWorker` is the URL
-of the copy on the dapp's origin and defaults to `/sw.js`.
+of the copy on the dapp's origin and defaults to `/sw.js`. A dapp served
+under a path, such as `/app/`, serves its copy from that path and passes
+`/app/sw.js`.
 
 ### `triggers()`
 
@@ -113,15 +115,17 @@ replaces an earlier one with the same link. A push without a usable
 payload still shows "New activity", because Safari revokes a
 subscription whose pushes show nothing.
 
-A click resolves the notification's link against the dapp's origin, and
-opens the dapp's root instead when the link lands on another origin.
+A click opens the notification's link on the dapp's origin. A link that
+lands on another origin opens the service worker's scope instead: the
+path `sw.js` is served from, `/` for a dapp at the root of its origin.
+"New activity" opens the scope too.
 
-- With a tab of the dapp open, it focuses the first such tab, and
+- With a tab open under the scope, it focuses the first such tab, and
   navigates it to the link when the service worker controls that tab. A
   tab is controlled when it loaded after the service worker activated.
   `sw.js` never claims open tabs, so the tab where `enable()` first ran
   stays uncontrolled until it reloads, and a click only focuses it.
-- With no tab of the dapp open, it opens one at the link.
+- With no tab open under the scope, it opens one at the link.
 
 When the browser renews its push subscription, `sw.js` sends the new one
 to the server in place of the old, so the opt-ins carry over.
