@@ -1,4 +1,5 @@
 import { Gnotif, GnotifError } from "./gnotif.js";
+import { isAddress } from "./address.mjs";
 import { gnoweb, pingpong, server } from "./config.js";
 
 const gnotif = new Gnotif({ server, serviceWorker: "/sw.js" });
@@ -98,13 +99,16 @@ function renderTriggers(saved) {
   }));
 }
 
-// selectedOptins throws when a checked trigger needs the address and it is empty.
+// selectedOptins throws when a checked trigger needs the address and it is empty or malformed.
 function selectedOptins() {
   const address = el("address").value.trim();
   return [...el("triggers").querySelectorAll("input:checked")].map((box) => {
     const t = triggers.find((x) => x.id === box.value);
     if (t.param && !address) {
       throw new Error(`Enter your address: "${t.title}" needs it.`);
+    }
+    if (t.param && !isAddress(address)) {
+      throw new Error(`"${address}" isn't a valid gno address. Expected g1 followed by 38 letters and digits.`);
     }
     return { trigger: t.id, value: t.param ? address : "" };
   });

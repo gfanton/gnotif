@@ -33,7 +33,7 @@ go-test: ## Run go vet and the Go tests
 	go test ./...
 
 js-test: ## Run the browser script tests
-	node --test 'js/test/*.test.mjs'
+	node --test 'js/test/*.test.mjs' 'demo/*.test.mjs'
 
 $(TOOLS)/gno-src:
 	git clone --depth 1 --branch $(GNO_REF) $(GNO_CHECKOUT) $@
