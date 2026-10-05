@@ -130,6 +130,53 @@ test("connect rejects with the server's message and does not retry", async (t) =
   assert.equal(sockets().length, 1);
 });
 
+// ThrowingWebSocket refuses its URL at once, as a browser does for ws: from
+// an https: page, while throwing.on is set.
+class ThrowingWebSocket extends FakeWebSocket {
+  static on = true;
+
+  constructor(url) {
+    if (ThrowingWebSocket.on) {
+      throw new DOMException("refused by the browser", "SecurityError");
+    }
+    super(url);
+  }
+}
+
+test("connect rejects with code server when the socket cannot be created, and can be tried again", async (t) => {
+  stubLive(t);
+  ThrowingWebSocket.on = true;
+  t.after(stubGlobal("WebSocket", ThrowingWebSocket));
+  const g = new Gnotif({ server: SERVER });
+  await assert.rejects(g.connect(), (err) => err instanceof GnotifError && err.code === "server" && err.message === "refused by the browser");
+
+  ThrowingWebSocket.on = false;
+  const p = g.connect();
+  assert.equal(sockets().length, 1);
+  last().open();
+  last().receive(ACCEPTED);
+  await p;
+  g.disconnect();
+});
+
+test("a socket refused while reconnecting is retried later", async (t) => {
+  stubLive(t, 0);
+  t.after(stubGlobal("WebSocket", ThrowingWebSocket));
+  ThrowingWebSocket.on = false;
+  const g = await connected(t);
+  ThrowingWebSocket.on = true;
+  last().drop();
+  t.mock.timers.tick(500); // the retry is refused at once
+  assert.equal(sockets().length, 1);
+  ThrowingWebSocket.on = false;
+  t.mock.timers.tick(1000);
+  assert.equal(sockets().length, 2);
+  last().open();
+  last().receive(ACCEPTED);
+  assert.deepEqual(last().optinsSent(), [A]);
+  g.disconnect();
+});
+
 test("connect called twice opens one socket", async (t) => {
   stubLive(t);
   const g = new Gnotif({ server: SERVER });

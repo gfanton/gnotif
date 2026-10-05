@@ -384,7 +384,20 @@ export class Gnotif {
   }
 
   #open() {
-    const ws = new WebSocket(this.#server.replace(/^http/, "ws") + "/v1/stream");
+    /** @type {WebSocket} */
+    let ws;
+    try {
+      ws = new WebSocket(this.#server.replace(/^http/, "ws") + "/v1/stream");
+    } catch (err) {
+      // A browser refuses some URLs at once, such as ws: from an https:
+      // page: the first connect fails, and a reconnect tries again later.
+      if (this.#connecting) {
+        this.#stop(new GnotifError("server", err instanceof Error ? err.message : String(err)));
+      } else {
+        this.#onClose();
+      }
+      return;
+    }
     this.#ws = ws;
     ws.addEventListener("open", () => {
       if (ws !== this.#ws) {
