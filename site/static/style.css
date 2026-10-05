@@ -1,0 +1,26 @@
+/* Layout only; the tokens, colors and type arrive with the identity. */
+* { box-sizing: border-box; }
+body { margin: 0; }
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 1rem; top: 1rem; }
+
+.nav, .footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem clamp(1rem, 4vw, 3rem); }
+.nav nav, .footer nav { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+
+.docs { display: grid; grid-template-columns: 240px minmax(0, 1fr) 200px; gap: 3rem; padding: 2rem clamp(1rem, 4vw, 3rem); max-width: 1280px; margin-inline: auto; }
+.content { min-width: 0; max-width: 68ch; }
+.sidebar ul, .toc ul { list-style: none; margin: 0; padding: 0; }
+.sidebar-menu > summary { display: none; }
+.toc-inline { display: none; }
+.toc .level-3 { padding-left: 1rem; }
+.pager { display: flex; justify-content: space-between; gap: 1rem; margin-top: 3rem; }
+.pager small { display: block; }
+.code { overflow-x: auto; }
+.code pre { margin: 0; }
+
+@media (max-width: 900px) {
+  .docs { grid-template-columns: 1fr; gap: 1.5rem; }
+  .sidebar-menu > summary { display: list-item; }
+  .toc-rail { display: none; }
+  .toc-inline { display: block; }
+}

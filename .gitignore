@@ -5,3 +5,4 @@ node_modules/
 demo/gnotif.js
 demo/sw.js
 vapid.env
+site/dist/

@@ -13,7 +13,7 @@ NS ?=
 REALMS := gnotif/v0 pingpong/v0
 DEMO_JS := demo/gnotif.js demo/sw.js
 
-.PHONY: all test gno-test gno-lint gno-deps go-test js-test tools e2e demo deploy-pkgs clean help
+.PHONY: all test gno-test gno-lint gno-deps go-test js-test tools e2e demo site site-serve deploy-pkgs clean help
 
 all: test ## Run every test (default)
 
@@ -58,6 +58,12 @@ $(DEMO_JS): demo/%.js: js/src/%.js
 
 demo: $(DEMO_JS) ## Serve the demo dapp on http://localhost:3000
 	python3 -m http.server 3000 --bind 127.0.0.1 --directory demo
+
+site: ## Build the website into site/dist
+	go run ./site -out site/dist
+
+site-serve: site ## Build and serve the website on http://localhost:3001
+	python3 -m http.server 3001 --bind 127.0.0.1 --directory site/dist
 
 deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>, without tests
 	test -n "$(NS)" || { echo "deploy-pkgs: set NS=gno.land/r/<namespace>" >&2; exit 1; }
