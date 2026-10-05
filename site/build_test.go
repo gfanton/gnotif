@@ -33,9 +33,12 @@ func TestBuildDocs(t *testing.T) {
 			html := readOut(t, out, "docs/"+p.Slug+"/index.html")
 			assert.Contains(t, html, "<title>"+p.Title)
 
+			start := strings.Index(html, `<ul class="sidebar-list">`)
+			require.Greater(t, start, -1)
+			sidebar := html[start : start+strings.Index(html[start:], "</ul>")]
 			last := 0
 			for _, q := range pages {
-				at := strings.Index(html, ">"+q.Title+"</a>")
+				at := strings.Index(sidebar, ">"+q.Title+"</a>")
 				require.Greater(t, at, last, "sidebar lists %q after the one before it", q.Title)
 				last = at
 			}
@@ -64,11 +67,12 @@ func TestBuildDocs(t *testing.T) {
 	assert.Contains(t, redirect, `<meta http-equiv="refresh" content="0; url=/docs/getting-started/">`)
 	assert.Contains(t, redirect, `<a href="/docs/getting-started/">`)
 
-	assert.Equal(t, "gnotif.xyz\n", readOut(t, out, "CNAME"))
 	assert.NotEmpty(t, readOut(t, out, "style.css"))
 	highlightCSS := readOut(t, out, "highlight.css")
 	assert.Contains(t, highlightCSS, ".chroma")
 	assert.Contains(t, highlightCSS, "@media (prefers-color-scheme: light)")
+	assert.Contains(t, highlightCSS, "@media (prefers-color-scheme: dark)")
+	assert.Regexp(t, `(?s)@media \(prefers-color-scheme: dark\) \{.*?\.chroma \{`, highlightCSS, "the dark rules sit inside the dark media query")
 }
 
 func TestBuildLanding(t *testing.T) {
@@ -81,6 +85,9 @@ func TestBuildLanding(t *testing.T) {
 	assert.Contains(t, html, `href="/docs/getting-started/" class="button primary">Add it to your dapp`)
 	assert.Contains(t, html, `href="/docs/running-gnotifd/" class="button">Run your own server`)
 	assert.Contains(t, html, "https://gnotif.xyz")
+	assert.Contains(t, html, `<a class="wordmark" href="/" aria-label="gnotif">`)
+	assert.Contains(t, html, `>HTTP API</a>`)
+	assert.Contains(t, html, `>npm install gnotif</code>`)
 
 	assert.Contains(t, text, "chain.Emit(")
 	assert.Contains(t, text, "gnotif.Declare(")

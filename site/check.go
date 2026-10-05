@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"html"
 	"io/fs"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -36,30 +38,34 @@ func checkLinks(dir string) error {
 	}
 
 	ids := map[string]map[string]bool{}
-	for p, html := range htmlFiles {
+	for p, page := range htmlFiles {
 		ids[p] = map[string]bool{}
-		for _, m := range idPattern.FindAllStringSubmatch(html, -1) {
-			ids[p][m[1]] = true
+		for _, m := range idPattern.FindAllStringSubmatch(page, -1) {
+			ids[p][html.UnescapeString(m[1])] = true
 		}
 	}
 
 	var dangling []error
-	for p, html := range htmlFiles {
-		for _, m := range hrefPattern.FindAllStringSubmatch(html, -1) {
-			href := m[1]
+	for p, page := range htmlFiles {
+		for _, m := range hrefPattern.FindAllStringSubmatch(page, -1) {
+			href := html.UnescapeString(m[1])
 			if !strings.HasPrefix(href, "/") && !strings.HasPrefix(href, "#") {
 				continue
 			}
-			target, fragment, _ := strings.Cut(href, "#")
+			u, err := url.Parse(href)
+			if err != nil {
+				dangling = append(dangling, fmt.Errorf("%s: %s: %w", p, href, err))
+				continue
+			}
 			file := p
-			if target != "" {
-				file = resolveInternal(dir, target)
+			if u.Path != "" {
+				file = resolveInternal(dir, u.Path)
 				if _, err := os.Stat(file); err != nil {
 					dangling = append(dangling, fmt.Errorf("%s: %s", p, href))
 					continue
 				}
 			}
-			if fragment != "" && !ids[file][fragment] {
+			if u.Fragment != "" && !ids[file][u.Fragment] {
 				dangling = append(dangling, fmt.Errorf("%s: %s", p, href))
 			}
 		}

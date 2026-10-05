@@ -20,10 +20,12 @@ var assets embed.FS
 type siteView struct {
 	ServerURL string
 	RepoURL   string
+	BlobURL   string
+	EditURL   string
 	NpmURL    string
 }
 
-var site = siteView{ServerURL: serverURL, RepoURL: repoURL, NpmURL: npmURL}
+var site = siteView{ServerURL: serverURL, RepoURL: repoURL, BlobURL: repoBlobURL, EditURL: repoEditURL, NpmURL: npmURL}
 
 // docsView is the data of one documentation page.
 type docsView struct {
@@ -125,18 +127,18 @@ func copyStatic(out string) error {
 	})
 }
 
-// writeHighlightCSS writes chroma's rules for both themes: github-dark as
-// the default and github when the reader prefers a light scheme.
+// writeHighlightCSS writes chroma's rules for both themes, each inside its
+// own media query so a token one style leaves unstyled never inherits the
+// other style's color.
 func writeHighlightCSS(out string) error {
 	formatter := chromahtml.New(chromahtml.WithClasses(true))
 	var buf bytes.Buffer
-	if err := formatter.WriteCSS(&buf, styles.Get("github-dark")); err != nil {
-		return err
+	for scheme, style := range map[string]string{"dark": "github-dark", "light": "github"} {
+		fmt.Fprintf(&buf, "@media (prefers-color-scheme: %s) {\n", scheme)
+		if err := formatter.WriteCSS(&buf, styles.Get(style)); err != nil {
+			return err
+		}
+		buf.WriteString("}\n")
 	}
-	buf.WriteString("@media (prefers-color-scheme: light) {\n")
-	if err := formatter.WriteCSS(&buf, styles.Get("github")); err != nil {
-		return err
-	}
-	buf.WriteString("}\n")
 	return writeFile(filepath.Join(out, "highlight.css"), buf.Bytes())
 }

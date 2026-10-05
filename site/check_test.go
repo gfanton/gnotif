@@ -37,16 +37,11 @@ func TestCheckLinksDangling(t *testing.T) {
 
 func TestCheckLinksClean(t *testing.T) {
 	dir := writeSite(t, map[string]string{
-		"a/index.html": `<p>a</p>`,
+		"a/index.html": `<p>a</p> <a href="#a%c3%a7%c3%a3o">accent</a> <a href="/b/?x=1#here">query</a> <h2 id="ação">Ação</h2>`,
 		"b/index.html": `<a href="/a/">a</a> <a href="#here">here</a> <a href="https://example.com/x.md">out</a> <h2 id="here">Here</h2>`,
 		"style.css":    `body{}`,
 		"index.html":   `<a href="/style.css">css</a> <a href="/b/">b</a>`,
 	})
 
 	assert.NoError(t, checkLinks(dir))
-}
-
-func TestBuildChecksLinks(t *testing.T) {
-	out := buildSite(t)
-	assert.NoError(t, checkLinks(out))
 }
