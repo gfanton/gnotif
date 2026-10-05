@@ -15,7 +15,7 @@ TX_INDEXER_VERSION := v1.3.0
 NS ?=
 DEMO_JS := demo/gnotif.js demo/sw.js
 
-.PHONY: all test gno-test gno-lint gno-deps go-test js-test tools e2e demo site site-serve deploy-pkgs clean fclean help
+.PHONY: all test gno-test gno-lint gno-deps go-test js-test tools e2e conformance demo site site-serve deploy-pkgs clean fclean help
 
 all: test ## Run every test (default)
 
@@ -67,6 +67,10 @@ tools: $(TOOLS)/gnodev $(TOOLS)/gnokey $(TOOLS)/tx-indexer ## Build gnodev, gnok
 
 e2e: tools ## Run the local end-to-end test
 	GNOTIF_TOOLS=$(abspath $(TOOLS)) GNOTIF_ROOT=$(abspath .) go test -tags e2e -count=1 -v ./e2e/
+
+conformance: ## Check the live endpoint of GNOTIF_SERVER, opting into a trigger of GNOTIF_TARGET
+	test -n "$(GNOTIF_SERVER)" && test -n "$(GNOTIF_TARGET)" || { echo "conformance: set GNOTIF_SERVER=<gnotif server URL> GNOTIF_TARGET=<realm path>" >&2; exit 1; }
+	GNOTIF_SERVER=$(GNOTIF_SERVER) GNOTIF_TARGET=$(GNOTIF_TARGET) node --test e2e/conformance/stream.test.mjs
 
 $(DEMO_JS): demo/%.js: js/src/%.js
 	cp $< $@

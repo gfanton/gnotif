@@ -118,7 +118,7 @@ gnotifd holds live connections itself. A deployment can hold them in an external
 - `-hub-listen <addr>` opens a second listener with one route, `POST /message`. The hub posts each text frame a client sends, at most 8,192 bytes, and receives `{"reply": "<frame>", "keys": ["<key>", "..."]}`. It sends `reply` to the client as is. `keys` is present when the frame replaced the connection's set, and lists that set. Keep this listener off the public network.
 - `-publish <url>` posts each processed window's matches to the hub as `[{"key": "<key>", "frame": "<frame>"}]`, in chain order, and the hub sends each `frame` to the connections whose keys include `key`. With `GNOTIF_PUBLISH_TOKEN` set, each request carries `Authorization: Bearer <token>`. A request that fails or takes over 5 seconds is logged and dropped, and so is a batch that arrives while 64 wait.
 
-The hub answers the transport itself, with the texts of the [HTTP API](http-api.md#live-notifications): the exact pong to the exact ping, the closes for an oversized or a binary frame, and the 503 answer past its own cap.
+The hub answers the transport itself, with the texts of the [HTTP API](http-api.md#live-notifications): the exact pong to the exact ping, the closes for an oversized or a binary frame, and the 503 answer past its own cap. From a checkout, `GNOTIF_SERVER=https://<server> GNOTIF_TARGET=<realm path> make conformance` checks a server's live endpoint, with a hub or without, opting into a verified trigger of that realm.
 
 ## Run the container image
 
