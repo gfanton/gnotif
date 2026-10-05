@@ -1,6 +1,7 @@
 package main
 
 import (
+	"html"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -84,36 +85,47 @@ func TestBuildLanding(t *testing.T) {
 	assert.Contains(t, html, "Browser notification out.")
 	assert.Contains(t, html, `href="/docs/getting-started/" class="button primary">Add it to your dapp`)
 	assert.Contains(t, html, `href="/docs/running-gnotifd/" class="button">Run your own server`)
-	assert.Contains(t, html, "https://gnotif.xyz")
+	assert.Contains(t, html, `class="hero-more" href="#how"`)
+	assert.Contains(t, html, `<section class="flow-section" id="how">`)
+	assert.Contains(t, html, `class="scroll-hint"`)
 	assert.Contains(t, html, `<a class="wordmark" href="/" aria-label="gnotif">`)
 	assert.Contains(t, html, `>HTTP API</a>`)
 	assert.Contains(t, html, `>npm install gnotif</code>`)
 
+	assert.Equal(t, 5, strings.Count(html, `<div class="scene`), "five examples on the signal line")
+	assert.Equal(t, 1, strings.Count(html, `<div class="scene active"`), "one example shown at rest")
+	assert.Contains(t, html, "Game 0000042, turn 7")
+	assert.Contains(t, text, "the player's browser")
+	assert.Contains(t, text, "every voter's browser")
+
+	assert.Contains(t, text, "there is no notification server to run")
 	assert.Contains(t, text, "chain.Emit(")
 	assert.Contains(t, text, "gnotif.Declare(")
 	assert.Contains(t, text, "new Gnotif(")
+	assert.Contains(t, text, "yourTurn === undefined")
+	assert.Contains(t, html, "https://gnotif.xyz")
 	assert.GreaterOrEqual(t, strings.Count(html, `class="chroma"`), 3)
 	for _, anchor := range []string{"#1-emit-an-event", "#2-declare-a-trigger", "#3-add-the-client-to-the-page"} {
 		assert.Contains(t, html, `href="/docs/getting-started/`+anchor+`"`)
 	}
-
 	for _, node := range []string{"dapp realm", "gnotif registry", "tx-indexer", "gnotifd", "push service", "sw.js"} {
 		assert.Contains(t, html, node)
 	}
-	assert.Contains(t, html, "Integrate")
-	assert.Contains(t, html, "Operate")
-	assert.Contains(t, html, "mainnet")
+
+	assert.Contains(t, html, "Run your own gnotifd")
+	assert.NotContains(t, html, "Integrate")
+	assert.NotContains(t, html, `class="status"`)
+	assert.NotContains(t, strings.ToLower(text), "onyx", "the landing names no network or endpoint")
+	assert.NotContains(t, text, "indexer.")
 	assert.NotContains(t, html, "hosted public instance")
-	assert.Contains(t, html, "Your turn")
-	assert.Contains(t, html, "Game 42, turn 7")
 }
 
 var tagPattern = regexp.MustCompile(`<[^>]+>`)
 
-// stripTags leaves the text of an HTML fragment, so code split into
-// highlighting spans can be matched as it reads.
-func stripTags(html string) string {
-	return tagPattern.ReplaceAllString(html, "")
+// stripTags leaves the text of an HTML fragment, entities decoded, so code
+// split into highlighting spans and copy with apostrophes match as they read.
+func stripTags(page string) string {
+	return html.UnescapeString(tagPattern.ReplaceAllString(page, ""))
 }
 
 func TestBuildDocsSidebarListOutsideMenu(t *testing.T) {

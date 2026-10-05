@@ -3,10 +3,11 @@ package main
 import "html/template"
 
 // step is one of the three integration steps shown on the landing page.
+// Text is the site's own copy and may carry inline code.
 type step struct {
 	Label    string
 	Title    string
-	Text     string
+	Text     template.HTML
 	Lang     string
 	Code     string
 	DocsHref string
@@ -24,7 +25,7 @@ var steps = [3]step{
 	{
 		Label: "Declare",
 		Title: "Declare a trigger in the registry",
-		Text:  "Declared by the realm itself, the trigger is verified. It notifies the browsers that opted in with the address in the event's next attribute.",
+		Text:  "The realm declares the trigger itself, so the registry marks it verified. Call <code>DeclareTriggers</code> once after the deploy.",
 		Lang:  "go",
 		Code: `import "` + registryPath + `"
 
@@ -43,7 +44,7 @@ func DeclareTriggers(cur realm) {
 	{
 		Label: "Subscribe",
 		Title: "Subscribe the browser from your page",
-		Text:  "Install the client, serve its service worker from your origin, and call enable() from a click.",
+		Text:  "Copy <code>node_modules/gnotif/src/sw.js</code> to the folder your site serves at its root. From a click, call <code>enable()</code>, then opt the browser in with the player's address.",
 		Lang:  "js",
 		Code: `import { Gnotif } from "gnotif";
 
@@ -54,6 +55,9 @@ const yourTurn = (await gnotif.triggers()).find(
     t.event === "TurnPlayed" &&
     t.verified,
 );
+if (yourTurn === undefined) {
+  throw new Error("This gnotif server does not offer pingpong's trigger.");
+}
 
 button.addEventListener("click", async () => {
   await gnotif.enable();
@@ -68,6 +72,31 @@ type renderedStep struct {
 	Code template.HTML
 }
 
+// scene is one example on the hero's signal line: the event a realm emits
+// on the left, the notification it becomes on the right.
+type scene struct {
+	Label string
+	Event string
+	Attrs string
+	Title string
+	Body  string
+	App   string
+	Who   string
+}
+
+var scenes = []scene{
+	{Label: "pingpong · TurnPlayed", Event: "TurnPlayed", Attrs: "game=0000042 next=g1k7…x2q turn=7",
+		Title: "Your turn", Body: "Game 0000042, turn 7", App: "pingpong", Who: "the player's browser"},
+	{Label: "gnochat · Mentioned", Event: "Mentioned", Attrs: "channel=general by=g1zm…9ra who=g1k7…x2q",
+		Title: "g1zm…9ra mentioned you", Body: "in #general", App: "gnochat", Who: "the member's browser"},
+	{Label: "govdao · ProposalClosed", Event: "ProposalClosed", Attrs: "id=0000012 result=passed",
+		Title: "Proposal 12 passed", Body: "Treasury budget, Q4", App: "govdao", Who: "every voter's browser"},
+	{Label: "auctions · Outbid", Event: "Outbid", Attrs: "lot=0000309 by=g1p0…7cd was=g1k7…x2q",
+		Title: "You were outbid", Body: "Lot 309, now 1 250 GNOT", App: "auctions", Who: "the bidder's browser"},
+	{Label: "vesting · UnlockReached", Event: "UnlockReached", Attrs: "height=1300000 account=g1k7…x2q",
+		Title: "Block 1 300 000 reached", Body: "Your tokens are unlocked", App: "vesting", Who: "the holder's browser"},
+}
+
 // flowNode is one box of the "How it works" path. Dashed nodes belong to
 // the dapp, solid ones to gnotif and the chain's infrastructure.
 type flowNode struct {
@@ -80,29 +109,20 @@ var flow = []flowNode{
 	{Name: "dapp realm", Note: "emits events, declares its trigger", Dashed: true},
 	{Name: "gnotif registry", Note: "holds the triggers, on chain"},
 	{Name: "tx-indexer", Note: "reads the chain, serves GraphQL"},
-	{Name: "gnotifd", Note: "matches events, one SQLite file"},
-	{Name: "push service", Note: "Web Push, the browser vendor's"},
+	{Name: "gnotifd", Note: "matches events, sends the pushes"},
+	{Name: "push service", Note: "Web Push, run by the browser's vendor"},
 	{Name: "sw.js", Note: "shows the notification, on the dapp's origin", Dashed: true},
 }
 
-// status is what version 0 leaves out.
-var status = []string{
-	"abuse limits: caps per IP, a send budget per declarer, and expiring subscriptions that stop re-registering;",
-	"monitoring and a health endpoint;",
-	"configuration through environment variables, beyond the VAPID keys;",
-	"mainnet.",
-}
-
 type landingView struct {
-	Site     siteView
-	Steps    []renderedStep
-	Flow     []flowNode
-	Status   []string
-	Registry string
+	Site   siteView
+	Scenes []scene
+	Steps  []renderedStep
+	Flow   []flowNode
 }
 
 func newLandingView() (landingView, error) {
-	v := landingView{Site: site, Flow: flow, Status: status, Registry: registryPath}
+	v := landingView{Site: site, Scenes: scenes, Flow: flow}
 	for _, s := range steps {
 		code, err := highlight(s.Lang, s.Code)
 		if err != nil {

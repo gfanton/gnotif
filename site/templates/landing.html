@@ -1,42 +1,45 @@
 {{define "title"}}gnotif · Web Push for gno.land dapps{{end}}
 {{define "content"}}
 <section class="hero">
-  <div class="hero-text">
-    <h1>Realm event in.<br>Browser notification out.</h1>
-    <p class="lede">Web Push for gno.land dapps, even when the tab is closed. A realm emits an event, a trigger in the registry says who it notifies, gnotifd pushes it to the browser.</p>
+  <h1><span class="l1">Realm event in.</span> <span class="l2">Browser notification out.</span></h1>
+  <div class="signal" aria-label="A realm event becoming a browser notification">
+    <div class="stage">
+      {{range $i, $s := .Scenes}}<div class="scene{{if eq $i 0}} active{{end}}">
+        <div class="sig-in">
+          <span class="sig-label">{{$s.Label}}</span>
+          <pre class="sig-line"><span class="ev">{{$s.Event}}</span> {{$s.Attrs}}</pre>
+        </div>
+        <div class="sig-wire"><span class="sig-pulse"></span><span class="sig-dot"><i class="indicator"></i></span></div>
+        <div class="sig-out">
+          <span class="sig-label">notification · {{$s.Who}}</span>
+          <div class="toast">
+            <span class="toast-icon"><i class="indicator"></i></span>
+            <div class="toast-text"><b>{{$s.Title}}</b><span>{{$s.Body}}</span><small>{{$s.App}} · just now</small></div>
+          </div>
+        </div>
+      </div>
+      {{end}}
+    </div>
+    <ol class="scene-dots" aria-hidden="true">{{range $i, $s := .Scenes}}<li{{if eq $i 0}} class="on"{{end}}></li>{{end}}</ol>
+  </div>
+  <div class="hero-actions">
     <p class="actions">
       <a href="/docs/getting-started/" class="button primary">Add it to your dapp</a>
       <a href="/docs/running-gnotifd/" class="button">Run your own server</a>
     </p>
-    <p class="install-line"><span class="prompt">$</span> npm install gnotif</p>
-    <p class="status-line"><span><i class="indicator"></i>{{.Site.ServerURL}} is live</span><span>onyx-1 testnet</span><span>v0</span></p>
+    <a class="hero-more" href="#how">How it works ↓</a>
   </div>
-  <div class="hero-media" aria-hidden="true">
-    <div class="log">
-      <div class="log-bar"><b>gnotifd</b><span>indexer.onyx.testnets.gno.land</span><span>height 1 204 388</span></div>
-<pre><span class="ev">TurnPlayed</span>   gno.land/r/dev/pingpong/v0
-  game=42 next=g1k7…x2q turn=7
-<span class="match">▸ match</span>      trigger #3 "Your turn"
-<span class="match">▸ push</span>       1 subscription · fcm.googleapis.com
-<span class="ev">TurnPlayed</span>   gno.land/r/dev/pingpong/v0
-  game=42 next=g1zm…9ra turn=8
-<span class="match">▸ match</span>      trigger #3 "Your turn"
-<span class="match">▸ push</span>       1 subscription · updates.push.services.mozilla.com</pre>
-      <div class="toast">
-        <span class="toast-icon"><i class="indicator"></i></span>
-        <div class="toast-text"><b>Your turn</b><span>Game 42, turn 7</span><small>pingpong · just now</small></div>
-      </div>
-    </div>
-  </div>
+  <a class="scroll-hint" href="#how" aria-label="Scroll to how it works"><svg width="18" height="28" viewBox="0 0 18 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v22M2 17l7 7 7-7"/></svg></a>
 </section>
 
-<section class="flow-section">
+<section class="flow-section" id="how">
   <h2>How it works</h2>
+  <p class="lede">gnotif sends browser notifications when your realm emits an event, even when the page that asked for them is closed. A trigger in the gnotif registry says who an event notifies. The public server at {{.Site.ServerURL}} watches the testnet and sends the push, so there is no notification server to run.</p>
   <ol class="flow">
     {{range .Flow}}<li class="node{{if .Dashed}} dashed{{end}}"><b>{{.Name}}</b><span>{{.Note}}</span></li>
     {{end}}
   </ol>
-  <p class="flow-note">The page calls gnotifd only to subscribe and to choose its triggers. The notification travels through the browser's push service and is shown by the service worker the dapp serves from its own origin, so it arrives even when no tab of the dapp is open.</p>
+  <p class="flow-note">The page calls gnotifd only to subscribe and to set its opt-ins. The notification travels through the browser's push service and is shown by the service worker the dapp serves from its own origin.</p>
 </section>
 
 <section class="steps">
@@ -56,25 +59,46 @@
 
 <section class="roles">
   <div class="role">
-    <p class="eyebrow">Integrate</p>
-    <h2>Add it to a dapp</h2>
-    <p>The npm package, one service worker file served from your origin, and the triggers your page offers. Nothing to run: the public server at {{.Site.ServerURL}} watches onyx for you.</p>
-    <a href="/docs/getting-started/">Getting started →</a>
-  </div>
-  <div class="role">
     <p class="eyebrow">Operate</p>
     <h2>Run your own gnotifd</h2>
-    <p>One binary, one SQLite file, a VAPID key pair and a tx-indexer to read. A container image is published for every release.</p>
+    <p>gnotifd is one binary with one SQLite file. It reads a tx-indexer and signs its pushes with a VAPID key pair. A container image is published for every release.</p>
     <a href="/docs/running-gnotifd/">Running gnotifd →</a>
   </div>
 </section>
 
-<section class="status">
-  <h2>Status</h2>
-  <div>
-    <p>gnotif is at version 0 and targets the onyx testnet (<code>onyx-1</code>). The public server at {{.Site.ServerURL}} runs it with the registry at <code>{{.Registry}}</code>. Version 0 leaves out:</p>
-    <ul>{{range .Status}}<li>{{.}}</li>{{end}}</ul>
-    <p>gnotif does not check that an address a browser opts in with belongs to that browser's user.</p>
-  </div>
-</section>
+<script>
+(function () {
+  var stage = document.querySelector('.signal .stage');
+  var scenes = stage.querySelectorAll('.scene');
+  var dots = document.querySelectorAll('.scene-dots li');
+  var hint = document.querySelector('.scroll-hint');
+
+  // The stage holds the height of the tallest example, so the page never
+  // moves when the examples change.
+  function size() {
+    var max = 0;
+    scenes.forEach(function (sc) { max = Math.max(max, sc.offsetHeight); });
+    stage.style.minHeight = max + 'px';
+  }
+  size();
+  addEventListener('resize', size);
+
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (hint) {
+    setTimeout(function () { hint.classList.add('show'); }, reduced ? 0 : 5500);
+    addEventListener('scroll', function () { if (scrollY > 40) hint.classList.add('gone'); }, { passive: true });
+  }
+  if (scenes.length < 2 || reduced) return;
+  var i = 0;
+  setInterval(function () {
+    var old = scenes[i];
+    old.classList.add('leaving'); dots[i].classList.remove('on');
+    setTimeout(function () {
+      old.classList.remove('active', 'leaving');
+      i = (i + 1) % scenes.length;
+      scenes[i].classList.add('active'); dots[i].classList.add('on');
+    }, 380);
+  }, 5600);
+})();
+</script>
 {{end}}
