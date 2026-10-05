@@ -128,7 +128,7 @@ Then subscribe the browser and opt it in:
 ```js
 import { Gnotif, GnotifError } from "gnotif";
 
-const gnotif = new Gnotif({ server: "https://gnotif.example" });
+const gnotif = new Gnotif({ server: "https://gnotif.xyz" });
 
 const yourTurn = (await gnotif.triggers()).find(
   (t) => t.target === "gno.land/r/dev/pingpong/v0" && t.event === "TurnPlayed" && t.verified,

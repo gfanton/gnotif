@@ -26,7 +26,7 @@ assets by module path. Copy it again after each upgrade.
 ```js
 import { Gnotif, GnotifError } from "gnotif";
 
-const gnotif = new Gnotif({ server: "https://gnotif.example", serviceWorker: "/sw.js" });
+const gnotif = new Gnotif({ server: "https://gnotif.xyz", serviceWorker: "/sw.js" });
 ```
 
 `server` is the base URL of the gnotif server. `serviceWorker` is the URL

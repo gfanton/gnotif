@@ -60,7 +60,7 @@ These steps use the repository's placeholder paths under `gno.land/r/dev`. A dep
    ```js
    import { Gnotif } from "gnotif";
 
-   const gnotif = new Gnotif({ server: "https://gnotif.example" });
+   const gnotif = new Gnotif({ server: "https://gnotif.xyz" });
    const yourTurn = (await gnotif.triggers()).find(
      (t) => t.target === "gno.land/r/dev/pingpong/v0" && t.event === "TurnPlayed" && t.verified,
    );
@@ -114,10 +114,9 @@ make test
 
 ## Status
 
-gnotif is at version 0 and targets the onyx testnet (`onyx-1`). Version 0 leaves out:
+gnotif is at version 0 and targets the onyx testnet (`onyx-1`). A public server runs at gnotif.xyz. Version 0 leaves out:
 
 - abuse limits: caps per IP, a send budget per declarer, and expiring subscriptions that stop re-registering;
-- a hosted public instance;
 - monitoring and a health endpoint;
 - configuration through environment variables, beyond the VAPID keys;
 - mainnet.
