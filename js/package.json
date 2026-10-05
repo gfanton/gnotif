@@ -4,6 +4,12 @@
   "description": "Browser client and service worker for gnotif, which turns gno.land realm events into Web Push notifications",
   "type": "module",
   "license": "Apache-2.0",
+  "homepage": "https://gnotif.xyz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gfanton/gnotif.git",
+    "directory": "js"
+  },
   "main": "./src/gnotif.js",
   "types": "./types/gnotif.d.ts",
   "exports": {

@@ -74,9 +74,7 @@ jobs:
       - run: npm ci
       - run: npm version "${VERSION}" --no-git-tag-version
       - run: npm run types
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --access public
 
   github-release:
     needs: [image, npm]
