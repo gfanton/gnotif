@@ -17,8 +17,8 @@ import (
 // the value of the event's attribute key.
 type Trigger struct {
 	ID, Target, Event, Filter, Param, Title, Body, Link string
-	Declarer address
-	Verified bool
+	Declarer                                            address
+	Verified                                            bool
 }
 
 const (
