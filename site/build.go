@@ -79,7 +79,10 @@ func build(root, out string) error {
 	if err := copyStatic(out); err != nil {
 		return err
 	}
-	return writeHighlightCSS(out)
+	if err := writeHighlightCSS(out); err != nil {
+		return err
+	}
+	return checkLinks(out)
 }
 
 const redirectPage = `<!doctype html>
