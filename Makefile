@@ -60,6 +60,7 @@ demo: $(DEMO_JS) ## Serve the demo dapp on http://localhost:3000
 	python3 -m http.server 3000 --bind 127.0.0.1 --directory demo
 
 site: ## Build the website into site/dist
+	rm -rf site/dist
 	go run ./site -out site/dist
 
 site-serve: site ## Build and serve the website on http://localhost:3001
@@ -76,8 +77,8 @@ deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>
 		sed 's|gno.land/r/dev|$(NS)|g' "$$f" > "$$f.tmp" && mv "$$f.tmp" "$$f" || exit 1; \
 	done
 
-clean: ## Remove built tools, deploy copies and the demo's copied scripts
-	rm -rf $(TOOLS)
+clean: ## Remove built tools, deploy copies, the website build and the demo's copied scripts
+	rm -rf $(TOOLS) site/dist
 	rm -f $(DEMO_JS)
 
 help: ## Show this help
