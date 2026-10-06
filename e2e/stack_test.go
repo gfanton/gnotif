@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -126,8 +127,8 @@ func (s *stack) gnokey(stdin string, args ...string) string {
 	return string(out)
 }
 
-// call sends a MsgCall to pingpong signed by key.
-func (s *stack) call(key, fn string, args ...string) {
+// call sends a MsgCall to pingpong signed by key and returns gnokey's output.
+func (s *stack) call(key, fn string, args ...string) string {
 	s.t.Helper()
 	a := []string{"maketx", "call", "-pkgpath", pingpongPath, "-func", fn}
 	for _, arg := range args {
@@ -135,7 +136,24 @@ func (s *stack) call(key, fn string, args ...string) {
 	}
 	a = append(a, "-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
 		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, key)
-	s.gnokey("\n", a...)
+	return s.gnokey("\n", a...)
+}
+
+var (
+	heightLine = regexp.MustCompile(`HEIGHT:\s+(\d+)`)
+	hashLine   = regexp.MustCompile(`TX HASH:\s+(\S+)`)
+)
+
+// committed returns the block height and the base64 hash gnokey printed for
+// a broadcast transaction.
+func committed(t *testing.T, out string) (int64, string) {
+	t.Helper()
+	height, hash := heightLine.FindStringSubmatch(out), hashLine.FindStringSubmatch(out)
+	require.NotNil(t, height, "no HEIGHT in gnokey output:\n%s", out)
+	require.NotNil(t, hash, "no TX HASH in gnokey output:\n%s", out)
+	h, err := strconv.ParseInt(height[1], 10, 64)
+	require.NoError(t, err)
+	return h, hash[1]
 }
 
 // addpkg deploys the package in dir at pkgPath, without its tests, signed

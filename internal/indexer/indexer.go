@@ -117,17 +117,22 @@ func (c *Client) BlockTxs(ctx context.Context, height int64) ([]TxRef, time.Time
 }
 
 // FetchTx reads the GnoEvents of one successful transaction, with the latest
-// height at the time of the query. Batch.BlockTimes is empty.
+// height at the time of the query. Batch.BlockTimes is empty. An answer
+// without exactly one transaction is ErrQuery: a transaction BlockTxs listed
+// can be missing only from an indexer that is behind.
 func (c *Client) FetchTx(ctx context.Context, height int64, index int) (Batch, error) {
 	data, err := post[txData](ctx, c, txQuery, newTxVars(height, index))
 	if err != nil {
 		return Batch{}, err
 	}
-	b := Batch{Latest: data.LatestBlockHeight, BlockTimes: map[int64]time.Time{}}
-	for _, tx := range data.GetTransactions {
-		b.Events = append(b.Events, gnoEvents(tx)...)
+	if n := len(data.GetTransactions); n != 1 {
+		return Batch{}, fmt.Errorf("%w: block %d tx %d: got %d transactions", ErrQuery, height, index, n)
 	}
-	return b, nil
+	return Batch{
+		Latest:     data.LatestBlockHeight,
+		Events:     gnoEvents(data.GetTransactions[0]),
+		BlockTimes: map[int64]time.Time{},
+	}, nil
 }
 
 // gnoEvents keeps the GnoEvents of tx; Index is the event's position among

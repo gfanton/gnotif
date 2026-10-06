@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -25,7 +26,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/gfanton/gnotif/internal/delivery"
+	"github.com/gfanton/gnotif/internal/indexer"
 	"github.com/gfanton/gnotif/internal/server"
+	"github.com/gfanton/gnotif/internal/trigger"
 )
 
 type pushed struct {
@@ -124,12 +127,25 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 	s.call("player2", "Accept", "0000001")
 	require.Never(t, func() bool { return count() > 0 }, 3*time.Second, 100*time.Millisecond, "a push arrived before anyone played")
 
-	s.call("devtest", "Play", "0000001") // player2's turn: push 1
-	s.call("player2", "Play", "0000001") // devtest's turn: no push
-	s.call("devtest", "Play", "0000001") // player2's turn: push 2
+	playHeight, playHash := committed(t, s.call("devtest", "Play", "0000001")) // player2's turn: push 1
+	s.call("player2", "Play", "0000001")                                       // devtest's turn: no push
+	s.call("devtest", "Play", "0000001")                                       // player2's turn: push 2
 
 	require.Eventually(t, func() bool { return count() == 2 }, 30*time.Second, 100*time.Millisecond, "expected 2 pushes, got %d", count())
 	assert.Never(t, func() bool { return count() > 2 }, 3*time.Second, 100*time.Millisecond)
+
+	// The pushes prove the indexer already holds the first Play's block.
+	ix := indexer.New(s.indexer, http.DefaultClient)
+	refs, _, err := ix.BlockTxs(context.Background(), playHeight)
+	require.NoError(t, err)
+	i := slices.IndexFunc(refs, func(r indexer.TxRef) bool { return r.Hash == playHash })
+	require.NotEqual(t, -1, i, "BlockTxs(%d) = %v lacks %s", playHeight, refs, playHash)
+	batch, err := ix.FetchTx(context.Background(), playHeight, refs[i].Index)
+	require.NoError(t, err)
+	assert.True(t, slices.ContainsFunc(batch.Events, func(e trigger.Event) bool {
+		return e.PkgPath == pingpongPath && e.Type == "TurnPlayed" &&
+			e.TxHash == playHash && e.Height == playHeight && e.TxIndex == refs[i].Index
+	}), "FetchTx(%d, %d) = %+v", playHeight, refs[i].Index, batch.Events)
 
 	mu.Lock()
 	defer mu.Unlock()

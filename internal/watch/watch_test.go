@@ -64,6 +64,7 @@ type fakeIndexer struct {
 	fail       bool                      // every window answers boom
 	windowErrs map[indexer.Window]string // the error one window answers
 	txErrs     map[txAt]string           // the error one transaction answers
+	lagging    map[txAt]bool             // listed transactions FetchTx answers without
 	windows    []indexer.Window
 	fetched    []txAt
 }
@@ -169,7 +170,7 @@ func (f *fakeIndexer) serveTx(w http.ResponseWriter, at txAt) {
 	}
 	var txs []any
 	for _, tx := range f.txs {
-		if tx.height == at.height && tx.index == at.index {
+		if tx.height == at.height && tx.index == at.index && !f.lagging[at] {
 			txs = append(txs, tx.encode())
 		}
 	}
@@ -216,7 +217,7 @@ type harness struct {
 
 func newHarness(t *testing.T, startHeight int64) *harness {
 	t.Helper()
-	fake := &fakeIndexer{times: map[int64]time.Time{}, windowErrs: map[indexer.Window]string{}, txErrs: map[txAt]string{}}
+	fake := &fakeIndexer{times: map[int64]time.Time{}, windowErrs: map[indexer.Window]string{}, txErrs: map[txAt]string{}, lagging: map[txAt]bool{}}
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
 	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "gnotif.db"))
@@ -656,16 +657,34 @@ func TestResumesInsideBlock(t *testing.T) {
 }
 
 func TestTransientNeverSkips(t *testing.T) {
-	h := oversizedBlock(t)
-	h.fake.set(func(f *fakeIndexer) { f.txErrs[txAt{height: 11, index: 1}] = boom })
-	require.ErrorIs(t, h.w.Tick(context.Background()), indexer.ErrQuery)
-	assert.Equal(t, store.Cursor{HeightDone: 10, Bound: 11, NextTx: 1}, h.cursor(t))
-	assert.Equal(t, []string{"Game 7, turn 1"}, h.bodies(t))
+	at := txAt{height: 11, index: 1}
+	cases := map[string]struct {
+		fault, heal func(f *fakeIndexer)
+	}{
+		"query error": {
+			fault: func(f *fakeIndexer) { f.txErrs[at] = boom },
+			heal:  func(f *fakeIndexer) { delete(f.txErrs, at) },
+		},
+		// An indexer instance behind the one that listed the block.
+		"listed transaction missing": {
+			fault: func(f *fakeIndexer) { f.lagging[at] = true },
+			heal:  func(f *fakeIndexer) { delete(f.lagging, at) },
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			h := oversizedBlock(t)
+			h.fake.set(tc.fault)
+			require.ErrorIs(t, h.w.Tick(context.Background()), indexer.ErrQuery)
+			assert.Equal(t, store.Cursor{HeightDone: 10, Bound: 11, NextTx: 1}, h.cursor(t))
+			assert.Equal(t, []string{"Game 7, turn 1"}, h.bodies(t))
 
-	h.fake.set(func(f *fakeIndexer) { delete(f.txErrs, txAt{height: 11, index: 1}) })
-	h.tick(t)
-	assert.Equal(t, []string{"Game 7, turn 1", "Game 8, turn 1", "Game 9, turn 1"}, h.bodies(t))
-	assert.Equal(t, []txAt{{11, 0}, {11, 1}, {11, 1}, {11, 2}}, h.fake.fetchedTxs())
-	assert.Equal(t, store.Cursor{HeightDone: 11, Bound: 11}, h.cursor(t))
-	assert.NotContains(t, h.log.String(), "level=ERROR")
+			h.fake.set(tc.heal)
+			h.tick(t)
+			assert.Equal(t, []string{"Game 7, turn 1", "Game 8, turn 1", "Game 9, turn 1"}, h.bodies(t))
+			assert.Equal(t, []txAt{{11, 0}, {11, 1}, {11, 1}, {11, 2}}, h.fake.fetchedTxs())
+			assert.Equal(t, store.Cursor{HeightDone: 11, Bound: 11}, h.cursor(t))
+			assert.NotContains(t, h.log.String(), "level=ERROR")
+		})
+	}
 }

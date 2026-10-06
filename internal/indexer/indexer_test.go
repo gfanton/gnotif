@@ -166,3 +166,21 @@ func TestFetchTx(t *testing.T) {
 		PkgPath: "gno.land/r/one", Type: "X", Attrs: []trigger.Pair{{Key: "k", Value: "v"}},
 	}}, b.Events)
 }
+
+func TestFetchTxNotOne(t *testing.T) {
+	cases := map[string]string{
+		"none": `{"data":{"latestBlockHeight":15,"getTransactions":[]}}`,
+		"null": `{"data":{"latestBlockHeight":15,"getTransactions":null}}`,
+		"two": `{"data":{"latestBlockHeight":15,"getTransactions":[
+		  {"hash":"a","block_height":12,"index":0,"response":{"events":[]}},
+		  {"hash":"b","block_height":12,"index":0,"response":{"events":[]}}]}}`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := serve(t, http.StatusOK, body, nil)
+			_, err := c.FetchTx(context.Background(), 12, 0)
+			assert.True(t, errors.Is(err, ErrQuery), err)
+			assert.False(t, errors.Is(err, ErrTooLarge), err)
+		})
+	}
+}
