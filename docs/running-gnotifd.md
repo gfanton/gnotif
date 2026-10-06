@@ -22,9 +22,7 @@ chmod 600 vapid.env
 gnotifd keygen > vapid.env
 ```
 
-- `touch` creates `vapid.env`, empty.
-- `chmod 600` lets only you read and write it.
-- `gnotifd keygen` makes a new key pair and writes it into the file, which keeps its permissions.
+`>` writes into the file that already exists and keeps its mode, so only you can read the private key.
 
 The file holds two lines, the environment variables gnotifd reads the pair from:
 
@@ -38,8 +36,6 @@ Load them into the terminal you start gnotifd from:
 ```sh
 export $(cat vapid.env)
 ```
-
-`cat` prints the two lines, and `export` sets each one as an environment variable of this terminal, where gnotifd reads them.
 
 Keep the pair for the life of the server, keep the private key secret, and keep `vapid.env` outside any source checkout. A browser subscribes with the server's public key, and a push service accepts a push only when it is signed with the key that subscription was made with. A new pair leaves every stored subscription unable to receive pushes until its page calls `enable()` again, which subscribes anew when the server's key changed.
 
@@ -77,7 +73,7 @@ A `mailto:` prefix on `-vapid-subject` is removed: the push library adds its own
 
 ## The indexer and the start height
 
-`-indexer` is the GraphQL URL of a [tx-indexer](https://github.com/gnolang/tx-indexer) that reads the chain. onyx's public indexer answers at `https://indexer.onyx.testnets.gno.land/graphql/query`. gnotifd sends it one request per poll, so `-poll` sets the load.
+`-indexer` is the GraphQL URL of a [tx-indexer](https://github.com/gnolang/tx-indexer) that reads the chain. onyx's public indexer answers at `https://indexer.onyx.testnets.gno.land/graphql/query`. gnotifd sends it one request per poll, so `-poll` sets the load. While it reads a block too large to read whole, a poll sends one request per transaction in that block.
 
 `-registry` is the path the registry is deployed at. gnotifd builds its triggers only from that path's events, and keeps only the verified ones.
 

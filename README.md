@@ -69,7 +69,7 @@ The page calls gnotifd only to subscribe and to choose its triggers. The notific
 
 ## Run gnotifd
 
-gnotif.xyz is a public gnotifd that any dapp can use. To run your own, follow [Running gnotifd](docs/running-gnotifd.md): it installs gnotifd, makes its VAPID keys and starts it.
+gnotif.xyz is a public gnotifd that any dapp can use. To run your own, follow [Running gnotifd](docs/running-gnotifd.md): it covers installing gnotifd, making its VAPID keys and starting it.
 
 ## Documentation
 

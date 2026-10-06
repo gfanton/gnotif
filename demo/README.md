@@ -135,9 +135,9 @@ gnodev keeps its chain in memory, so a restarted gnodev starts an empty chain. T
 rm -rf .tools/indexer-db .tools/gnotif.db*
 ```
 
-Then repeat steps 3 to 7, and turn notifications off and on in the demo, so that the new database learns this browser's subscription.
+Then repeat steps 3 to 7, and turn notifications off and on in the demo, so that the new database learns this browser's subscription. Until you do, the page still shows its old "Following" count: it keeps the opt-ins it last sent in the browser's local storage, because the server cannot read opt-ins back.
 
-The demo's "Following" count is the page's own record of the opt-ins it last sent, kept in the browser's local storage, because the server cannot read opt-ins back. `make clean` removes `.tools/`, with the tools, the keys and the databases.
+`make clean` removes `.tools/`, with the tools, the keys and the databases.
 
 ## Deploy it to onyx
 

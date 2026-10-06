@@ -29,12 +29,12 @@ func TestRenderPage(t *testing.T) {
 	}
 }
 
-// The site shows a page's Title in place of the source's first heading, so
-// the site and the file on GitHub carry the same title.
+// The site shows a page's Title in place of the source's first heading, so a
+// page whose two differ reads one title on the site and another on GitHub.
 func TestPageTitleMatchesSourceHeading(t *testing.T) {
 	for _, p := range pages {
 		// js/README.md is headed by the npm package's name.
-		if !strings.HasPrefix(p.Source, "docs/") {
+		if p.Source == "js/README.md" {
 			continue
 		}
 		t.Run(p.Slug, func(t *testing.T) {

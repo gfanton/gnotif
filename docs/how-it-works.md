@@ -57,7 +57,7 @@ A block is read on the tick after the one that first reports its height, so a no
 
 ### A block too large to read whole
 
-An indexer answer is too large when it is over 64 MiB, or when the indexer stops with `max elements per query reached`, which it does for a query that matches more than 10,000 transactions. Each too-large answer fails the tick and halves the window, until the window holds one block. When the answer for that one block is still too large, gnotifd reads the block one transaction at a time:
+An indexer answer is too large when it is over 64 MiB, or when the indexer stops with `max elements per query reached`, which it does for a query that matches 10,000 transactions or more. Each too-large answer fails the tick and halves the window, until the window holds one block. When the answer for that one block is still too large, gnotifd reads the block one transaction at a time:
 
 1. It lists the block's successful transactions that have a realm event, by index, with the block's time.
 2. It reads each transaction's events, from `next_tx` on. It applies them and stores the next index as `next_tx` in one SQLite transaction, so a restart resumes inside the block.

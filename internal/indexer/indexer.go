@@ -29,8 +29,8 @@ var ErrTooLarge = errors.New("indexer answer too large")
 const (
 	maxResponse = 64 << 20
 
-	// maxElementsMessage is the indexer's error when a query matches more
-	// than 10,000 transactions; it returns a partial result with it.
+	// maxElementsMessage is the indexer's error when a query matches 10,000
+	// transactions or more; it returns a partial result with it.
 	maxElementsMessage = "max elements per query reached"
 )
 
