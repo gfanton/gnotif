@@ -5,7 +5,7 @@ gnotifd serves its API under `/v1/`. Request and response bodies are JSON. Every
 | Method and path | Body | Answer |
 |---|---|---|
 | `GET /v1/vapid` | | 200, the server's VAPID public key |
-| `GET /v1/triggers` | | 200, every trigger the server knows |
+| `GET /v1/triggers?target=<realm path>` | | 200, the realm's verified triggers |
 | `PUT /v1/subscription` | a push subscription, with an optional `oldEndpoint` | 204 |
 | `PUT /v1/subscription/optins` | the subscription's endpoint and its opt-ins | 204 |
 | `DELETE /v1/subscription` | the subscription's endpoint | 204 |
@@ -20,9 +20,9 @@ The API has no accounts. A subscription is known by its push endpoint, which onl
 {"publicKey": "BO_JMLuc47778WCmQARvoO7_yLkXrl1fhV92AEkiKv-CMF7L4lglQDzbQqsO-TjsoLeXXQiwcQoebx2v_icTqn0"}
 ```
 
-## List the triggers
+## List a realm's triggers
 
-`GET /v1/triggers` answers the triggers gnotifd has read from the registry and not seen removed, in id order, or `[]`:
+`GET /v1/triggers?target=<realm path>` answers the verified triggers whose target is that realm, in id order. The registry allows a realm 64 verified triggers, so the list holds at most 64. For `target=gno.land/r/dev/pingpong/v0`:
 
 ```json
 [
@@ -42,6 +42,8 @@ The API has no accounts. A subscription is known by its push endpoint, which onl
 ```
 
 `filter` holds comma-separated `key=value` pairs, and `param` is empty for a trigger that takes no value. `title`, `body` and `link` are the templates as declared ([Triggers](triggers.md#templates)).
+
+A realm without verified triggers gets `[]`.
 
 ## Register a subscription
 
@@ -91,7 +93,7 @@ The subscription stored at `oldEndpoint` takes the new endpoint and keys, and ke
 ```
 
 - `optins` holds at most 50 entries, and `[]` clears the set.
-- Each `trigger` is the id of a trigger the server knows.
+- Each `trigger` is the id of a trigger the server holds. It holds verified triggers only.
 - `value` is the trigger's param value: non-empty when the trigger has a `param`, `""` when it has none. It is at most 4,096 bytes. The server refuses leading or trailing white space, since a value that carries it never equals an event attribute.
 - The same trigger and value twice count once.
 
@@ -115,6 +117,7 @@ An error answers JSON with a message:
 
 | Status | When | Messages |
 |---|---|---|
+| 400 | `GET /v1/triggers` has a missing or empty `target`, or one over 256 bytes | `target is required`, `invalid target` |
 | 400 | the body is not JSON, or a field has the wrong type | `invalid JSON body` |
 | 400 | a subscription breaks a rule | `endpoint longer than 1000 bytes`, `endpoint must be an https URL`, `endpoint must not carry user information`, `push service <host> is not allowed`, `p256dh must be 65 bytes in base64url`, `auth must be 16 bytes in base64url`, `p256dh must be a P-256 public key` |
 | 400 | an opt-in breaks a rule | `more than 50 opt-ins`, `unknown trigger "<id>"`, `trigger <id> takes no value`, `trigger <id> needs a value for <param>`, `value longer than 4096 bytes`, `value has leading or trailing white space` |

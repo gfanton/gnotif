@@ -69,16 +69,7 @@ The page calls gnotifd only to subscribe and to choose its triggers. The notific
 
 ## Run gnotifd
 
-```sh
-go install github.com/gfanton/gnotif/cmd/gnotifd@latest
-(umask 077; gnotifd keygen > vapid.env)
-set -a; . ./vapid.env; set +a
-gnotifd -indexer https://indexer.onyx.testnets.gno.land/graphql/query \
-  -registry gno.land/r/<namespace>/gnotif/v0 -start-height <height> \
-  -vapid-subject <contact>
-```
-
-`vapid.env` holds the private key that signs every push: keep it outside any source checkout. `<contact>` is an email address or https URL where push services can reach you, such as `ops@example.org`. gnotifd serves its API on `127.0.0.1:8080` and keeps its state in `gnotif.db`. `-start-height` is a height at or before the registry's deploy, and only the first start needs it. [Running gnotifd](docs/running-gnotifd.md) covers the flags, the keys, the push service allowlist and the container image.
+gnotif.xyz is a public gnotifd that any dapp can use. To run your own, follow [Running gnotifd](docs/running-gnotifd.md): it installs gnotifd, makes its VAPID keys and starts it.
 
 ## Documentation
 
@@ -88,7 +79,8 @@ gnotifd -indexer https://indexer.onyx.testnets.gno.land/graphql/query \
 - [Browser client](js/README.md): the `gnotif` npm package.
 - [HTTP API](docs/http-api.md): the `/v1` endpoints, errors and CORS.
 - [Running gnotifd](docs/running-gnotifd.md): flags, VAPID keys, the push service allowlist, the indexer and the container image.
-- [Deploying the realms](docs/deploying-realms.md): deploy copies, linting and the deploy order on onyx.
+- [Deploying the registry](docs/deploying-realms.md): deploy copies, linting and the registry's deploy on onyx.
+- [The demo](demo/README.md): pingpong, run on a local chain or deployed to onyx.
 
 ## Develop
 

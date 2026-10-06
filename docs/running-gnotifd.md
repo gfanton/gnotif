@@ -14,24 +14,34 @@ Or run the [container image](#run-the-container-image).
 
 ## Make the VAPID keys
 
+gnotifd signs every push with a VAPID key pair. Make the pair once, in a file that only you can read:
+
 ```sh
-(umask 077; gnotifd keygen > vapid.env)
+touch vapid.env
+chmod 600 vapid.env
+gnotifd keygen > vapid.env
 ```
 
-`keygen` prints a new key pair as two environment variables, which gnotifd reads at start:
+- `touch` creates `vapid.env`, empty.
+- `chmod 600` lets only you read and write it.
+- `gnotifd keygen` makes a new key pair and writes it into the file, which keeps its permissions.
+
+The file holds two lines, the environment variables gnotifd reads the pair from:
 
 ```sh
 GNOTIF_VAPID_PUBLIC_KEY=...
 GNOTIF_VAPID_PRIVATE_KEY=...
 ```
 
-Load them into the shell that starts gnotifd:
+Load them into the terminal you start gnotifd from:
 
 ```sh
-set -a; . ./vapid.env; set +a
+export $(cat vapid.env)
 ```
 
-Keep the pair for the life of the server, and keep the private key secret: the `umask` makes `vapid.env` readable by its owner only, and it belongs outside any source checkout. A browser subscribes with the server's public key, and a push service accepts a push only when it is signed with the key that subscription was made with. A new pair leaves every stored subscription unable to receive pushes until its page calls `enable()` again, which subscribes anew when the server's key changed.
+`cat` prints the two lines, and `export` sets each one as an environment variable of this terminal, where gnotifd reads them.
+
+Keep the pair for the life of the server, keep the private key secret, and keep `vapid.env` outside any source checkout. A browser subscribes with the server's public key, and a push service accepts a push only when it is signed with the key that subscription was made with. A new pair leaves every stored subscription unable to receive pushes until its page calls `enable()` again, which subscribes anew when the server's key changed.
 
 ## Start gnotifd
 
@@ -69,13 +79,17 @@ A `mailto:` prefix on `-vapid-subject` is removed: the push library adds its own
 
 `-indexer` is the GraphQL URL of a [tx-indexer](https://github.com/gnolang/tx-indexer) that reads the chain. onyx's public indexer answers at `https://indexer.onyx.testnets.gno.land/graphql/query`. gnotifd sends it one request per poll, so `-poll` sets the load.
 
-`-registry` is the path the registry is deployed at. gnotifd builds its triggers only from that path's events.
+`-registry` is the path the registry is deployed at. gnotifd builds its triggers only from that path's events, and keeps only the verified ones.
 
-`-start-height` matters only while the database is empty: the first start reads the chain from that height, and gnotifd refuses to start without it. Later starts resume where the database stopped and ignore the flag. Use a height at or before the registry's first event. [Deploying the realms](deploying-realms.md#4-deploy-the-registry) notes the indexer's height right before the deploy for this. A height far below the deploy only costs time: gnotifd reads at most 1,000 blocks per poll.
+`-start-height` matters only while the database is empty: the first start reads the chain from that height, and gnotifd refuses to start without it. Later starts resume where the database stopped and ignore the flag. Use a height at or before the registry's first event. [Deploying the registry](deploying-realms.md#4-deploy-the-registry) notes the indexer's height right before the deploy for this. A height far below the deploy only costs time: gnotifd reads at most 1,000 blocks per poll.
+
+A database belongs to one registry. To move gnotifd to a new registry, start a new database: name a new file with `-db`, and set `-start-height` at or before the new registry's deploy. An old database would keep its triggers and opt-ins, and a new registry numbers its triggers from `0000001` again, so an old opt-in would follow the new trigger that takes its id.
 
 While it catches up, gnotifd skips realm events older than `-max-age`, so a restart after downtime sends no burst of stale notifications. It always applies the registry's events. Against a chain that makes blocks only on transactions, such as a local gnodev, raise `-max-age`, to `1h` for instance: the first block after a quiet spell can carry an old time.
 
 When the indexer reports a height below what gnotifd already stored, gnotifd logs `indexer behind stored bound` on every poll until the indexer catches up, and waits for it. That happens when the indexer re-syncs from scratch, or when several indexers answer behind one URL.
+
+When the indexer's answer for a single transaction is too large to read, gnotifd skips that transaction and logs `skip oversized transaction` as an error, with its height, index and hash. That transaction's events are lost; every other transaction is read ([How gnotif works](how-it-works.md#a-block-too-large-to-read-whole)).
 
 ## The push service allowlist
 
@@ -95,6 +109,8 @@ An entry `*.suffix` matches any host under `suffix` on the default port. Any oth
 The database is one SQLite file in WAL mode: while gnotifd runs, `gnotif.db` sits next to `gnotif.db-wal` and `gnotif.db-shm`. Stop gnotifd before copying the database, and copy any `-wal` or `-shm` file left beside it.
 
 The subscriptions and opt-ins exist nowhere else: after losing the database, each browser has to turn notifications on again from its dapp's page. The triggers come back from the chain, since a new database starts like a first start, from `-start-height`.
+
+A gnotifd release that changes the database's layout refuses a database made by an older release. It stops with `database was made by an older gnotifd: start a new database with -start-height`. Name a new file with `-db` and give `-start-height`. The subscriptions do not carry over to the new file, so each browser turns notifications on again from its dapp's page.
 
 ## Run the container image
 

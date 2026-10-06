@@ -29,6 +29,23 @@ func TestRenderPage(t *testing.T) {
 	}
 }
 
+// The site shows a page's Title in place of the source's first heading, so
+// the site and the file on GitHub carry the same title.
+func TestPageTitleMatchesSourceHeading(t *testing.T) {
+	for _, p := range pages {
+		// js/README.md is headed by the npm package's name.
+		if !strings.HasPrefix(p.Source, "docs/") {
+			continue
+		}
+		t.Run(p.Slug, func(t *testing.T) {
+			src, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(p.Source)))
+			require.NoError(t, err)
+			first, _, _ := strings.Cut(string(src), "\n")
+			assert.Equal(t, "# "+p.Title, first)
+		})
+	}
+}
+
 // pageBySlug finds a listed page without depending on its place in the list.
 func pageBySlug(t *testing.T, slug string) Page {
 	t.Helper()

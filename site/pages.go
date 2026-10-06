@@ -21,7 +21,7 @@ var pages = []Page{
 	{Title: "Browser client", Source: "js/README.md", Slug: "browser-client"},
 	{Title: "HTTP API", Source: "docs/http-api.md", Slug: "http-api"},
 	{Title: "Running gnotifd", Source: "docs/running-gnotifd.md", Slug: "running-gnotifd"},
-	{Title: "Deploying the realms", Source: "docs/deploying-realms.md", Slug: "deploying-realms"},
+	{Title: "Deploying the registry", Source: "docs/deploying-realms.md", Slug: "deploying-realms"},
 }
 
 const (

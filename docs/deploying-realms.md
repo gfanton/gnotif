@@ -1,6 +1,6 @@
-# Deploying the realms
+# Deploying the registry
 
-The realms deploy to onyx (`onyx-1`) in a fixed order: the registry, then pingpong, then a call to pingpong's `DeclareTriggers`. The steps use gnomcp, a Model Context Protocol (MCP) server that gives an AI client tools to read and write a gno.land chain. The repository's realms sit under the placeholder namespace `gno.land/r/dev`, and `make deploy-pkgs` writes copies under yours.
+These steps deploy a gnotif registry to onyx (`onyx-1`), for an operator who runs a gnotif server on their own registry. The steps use gnomcp, a Model Context Protocol (MCP) server that gives an AI client tools to read and write a gno.land chain. The repository's realms sit under the placeholder namespace `gno.land/r/dev`, and `make deploy-pkgs` writes copies under yours. [The demo's README](../demo/README.md#deploy-it-to-onyx) deploys pingpong on top of the registry.
 
 ## Before you start
 
@@ -15,7 +15,7 @@ The realms deploy to onyx (`onyx-1`) in a fixed order: the registry, then pingpo
 make deploy-pkgs NS=gno.land/r/<namespace>
 ```
 
-This writes `.tools/deploy/gnotif/v0` and `.tools/deploy/pingpong/v0` without their tests, and rewrites every `gno.land/r/dev` in them to your namespace: both module paths and pingpong's import of the registry. pingpong declares its trigger with `cur.PkgPath()`, so the trigger follows the new path.
+This writes `.tools/deploy/gnotif/v0`, and pingpong's copy for the demo in `.tools/deploy/pingpong/v0`, without their tests. It rewrites every `gno.land/r/dev` in them to your namespace: both module paths and pingpong's import of the registry. It also writes `.tools/deploy/gnowork.toml`, which makes the copies one workspace for the lint in step 3. The marker sits beside the packages, outside them, and is not deployed.
 
 ## 2. Check the copies for personal data
 
@@ -37,16 +37,15 @@ curl -s https://rpc.onyx.testnets.gno.land/status | grep build_version
 
 When onyx reports another release, move the pin to it and pass the realm tests with it before deploying.
 
-Then lint the copies with the Makefile's toolchain, as one workspace, so that pingpong's import of the registry resolves to the copy beside it. `store` is the Makefile's `GNO_STORE`:
+Then lint the copies with the Makefile's toolchain. The workspace marker makes pingpong's import of the registry resolve to the copy beside it. `store` is the Makefile's `GNO_STORE`:
 
 ```sh
 store=$HOME/.cache/gno-toolchains/onyx
 gnoroot="$(go env GOMODCACHE)/github.com/gnolang/gno@$(go version -m "$store/gno" | awk '$1 == "mod" {print $3}')"
-touch .tools/deploy/gnowork.toml
 (cd .tools/deploy && GNOROOT="$gnoroot" GNOHOME="$store/gnohome" "$store/gno" lint ./...)
 ```
 
-`GNOROOT` points the binary at the standard library of its own release. `make deploy-pkgs` starts from an empty `.tools/deploy`, so touch `gnowork.toml` again after rerunning it. The marker sits beside the packages, outside them, and is not deployed.
+`GNOROOT` points the binary at the standard library of its own release.
 
 ## 4. Deploy the registry
 
@@ -66,18 +65,8 @@ Deploy `.tools/deploy/gnotif/v0` at `gno.land/r/<namespace>/gnotif/v0` with `gno
 | `redeploy_parked` | a new version is parked; the previous one keeps serving | as for `inert` |
 | `unknown` | the chain gave no usable answer | read the path with `gno_read` before going on |
 
-## 5. Deploy pingpong
+The registry's page renders on gnoweb, at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0`, or with `gno_render` on `gno.land/r/<namespace>/gnotif/v0`. It lists no trigger until a realm declares one.
 
-pingpong imports the registry, so deploy it only once the registry is `live`. Deploy `.tools/deploy/pingpong/v0` at `gno.land/r/<namespace>/pingpong/v0` with `gno_addpkg`, and wait for `live`.
+## 5. Point gnotifd at the registry
 
-## 6. Declare the trigger
-
-Call pingpong's `DeclareTriggers` with `gno_call`. It takes no argument and works once; a second call panics with `triggers already declared`.
-
-After the call, the registry's page lists the trigger with "✓ verified": `gno_render` on `gno.land/r/<namespace>/gnotif/v0`, or `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0` on gnoweb.
-
-## 7. Point gnotifd and the demo at the deploy
-
-Start gnotifd with `-registry gno.land/r/<namespace>/gnotif/v0` and the height from step 4 ([Running gnotifd](running-gnotifd.md#start-gnotifd)). Once it has read the deploy, `GET /v1/triggers` lists the trigger with `"verified": true`.
-
-For the demo, set `demo/config.js` to the deploy: `server` to the gnotifd URL, `pingpong` to `gno.land/r/<namespace>/pingpong/v0`, and `gnoweb` to `https://onyx.testnets.gno.land`.
+Start gnotifd on a new database, with `-registry gno.land/r/<namespace>/gnotif/v0` and `-start-height` set to the height from step 4 ([Running gnotifd](running-gnotifd.md#the-indexer-and-the-start-height)). Once a realm declares a verified trigger, `GET /v1/triggers?target=<realm path>` lists it.

@@ -11,7 +11,9 @@ gnotifd never reads the registry's state. It rebuilds its triggers from the even
 | `TriggerDeclared` | `id`, `target`, `event`, `filter`, `param`, `title`, `body`, `link`, `declarer`, `verified` (`true` or `false`) |
 | `TriggerRemoved` | `id` |
 
-gnotifd applies these events only when they come from the package path given with `-registry`. It logs a `TriggerDeclared` it cannot read as an error and skips it. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
+gnotifd applies these events only when they come from the package path given with `-registry`. It stores a trigger only when `verified` is `true`: it skips any other `TriggerDeclared`, so it never lists, matches or notifies for an unverified trigger. It logs a `TriggerDeclared` it cannot read as an error and skips it. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
+
+The registry holds at most 64 verified triggers per realm, and refuses the 65th ([Triggers](triggers.md#at-most-64-triggers-per-realm)). So one event matches at most 64 triggers, and gnotifd's list of a realm's triggers holds at most 64.
 
 ## What the verified mark means
 
@@ -19,14 +21,15 @@ gnotifd applies these events only when they come from the package path given wit
 
 The mark rests on the chain refusing deploys under a namespace to anyone but its owner. On onyx, a key deploys under its own address, `gno.land/r/<address>/...`, or under a name it registered. On a chain without that rule, whoever deploys a realm at a path earns the mark for that path.
 
-Anyone can declare a trigger without the mark, on any realm. The registry bounds what such a trigger can do: its names are identifiers and its target holds only the characters of a realm path, so its rendered text cannot imitate the mark; its link is a path on the dapp's own origin; and the registry's pages sanitize the text a declarer supplied. A dapp's page decides which triggers it offers, usually its own verified ones.
+Anyone can declare a trigger without the mark, on any realm. The registry bounds what such a trigger can do: its names are identifiers and its target holds only the characters of a realm path, so its rendered text cannot imitate the mark; its link is a path on the dapp's own origin; and the registry's pages sanitize the text a declarer supplied. gnotifd ignores triggers without the mark.
 
 ## The watch window
 
-gnotifd stores a cursor of two heights:
+gnotifd stores a cursor:
 
 - `height_done`, the last height fully processed;
-- `bound`, the indexer's latest height as reported on the previous poll.
+- `bound`, the indexer's latest height as reported on the previous poll;
+- `next_tx`, the index of the next transaction to read while gnotifd reads block `height_done` + 1 one transaction at a time, and 0 otherwise.
 
 On the first start the database holds no cursor, so gnotifd needs `-start-height`, 1 or more, and refuses to start without it. It reads the chain from that height on. Later starts resume from the stored cursor and ignore `-start-height`.
 
@@ -34,22 +37,34 @@ A window is bounded by the height the indexer reported on the previous poll, nev
 
 Every `-poll` interval, 5 seconds by default, the watch loop runs one tick:
 
-1. When `bound` is not above `height_done`, it asks the indexer for its latest height, stores it as `bound`, and stops. When that height is below `height_done`, the indexer is behind, and gnotifd logs a warning.
-2. Otherwise the window is the heights above `height_done` up to the smaller of `bound` and `height_done` plus the window size. The window size is 1,000 blocks. A failed tick halves it, down to one block, and a successful tick restores it, since the indexer refuses a query that would return too many transactions.
-3. One query asks for the successful transactions in the window that carry an event from the registry or from a watched realm, in chain order, and for the times of those blocks. The watched realms are the distinct targets of the triggers stored when the window starts.
-4. When the indexer reports a latest height below the end of the window, it is behind: it re-synced from scratch, or another instance answers behind the same URL. gnotifd logs a warning, lowers `bound`, and reads the window later.
-5. In one SQLite transaction, it walks the events in chain order:
+1. When `next_tx` is above 0, it reads the rest of block `height_done` + 1 one transaction at a time, and stops.
+2. When `bound` is not above `height_done`, it asks the indexer for its latest height, stores it as `bound`, and stops. When that height is below `height_done`, the indexer is behind, and gnotifd logs a warning.
+3. Otherwise the window is the heights above `height_done` up to the smaller of `bound` and `height_done` plus the window size. The window size starts at 1,000 blocks. A failed tick halves it, down to one block, and a successful tick doubles it, up to 1,000.
+4. One query asks for every successful transaction in the window that has at least one realm event, whatever the realm, in chain order, and for the times of those blocks.
+5. When the indexer reports a latest height below the end of the window, it is behind: it re-synced from scratch, or another instance answers behind the same URL. gnotifd logs a warning, lowers `bound`, and reads the window later.
+6. In one SQLite transaction, it walks the events in chain order:
    - a registry event adds or removes a trigger, and a removed trigger takes its opt-ins with it;
    - an event from a block older than `-max-age` is skipped and counted in a warning;
-   - any other event is matched against the triggers, and every matching opt-in queues one push;
+   - any other event is matched against the triggers stored for its realm and type, and every matching opt-in queues one push;
    - `height_done` becomes the end of the window and `bound` the latest height of this answer.
-6. When the transaction queued pushes, it wakes the delivery loop.
+7. When the transaction queued pushes, it wakes the delivery loop.
 
-A tick fails when the indexer is unreachable, answers with a status other than 200, or returns a GraphQL `errors` array. A failed tick leaves the cursor in place and logs a warning. A SQLite error rolls the whole window back. Either way the next tick starts again from the same height. A push is queued once per subscription, trigger, transaction and event index, so reading a window twice queues nothing new.
+A tick fails when the indexer is unreachable, answers with a status other than 200, returns a GraphQL `errors` array, or sends an answer too large to read. A failed tick leaves the cursor in place and logs a warning. A SQLite error rolls the whole window back. Either way the next tick starts again from the same height, with a window half as large. A push is queued once per subscription, trigger, transaction and event index, so reading a window twice queues nothing new.
 
 A block is read on the tick after the one that first reports its height, so a notification leaves gnotifd within two poll intervals of the indexer storing its block.
 
 `-max-age`, 10 minutes by default, stops a catch-up after downtime from sending a burst of stale notifications. Registry events are always applied, whatever their age. gnotifd judges age by block time, and a chain that makes blocks only when a transaction arrives, such as a local gnodev, can give the first block after a quiet spell an old time: run gnotifd with a larger `-max-age` against such a chain.
+
+### A block too large to read whole
+
+An indexer answer is too large when it is over 64 MiB, or when the indexer stops with `max elements per query reached`, which it does for a query that matches more than 10,000 transactions. Each too-large answer fails the tick and halves the window, until the window holds one block. When the answer for that one block is still too large, gnotifd reads the block one transaction at a time:
+
+1. It lists the block's successful transactions that have a realm event, by index, with the block's time.
+2. It reads each transaction's events, from `next_tx` on. It applies them and stores the next index as `next_tx` in one SQLite transaction, so a restart resumes inside the block.
+3. When the answer for one transaction alone is too large, gnotifd skips that transaction and logs `skip oversized transaction` as an error, with its height, index and hash.
+4. After the block's last transaction, `height_done` becomes the block's height and `next_tx` returns to 0.
+
+A skipped transaction loses only its own events: the notifications they would have sent, and any trigger they declared or removed. Any other error stops the block at the transaction being read, and the next tick reads that transaction again. gnotifd skips a transaction only when its answer is too large, never on an error that a retry can clear.
 
 ## Storage
 
@@ -57,8 +72,8 @@ One SQLite file, set with `-db`, holds everything, in WAL mode with foreign keys
 
 | Table | Holds |
 |---|---|
-| `cursor` | `height_done` and `bound`, one row |
-| `triggers` | every trigger the registry declared and has not removed |
+| `cursor` | `height_done`, `bound` and `next_tx`, one row |
+| `triggers` | every verified trigger the registry declared and has not removed, indexed by target and event |
 | `subscriptions` | each browser's push endpoint and its two keys |
 | `optins` | which subscription hears which trigger, with its value; removed with the subscription or the trigger |
 | `outbox` | queued pushes with their rendered title, body and link, attempt count and next attempt time; removed with the subscription |
