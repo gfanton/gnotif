@@ -80,6 +80,7 @@ import { Gnotif } from "gnotif";
 
 const gnotif = new Gnotif({ server: "https://gnotif.xyz" });
 const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
+if (!message) throw new Error("gnotif.xyz has not read this realm's trigger yet");
 
 button.addEventListener("click", async () => {
   await gnotif.enable();
@@ -133,7 +134,7 @@ onyx checks a new realm before it goes live, which takes a few seconds. Wait unt
 
 Serve your page over https or from `localhost`, and use a browser with Web Push, such as Chrome. On macOS, also allow notifications for the browser in System Settings.
 
-Open your page, with your own address as `address`. If `triggers()` returns an empty list, gnotif.xyz has not read your deploy yet: reload the page a few seconds later. Click the button, and allow notifications when the browser asks.
+Open your page, with your own address as `address`. If the page throws "gnotif.xyz has not read this realm's trigger yet", gnotif.xyz has not read your deploy yet: reload the page a few seconds later. Click the button, and allow notifications when the browser asks.
 
 Send yourself a message:
 

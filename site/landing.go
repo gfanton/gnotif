@@ -46,6 +46,7 @@ func init(cur realm) {
 
 const gnotif = new Gnotif({ server: "` + serverURL + `" });
 const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
+if (!message) throw new Error("gnotif.xyz has not read this realm's trigger yet");
 
 button.addEventListener("click", async () => {
   await gnotif.enable();
