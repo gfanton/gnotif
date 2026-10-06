@@ -219,3 +219,81 @@ func TestRenderPages(cur realm, t *testing.T) {
 	uassert.False(t, strings.Contains(detail, "[x](javascript"))
 	uassert.False(t, strings.Contains(detail, "✓ verified"))
 }
+
+const capped = "gno.land/r/demo/capped"
+
+func declareOwn(cur realm, target string) string {
+	return Declare(cross(cur), target, "TurnPlayed", "", "next", "Your turn", "", "/")
+}
+
+func TestDeclareCap(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(capped))
+	for i := 0; i < maxPerTarget; i++ {
+		declareOwn(cur, capped)
+	}
+	uassert.AbortsWithMessage(t, cur, "too many triggers for target", func() {
+		declareOwn(cur, capped)
+	})
+}
+
+func TestRemoveFreesSlot(cur realm, t *testing.T) {
+	target := capped + "/freed"
+	testing.SetRealm(testing.NewCodeRealm(target))
+	var first string
+	for i := 0; i < maxPerTarget; i++ {
+		id := declareOwn(cur, target)
+		if i == 0 {
+			first = id
+		}
+	}
+	uassert.AbortsWithMessage(t, cur, "too many triggers for target", func() {
+		declareOwn(cur, target)
+	})
+	Remove(cross(cur), first)
+	declareOwn(cur, target)
+	uassert.AbortsWithMessage(t, cur, "too many triggers for target", func() {
+		declareOwn(cur, target)
+	})
+}
+
+func TestUnverifiedNotCounted(cur realm, t *testing.T) {
+	target := capped + "/mixed"
+	testing.SetRealm(testing.NewUserRealm(alice))
+	for i := 0; i < 20; i++ {
+		declareOwn(cur, target)
+	}
+	testing.SetRealm(testing.NewCodeRealm(target))
+	for i := 0; i < maxPerTarget; i++ {
+		declareOwn(cur, target)
+	}
+	uassert.AbortsWithMessage(t, cur, "too many triggers for target", func() {
+		declareOwn(cur, target)
+	})
+}
+
+func TestRenderTarget(cur realm, t *testing.T) {
+	target := "gno.land/r/demo/listed"
+	testing.SetRealm(testing.NewCodeRealm(target))
+	older := declareOwn(cur, target)
+	gone := declareOwn(cur, target)
+	newer := declareOwn(cur, target)
+	testing.SetRealm(testing.NewCodeRealm("gno.land/r/demo/elsewhere"))
+	elsewhere := declareOwn(cur, "gno.land/r/demo/elsewhere")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	unverified := declareOwn(cur, target)
+	testing.SetRealm(testing.NewCodeRealm(target))
+	Remove(cross(cur), gone)
+
+	out := Render("target/" + target)
+	uassert.True(t, strings.Contains(out, sanitize.InlineText(target)))
+	uassert.True(t, strings.Contains(out, "(/r/dev/gnotif/v0:trigger/"+newer+")"))
+	uassert.True(t, strings.Contains(out, "✓ verified"))
+	uassert.True(t, strings.Index(out, newer) < strings.Index(out, older), "newest first")
+	uassert.False(t, strings.Contains(out, gone), "removed trigger listed")
+	uassert.False(t, strings.Contains(out, unverified), "unverified trigger listed")
+	uassert.False(t, strings.Contains(out, elsewhere), "other target's trigger listed")
+	uassert.True(t, strings.Contains(out, "[All triggers](/r/dev/gnotif/v0)"))
+
+	uassert.Equal(t, "Not found.", Render("target/gno.land/r/demo/none"))
+	uassert.Equal(t, "Not found.", Render("target/"))
+}

@@ -5,12 +5,14 @@ import (
 	"strconv"
 	"strings"
 
+	"gno.land/p/nt/avl/v0"
 	"gno.land/p/nt/markdown/sanitize/v0"
 )
 
 const pageSize = 50
 
-// Render serves "" (the first page), "page/N" and "trigger/<id>".
+// Render serves "" (the first page), "page/N", "trigger/<id>" and
+// "target/<path>".
 func Render(path string) string {
 	switch {
 	case path == "":
@@ -27,6 +29,12 @@ func Render(path string) string {
 			return "Not found."
 		}
 		return renderTrigger(v.(*Trigger))
+	case strings.HasPrefix(path, "target/"):
+		own := byTarget.Get(strings.TrimPrefix(path, "target/"))
+		if own == nil {
+			return "Not found."
+		}
+		return renderTarget(strings.TrimPrefix(path, "target/"), own.(*avl.Tree))
 	}
 	return "Not found."
 }
@@ -41,22 +49,38 @@ func renderPage(n int) string {
 		return b.String()
 	}
 	triggers.ReverseIterateByOffset((n-1)*pageSize, pageSize, func(_ string, v any) bool {
-		tr := v.(*Trigger)
-		b.WriteString("- [**" + tr.ID + "**](" + selfPath + ":trigger/" + tr.ID + ") " +
-			sanitize.InlineText(tr.Target) + " · " + sanitize.InlineText(tr.Event))
-		if tr.Param != "" {
-			b.WriteString(" · param " + sanitize.InlineText(tr.Param))
-		}
-		if tr.Verified {
-			b.WriteString(" · ✓ verified")
-		}
-		b.WriteString(" · by " + tr.Declarer.String() + "\n")
+		writeLine(&b, v.(*Trigger))
 		return false
 	})
 	if n < pages {
 		b.WriteString("\n[Next page](" + selfPath + ":page/" + strconv.Itoa(n+1) + ")\n")
 	}
 	return b.String()
+}
+
+// renderTarget lists a realm's verified triggers, newest first. The cap on
+// them keeps the page to one screen, so it is not paged.
+func renderTarget(target string, own *avl.Tree) string {
+	var b strings.Builder
+	b.WriteString("# gnotif triggers for " + sanitize.InlineText(target) + "\n\n")
+	own.ReverseIterate("", "", func(_ string, v any) bool {
+		writeLine(&b, v.(*Trigger))
+		return false
+	})
+	b.WriteString("\n[All triggers](" + selfPath + ")\n")
+	return b.String()
+}
+
+func writeLine(b *strings.Builder, tr *Trigger) {
+	b.WriteString("- [**" + tr.ID + "**](" + selfPath + ":trigger/" + tr.ID + ") " +
+		sanitize.InlineText(tr.Target) + " · " + sanitize.InlineText(tr.Event))
+	if tr.Param != "" {
+		b.WriteString(" · param " + sanitize.InlineText(tr.Param))
+	}
+	if tr.Verified {
+		b.WriteString(" · ✓ verified")
+	}
+	b.WriteString(" · by " + tr.Declarer.String() + "\n")
 }
 
 func renderTrigger(tr *Trigger) string {

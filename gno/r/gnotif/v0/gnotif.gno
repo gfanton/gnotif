@@ -28,10 +28,12 @@ const (
 	maxFilterPairs = 8
 	maxBody        = 255
 	maxLink        = 256
+	maxPerTarget   = 64
 )
 
 var (
 	triggers avl.Tree // id → *Trigger
+	byTarget avl.Tree // target → *avl.Tree of id → *Trigger, verified triggers only
 	lastID   seqid.ID
 )
 
@@ -40,6 +42,14 @@ var (
 func Declare(cur realm, target, event, filter, param, title, body, link string) string {
 	validate(target, event, filter, param, title, body, link)
 	caller := cur.Previous()
+	verified := caller.IsCode() && caller.PkgPath() == target
+	var own *avl.Tree
+	if v := byTarget.Get(target); v != nil {
+		own = v.(*avl.Tree)
+	}
+	if verified && own != nil && own.Size() >= maxPerTarget {
+		panic("too many triggers for target")
+	}
 	tr := &Trigger{
 		ID:       lastID.Next().String(),
 		Target:   target,
@@ -50,9 +60,16 @@ func Declare(cur realm, target, event, filter, param, title, body, link string) 
 		Body:     body,
 		Link:     link,
 		Declarer: caller.Address(),
-		Verified: caller.IsCode() && caller.PkgPath() == target,
+		Verified: verified,
 	}
 	triggers.Set(tr.ID, tr)
+	if verified {
+		if own == nil {
+			own = avl.NewTree()
+			byTarget.Set(target, own)
+		}
+		own.Set(tr.ID, tr)
+	}
 	chain.Emit("TriggerDeclared",
 		"id", tr.ID,
 		"target", tr.Target,
@@ -74,10 +91,18 @@ func Remove(cur realm, id string) {
 	if v == nil {
 		panic("unknown trigger")
 	}
-	if v.(*Trigger).Declarer != cur.Previous().Address() {
+	tr := v.(*Trigger)
+	if tr.Declarer != cur.Previous().Address() {
 		panic("not the declarer")
 	}
 	triggers.Remove(id)
+	if tr.Verified {
+		own := byTarget.Get(tr.Target).(*avl.Tree)
+		own.Remove(id)
+		if own.Size() == 0 {
+			byTarget.Remove(tr.Target)
+		}
+	}
 	chain.Emit("TriggerRemoved", "id", id)
 }
 
