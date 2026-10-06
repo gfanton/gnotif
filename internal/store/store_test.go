@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -327,4 +329,159 @@ func TestIDsNotReused(t *testing.T) {
 		require.Len(t, due2, 1)
 		assert.NotEqual(t, due[0].ID, due2[0].ID)
 	})
+}
+
+func putTriggerAt(t *testing.T, s *Store, id, target, event string) {
+	t.Helper()
+	require.NoError(t, s.Update(context.Background(), func(tx *Tx) error {
+		return tx.PutTrigger(trigger.Trigger{ID: id, Target: target, Event: event, Title: "t", Body: "b", Link: "/", Declarer: "g1alice"})
+	}))
+}
+
+func triggerIDs(ts []trigger.Trigger) []string {
+	ids := make([]string, len(ts))
+	for i, tr := range ts {
+		ids[i] = tr.ID
+	}
+	return ids
+}
+
+func TestTargetTriggers(t *testing.T) {
+	ctx := context.Background()
+	s := fresh(t)
+	putTriggerAt(t, s, "b", "gno.land/r/a", "E")
+	putTriggerAt(t, s, "a", "gno.land/r/a", "E")
+	putTriggerAt(t, s, "c", "gno.land/r/other", "E")
+
+	got, err := s.TargetTriggers(ctx, "gno.land/r/a")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a", "b"}, triggerIDs(got))
+
+	got, err = s.TargetTriggers(ctx, "gno.land/r/none")
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	for i := range MaxPerTarget + 1 {
+		putTriggerAt(t, s, fmt.Sprintf("many%03d", i), "gno.land/r/many", "E")
+	}
+	got, err = s.TargetTriggers(ctx, "gno.land/r/many")
+	require.NoError(t, err)
+	require.Len(t, got, MaxPerTarget)
+	assert.Equal(t, "many000", got[0].ID)
+	assert.Equal(t, fmt.Sprintf("many%03d", MaxPerTarget-1), got[MaxPerTarget-1].ID)
+}
+
+func TestTriggersByID(t *testing.T) {
+	ctx := context.Background()
+	s := fresh(t)
+	putTriggerAt(t, s, "a", "gno.land/r/a", "E")
+	putTriggerAt(t, s, "b", "gno.land/r/a", "E")
+	putTriggerAt(t, s, "c", "gno.land/r/a", "E")
+
+	cases := map[string]struct {
+		ids  []string
+		want []string
+	}{
+		"subset":         {[]string{"a", "c"}, []string{"a", "c"}},
+		"unknown absent": {[]string{"a", "nope"}, []string{"a"}},
+		"duplicates":     {[]string{"b", "b", "b"}, []string{"b"}},
+		"only unknown":   {[]string{"nope"}, nil},
+		"empty":          {nil, nil},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := s.TriggersByID(ctx, tc.ids)
+			require.NoError(t, err)
+			keys := make([]string, 0, len(got))
+			for id, tr := range got {
+				assert.Equal(t, id, tr.ID)
+				keys = append(keys, id)
+			}
+			assert.ElementsMatch(t, tc.want, keys)
+		})
+	}
+}
+
+func TestMatching(t *testing.T) {
+	s := fresh(t)
+	putTriggerAt(t, s, "b", "gno.land/r/a", "E")
+	putTriggerAt(t, s, "a", "gno.land/r/a", "E")
+	putTriggerAt(t, s, "c", "gno.land/r/a", "Other")
+	putTriggerAt(t, s, "d", "gno.land/r/b", "E")
+
+	cases := map[string]struct {
+		target, event string
+		want          []string
+	}{
+		"both match":   {"gno.land/r/a", "E", []string{"a", "b"}},
+		"other event":  {"gno.land/r/a", "Other", []string{"c"}},
+		"other target": {"gno.land/r/b", "E", []string{"d"}},
+		"nothing":      {"gno.land/r/b", "Other", nil},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var got []trigger.Trigger
+			require.NoError(t, s.Update(context.Background(), func(tx *Tx) error {
+				var err error
+				got, err = tx.Matching(tc.target, tc.event)
+				return err
+			}))
+			assert.Equal(t, tc.want, func() []string {
+				if len(got) == 0 {
+					return nil
+				}
+				return triggerIDs(got)
+			}())
+		})
+	}
+}
+
+func TestMatchingUsesIndex(t *testing.T) {
+	s := fresh(t)
+	rows, err := s.db.Query(`EXPLAIN QUERY PLAN `+selectMatching, "t", "e")
+	require.NoError(t, err)
+	defer rows.Close()
+	var plan string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		require.NoError(t, rows.Scan(&id, &parent, &unused, &detail))
+		plan += detail + "\n"
+	}
+	require.NoError(t, rows.Err())
+	assert.Contains(t, plan, "triggers_by_target")
+}
+
+func TestCursorNextTx(t *testing.T) {
+	ctx := context.Background()
+	s := fresh(t)
+	want := Cursor{HeightDone: 41, Bound: 50, NextTx: 3}
+	require.NoError(t, s.Update(ctx, func(tx *Tx) error { return tx.SetCursor(want) }))
+	got, ok, err := s.Cursor(ctx)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, want, got)
+}
+
+func TestOpenRefusesOldSchema(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "old.db")
+	old, err := sql.Open("sqlite", "file:"+path)
+	require.NoError(t, err)
+	_, err = old.Exec(`CREATE TABLE cursor (id INTEGER PRIMARY KEY CHECK (id = 1), height_done INTEGER NOT NULL, bound INTEGER NOT NULL)`)
+	require.NoError(t, err)
+	require.NoError(t, old.Close())
+
+	_, err = Open(ctx, path)
+	require.ErrorIs(t, err, ErrSchemaVersion)
+	assert.Contains(t, err.Error(), "start a new database with -start-height")
+
+	created := open(t, filepath.Join(t.TempDir(), "new.db"))
+	var version int
+	require.NoError(t, created.db.QueryRow(`PRAGMA user_version`).Scan(&version))
+	assert.Equal(t, 2, version)
+
+	path = filepath.Join(t.TempDir(), "reopen.db")
+	open(t, path).Close()
+	open(t, path)
 }

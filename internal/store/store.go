@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -18,6 +19,13 @@ import (
 // ErrUnknownSubscription reports an endpoint with no stored subscription.
 var ErrUnknownSubscription = errors.New("unknown subscription")
 
+// ErrSchemaVersion reports a database made by an older gnotifd.
+var ErrSchemaVersion = errors.New("database was made by an older gnotifd")
+
+// MaxPerTarget is the most triggers one realm may have; TargetTriggers
+// returns no more.
+const MaxPerTarget = 64
+
 // Store is the SQLite database. It is safe for concurrent use.
 type Store struct {
 	db *sql.DB
@@ -25,8 +33,12 @@ type Store struct {
 
 // Cursor is the chain position of the watch loop. HeightDone is the last
 // height fully processed; Bound is the indexer's latest height on the
-// previous tick, or 0 when unset.
-type Cursor struct{ HeightDone, Bound int64 }
+// previous tick, or 0 when unset. NextTx above 0 means block HeightDone+1 is
+// being read one transaction at a time, from index NextTx.
+type Cursor struct {
+	HeightDone, Bound int64
+	NextTx            int
+}
 
 // Subscription is a browser push subscription.
 type Subscription struct{ Endpoint, P256dh, Auth string }
@@ -64,9 +76,26 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
+	var version, tables int
+	if err := db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("read schema version: %w", err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table'`).Scan(&tables); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("count tables: %w", err)
+	}
+	if tables > 0 && version < schemaVersion {
+		db.Close()
+		return nil, fmt.Errorf("%s: %w: start a new database with -start-height", path, ErrSchemaVersion)
+	}
 	if _, err := db.ExecContext(ctx, schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("set schema version: %w", err)
 	}
 	return &Store{db: db}, nil
 }
@@ -79,7 +108,7 @@ func (s *Store) Close() error {
 // Cursor returns the stored cursor, and false before the first SetCursor.
 func (s *Store) Cursor(ctx context.Context) (Cursor, bool, error) {
 	var c Cursor
-	err := s.db.QueryRowContext(ctx, `SELECT height_done, bound FROM cursor WHERE id = 1`).Scan(&c.HeightDone, &c.Bound)
+	err := s.db.QueryRowContext(ctx, `SELECT height_done, bound, next_tx FROM cursor WHERE id = 1`).Scan(&c.HeightDone, &c.Bound, &c.NextTx)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Cursor{}, false, nil
 	}
@@ -117,6 +146,41 @@ func (s *Store) Triggers(ctx context.Context) ([]trigger.Trigger, error) {
 		return nil, fmt.Errorf("read triggers: %w", err)
 	}
 	return scanTriggers(rows)
+}
+
+// TargetTriggers returns the triggers of one realm in id order, at most
+// MaxPerTarget.
+func (s *Store) TargetTriggers(ctx context.Context, target string) ([]trigger.Trigger, error) {
+	rows, err := s.db.QueryContext(ctx, selectTriggerColumns+` FROM triggers WHERE target = ? ORDER BY id LIMIT ?`, target, MaxPerTarget)
+	if err != nil {
+		return nil, fmt.Errorf("read triggers of %s: %w", target, err)
+	}
+	return scanTriggers(rows)
+}
+
+// TriggersByID returns the stored triggers among ids, keyed by id. Unknown
+// ids are absent.
+func (s *Store) TriggersByID(ctx context.Context, ids []string) (map[string]trigger.Trigger, error) {
+	out := make(map[string]trigger.Trigger, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx, selectTriggerColumns+` FROM triggers WHERE id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")+`)`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read triggers by id: %w", err)
+	}
+	found, err := scanTriggers(rows)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range found {
+		out[t.ID] = t
+	}
+	return out, nil
 }
 
 // PutSubscription stores sub, or replaces the keys of the subscription with
@@ -248,9 +312,9 @@ type Tx struct {
 // SetCursor stores the cursor.
 func (tx *Tx) SetCursor(c Cursor) error {
 	_, err := tx.tx.Exec(`
-		INSERT INTO cursor (id, height_done, bound) VALUES (1, ?, ?)
-		ON CONFLICT (id) DO UPDATE SET height_done = excluded.height_done, bound = excluded.bound`,
-		c.HeightDone, c.Bound)
+		INSERT INTO cursor (id, height_done, bound, next_tx) VALUES (1, ?, ?, ?)
+		ON CONFLICT (id) DO UPDATE SET height_done = excluded.height_done, bound = excluded.bound, next_tx = excluded.next_tx`,
+		c.HeightDone, c.Bound, c.NextTx)
 	if err != nil {
 		return fmt.Errorf("write cursor: %w", err)
 	}
@@ -309,6 +373,15 @@ func (tx *Tx) Triggers() ([]trigger.Trigger, error) {
 	return scanTriggers(rows)
 }
 
+// Matching returns the triggers on target for event, in id order.
+func (tx *Tx) Matching(target, event string) ([]trigger.Trigger, error) {
+	rows, err := tx.tx.Query(selectMatching, target, event)
+	if err != nil {
+		return nil, fmt.Errorf("read triggers matching %s %s: %w", target, event, err)
+	}
+	return scanTriggers(rows)
+}
+
 // Subscribers returns the subscriptions opted in to triggerID with value.
 func (tx *Tx) Subscribers(triggerID, value string) ([]int64, error) {
 	rows, err := tx.tx.Query(`SELECT subscription_id FROM optins WHERE trigger_id = ? AND value = ? ORDER BY subscription_id`, triggerID, value)
@@ -346,7 +419,11 @@ func (tx *Tx) Enqueue(p Push) (bool, error) {
 	return n == 1, nil
 }
 
-const selectTriggers = `SELECT id, target, event, filter, param, title, body, link, declarer, verified FROM triggers ORDER BY id`
+const (
+	selectTriggerColumns = `SELECT id, target, event, filter, param, title, body, link, declarer, verified`
+	selectTriggers       = selectTriggerColumns + ` FROM triggers ORDER BY id`
+	selectMatching       = selectTriggerColumns + ` FROM triggers WHERE target = ? AND event = ? ORDER BY id`
+)
 
 func scanTriggers(rows *sql.Rows) ([]trigger.Trigger, error) {
 	defer rows.Close()

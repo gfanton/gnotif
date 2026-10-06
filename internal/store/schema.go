@@ -1,10 +1,15 @@
 package store
 
+// schemaVersion is stored in PRAGMA user_version of every database this
+// gnotifd creates.
+const schemaVersion = 2
+
 const schema = `
 CREATE TABLE IF NOT EXISTS cursor (
 	id          INTEGER PRIMARY KEY CHECK (id = 1),
 	height_done INTEGER NOT NULL,
-	bound       INTEGER NOT NULL
+	bound       INTEGER NOT NULL,
+	next_tx     INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS triggers (
@@ -19,6 +24,8 @@ CREATE TABLE IF NOT EXISTS triggers (
 	declarer TEXT NOT NULL,
 	verified INTEGER NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS triggers_by_target ON triggers (target, event);
 
 CREATE TABLE IF NOT EXISTS subscriptions (
 	id         INTEGER PRIMARY KEY AUTOINCREMENT,
