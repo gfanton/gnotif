@@ -38,7 +38,7 @@ func pageBySlug(t *testing.T, slug string) Page {
 }
 
 func TestRenderPageGettingStarted(t *testing.T) {
-	r, err := renderPage(repoRoot, pages[0])
+	r, err := renderPage(repoRoot, pageBySlug(t, "getting-started"))
 	require.NoError(t, err)
 	assert.Equal(t, Heading{Level: 2, ID: "1-emit-an-event", Text: "1. Emit an event"}, r.Headings[0])
 	assert.Contains(t, string(r.Body), `href="/docs/triggers/#a-triggers-id-can-change"`)

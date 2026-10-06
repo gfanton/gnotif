@@ -21,7 +21,7 @@ func init(cur realm) {
 }
 ```
 
-- `init` runs once, when the realm is deployed, so nobody else can run it.
+- `init` runs once, when the realm is deployed, and nothing can call it again.
 - `cross(cur)` makes the realm the caller that the registry sees, so the trigger is verified.
 - `cur.PkgPath()` is the realm's own path, whatever path it is deployed at.
 - The trigger's declarer is the realm's address, so only the realm can remove it, through a function that calls `gnotif.Remove(cross(cur), id)`.

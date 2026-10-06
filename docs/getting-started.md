@@ -19,7 +19,7 @@ The chain marks every event with the path of the realm that emitted it, so no ot
 
 ## 2. Declare the trigger
 
-A trigger tells gnotif which event to watch and what notification to send. Your realm declares it in the gnotif registry, from its `init` function. `init` runs once, when the realm is deployed, so the deploy declares the trigger and nobody else can.
+A trigger tells gnotif which event to watch and what notification to send. Your realm declares it in the gnotif registry, from its `init` function. `init` runs once, when the realm is deployed, so the deploy declares the trigger, and nobody can run `init` again.
 
 Here is the whole realm:
 
@@ -49,7 +49,7 @@ func Notify(cur realm, to address, msg string) {
 - the notification's title is "New message", and its text is the event's `msg`;
 - a click on the notification opens `/` on your dapp's site.
 
-The empty string after `"Message"` is a filter, which this trigger does not use. To notify every browser that opted in, whatever its address, leave the param empty: `""` in place of `"to"`.
+The empty string after `"Message"` is a filter, which this trigger does not use. To notify every browser that opted in, whatever its address, leave the param empty: `""` in place of `"to"`, and opt in with `value: ""`.
 
 `cross(cur)` makes your realm the caller that the registry sees. The caller is the realm the trigger watches, so the registry marks the trigger verified. gnotif.xyz offers verified triggers only.
 
@@ -131,7 +131,9 @@ gnokey maketx addpkg -pkgpath gno.land/r/<you>/notify -pkgdir . \
 
 onyx checks a new realm before it goes live, which takes a few seconds. Wait until its page opens on gnoweb, at `https://onyx.testnets.gno.land/r/<you>/notify`. A realm that does not compile never goes live, so if the page never opens, compare your file with step 2.
 
-Open your page, with your own address as `address`. If `triggers()` returns an empty list, gnotif.xyz has not read your deploy yet: reload the page a few seconds later. Click the button, and allow notifications when the browser asks. The page must be served over https or from `localhost`, in a browser with Web Push, such as Chrome. On macOS, also allow notifications for the browser in System Settings.
+Serve your page over https or from `localhost`, and use a browser with Web Push, such as Chrome. On macOS, also allow notifications for the browser in System Settings.
+
+Open your page, with your own address as `address`. If `triggers()` returns an empty list, gnotif.xyz has not read your deploy yet: reload the page a few seconds later. Click the button, and allow notifications when the browser asks.
 
 Send yourself a message:
 
