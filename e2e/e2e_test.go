@@ -35,7 +35,6 @@ type pushed struct {
 
 func TestTurnNotifiesOpponent(t *testing.T) {
 	s := newStack(t)
-	s.call("devtest", "DeclareTriggers")
 
 	var mu sync.Mutex
 	var pushes []pushed

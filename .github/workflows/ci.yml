@@ -86,7 +86,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/gno-toolchains/onyx/gnohome
-          key: gnohome-${{ env.GNO_VERSION }}-${{ hashFiles('gno/**/gnomod.toml') }}
+          key: gnohome-${{ env.GNO_VERSION }}-${{ hashFiles('gno/**/gnomod.toml', 'demo/**/gnomod.toml') }}
       - if: steps.gnohome.outputs.cache-hit != 'true'
         run: make gno-deps
       - run: make gno-test gno-lint

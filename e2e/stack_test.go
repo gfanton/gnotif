@@ -29,8 +29,8 @@ const pingpongPath = "gno.land/r/dev/pingpong/v0"
 // dependencies before dependents.
 var examplePackages = []string{"avl/v0", "cford32/v0", "seqid/v0", "markdown/sanitize/v0"}
 
-// stack is a local chain: gnodev with both realms loaded, and a tx-indexer
-// reading it.
+// stack is a local chain: gnodev with the registry loaded and pingpong
+// deployed, and a tx-indexer reading it.
 type stack struct {
 	t       *testing.T
 	tools   string
@@ -42,9 +42,9 @@ type stack struct {
 
 func newStack(t *testing.T) *stack {
 	t.Helper()
-	tools, realms := os.Getenv("GNOTIF_TOOLS"), os.Getenv("GNOTIF_REALMS")
+	tools, root := os.Getenv("GNOTIF_TOOLS"), os.Getenv("GNOTIF_ROOT")
 	require.NotEmpty(t, tools, "GNOTIF_TOOLS is unset; run make e2e")
-	require.NotEmpty(t, realms, "GNOTIF_REALMS is unset; run make e2e")
+	require.NotEmpty(t, root, "GNOTIF_ROOT is unset; run make e2e")
 	s := &stack{t: t, tools: tools, keybase: t.TempDir(), addrs: map[string]string{}}
 
 	s.gnokey(devtestMnemonic+"\n\n\n", "add", "devtest", "-recover", "-insecure-password-stdin", "-home", s.keybase)
@@ -60,7 +60,7 @@ func newStack(t *testing.T) *stack {
 	for _, p := range examplePackages {
 		args = append(args, filepath.Join(tools, "gno-src", "examples", "gno.land", "p", "nt", p))
 	}
-	args = append(args, filepath.Join(realms, "gnotif", "v0"), filepath.Join(realms, "pingpong", "v0"))
+	args = append(args, filepath.Join(root, "gno", "r", "gnotif", "v0"))
 	s.start("gnodev", []string{"GNOROOT=" + filepath.Join(tools, "gno-src")}, args...)
 	require.Eventually(t, func() bool {
 		resp, err := http.Get("http://" + s.rpc + "/status")
@@ -70,6 +70,9 @@ func newStack(t *testing.T) *stack {
 		resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
 	}, 2*time.Minute, 250*time.Millisecond, "gnodev RPC never answered")
+	// The tx-indexer files genesis transactions at height 0, below where
+	// gnotifd reads, so pingpong declares its trigger in a deploy transaction.
+	s.addpkg("devtest", filepath.Join(root, "demo", "gno.land", "r", "pingpong", "v0"), pingpongPath)
 
 	idx := freeAddr(t)
 	s.indexer = "http://" + idx + "/graphql/query"
@@ -133,6 +136,29 @@ func (s *stack) call(key, fn string, args ...string) {
 	a = append(a, "-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
 		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, key)
 	s.gnokey("\n", a...)
+}
+
+// addpkg deploys the package in dir at pkgPath, without its tests, signed
+// by key.
+func (s *stack) addpkg(key, dir, pkgPath string) {
+	t := s.t
+	t.Helper()
+	pkg := t.TempDir()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		name := e.Name()
+		deployed := name == "gnomod.toml" || strings.HasSuffix(name, ".gno") && !strings.HasSuffix(name, "_test.gno")
+		if !e.Type().IsRegular() || !deployed {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(pkg, name), b, 0o644))
+	}
+	s.gnokey("\n", "maketx", "addpkg", "-pkgpath", pkgPath, "-pkgdir", pkg, "-max-deposit", "10000000ugnot",
+		"-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
+		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, key)
 }
 
 func (s *stack) latestHeight() int64 {

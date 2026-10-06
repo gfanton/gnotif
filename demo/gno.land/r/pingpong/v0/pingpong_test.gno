@@ -1,11 +1,14 @@
 package pingpong
 
 import (
+	"chain"
 	"strings"
 	"testing"
 
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
+
+	"gno.land/r/dev/gnotif/v0"
 )
 
 var (
@@ -151,9 +154,11 @@ func TestLeave(cur realm, t *testing.T) {
 	uassert.AbortsWithMessage(t, cur, "unknown game", func() { Leave(cross(cur), startedID) })
 }
 
-func TestDeclareTriggersOnce(cur realm, t *testing.T) {
-	DeclareTriggers(cross(cur))
-	uassert.AbortsWithMessage(t, cur, "triggers already declared", func() { DeclareTriggers(cross(cur)) })
+func TestInitDeclaresTrigger(t *testing.T) {
+	out := gnotif.Render("target/gno.land/r/dev/pingpong/v0")
+	uassert.Equal(t, 1, strings.Count(out, "\n- ["), out)
+	by := chain.PackageAddress("gno.land/r/dev/pingpong/v0").String()
+	uassert.True(t, strings.Contains(out, " · TurnPlayed · param next · ✓ verified · by "+by+"\n"), out)
 }
 
 func TestRenderGame(cur realm, t *testing.T) {

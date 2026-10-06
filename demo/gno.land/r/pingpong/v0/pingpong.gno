@@ -27,8 +27,12 @@ type Game struct {
 var (
 	games    avl.Tree // id → *Game
 	lastGame seqid.ID
-	declared bool
 )
+
+// The registry sees this realm as the caller, so the trigger is verified.
+func init(cur realm) {
+	gnotif.Declare(cross(cur), cur.PkgPath(), "TurnPlayed", "", "next", "Your turn", "Game {game}, turn {turn}", "/?game={game}")
+}
 
 func load(id string) *Game {
 	if !games.Has(id) {
@@ -95,14 +99,4 @@ func Leave(cur realm, game string) {
 	}
 	games.Remove(game)
 	chain.Emit("GameEnded", "game", g.ID, "by", caller.String())
-}
-
-// DeclareTriggers declares the "your turn" trigger in the gnotif registry.
-// The registry sees this realm as the caller, so the trigger is verified.
-func DeclareTriggers(cur realm) {
-	if declared {
-		panic("triggers already declared")
-	}
-	declared = true
-	gnotif.Declare(cross(cur), cur.PkgPath(), "TurnPlayed", "", "next", "Your turn", "Game {game}, turn {turn}", "/?game={game}")
 }
