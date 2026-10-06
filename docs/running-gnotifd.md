@@ -106,7 +106,7 @@ The database is one SQLite file in WAL mode: while gnotifd runs, `gnotif.db` sit
 
 The subscriptions and opt-ins exist nowhere else: after losing the database, each browser has to turn notifications on again from its dapp's page. The triggers come back from the chain, since a new database starts like a first start, from `-start-height`.
 
-A gnotifd release that changes the database's layout refuses a database made by an older release. It stops with `database was made by an older gnotifd: start a new database with -start-height`. Name a new file with `-db` and give `-start-height`. The subscriptions do not carry over to the new file, so each browser turns notifications on again from its dapp's page.
+A gnotifd release that changes the database's layout refuses a database made by an older release. It stops with `database was made by an older gnotifd: start a new database with -start-height`. gnotifd also refuses a database made by a newer release, with `database was made by a newer gnotifd`, and leaves the file untouched: run the gnotifd that made it, or start a new database with `-start-height`. Name a new file with `-db` and give `-start-height`. The subscriptions do not carry over to the new file, so each browser turns notifications on again from its dapp's page.
 
 ## Run the container image
 
