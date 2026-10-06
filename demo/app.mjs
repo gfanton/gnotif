@@ -47,10 +47,6 @@ function errorText(err) {
   return err.message;
 }
 
-function featured(t) {
-  return t.target === pingpong && t.verified;
-}
-
 function mark(verified) {
   const m = element("span", verified ? "mark verified" : "mark", verified ? "Verified" : "Not verified");
   if (verified) {
@@ -73,14 +69,14 @@ function preview(t) {
 
 function renderTriggers(saved) {
   if (triggers.length === 0) {
-    el("triggers").replaceChildren(element("li", "note", "No notifications on offer yet. pingpong declares its trigger with DeclareTriggers."));
+    el("triggers").replaceChildren(element("li", "note", "No notifications on offer yet. pingpong declares its trigger in its init function when it is deployed."));
     return;
   }
   el("triggers").replaceChildren(...triggers.map((t) => {
     const box = document.createElement("input");
     box.type = "checkbox";
     box.value = t.id;
-    box.checked = saved ? saved.optins.some((o) => o.trigger === t.id) : featured(t);
+    box.checked = !saved || saved.optins.some((o) => o.trigger === t.id);
     box.addEventListener("change", () => {
       if (on) {
         sync();
@@ -92,9 +88,7 @@ function renderTriggers(saved) {
     label.append(box, head, element("span", "trigger-meta", `${t.event} on ${t.target}`));
     const item = document.createElement("li");
     item.append(label);
-    if (featured(t)) {
-      item.append(preview(t));
-    }
+    item.append(preview(t));
     return item;
   }));
 }
@@ -208,7 +202,7 @@ if (saved) {
   el("address").value = saved.address;
 }
 try {
-  triggers = (await gnotif.triggers()).sort((a, b) => Number(featured(b)) - Number(featured(a)));
+  triggers = await gnotif.triggers(pingpong);
   renderTriggers(saved);
 } catch (err) {
   el("triggers").replaceChildren(element("li", "note error", `Cannot load notifications from ${server}: ${err.message}`));

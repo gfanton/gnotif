@@ -134,5 +134,28 @@ test("triggers returns the server's list", async (t) => {
   const list = [{ id: "t1", target: "gno.land/r/demo/game", event: "TurnPlayed", filter: "", param: "",
     title: "Your turn", body: "", link: "/", declarer: "g1game", verified: true }];
   t.after(stubGlobal("fetch", async () => ({ ok: true, status: 200, json: async () => list })));
-  assert.deepEqual(await new Gnotif({ server: SERVER }).triggers(), list);
+  assert.deepEqual(await new Gnotif({ server: SERVER }).triggers("gno.land/r/demo/game"), list);
+});
+
+test("triggers encodes the target in the query string", async (t) => {
+  const urls = [];
+  t.after(stubGlobal("fetch", async (url) => {
+    urls.push(url);
+    return { ok: true, status: 200, json: async () => [] };
+  }));
+  await new Gnotif({ server: SERVER }).triggers("gno.land/r/a b");
+  assert.deepEqual(urls, [`${SERVER}/v1/triggers?target=gno.land%2Fr%2Fa%20b`]);
+});
+
+test("triggers rejects a target that is not a non-empty string before any request", async (t) => {
+  let calls = 0;
+  t.after(stubGlobal("fetch", async () => {
+    calls++;
+    return { ok: true, status: 200, json: async () => [] };
+  }));
+  const gnotif = new Gnotif({ server: SERVER });
+  for (const target of [undefined, "", 7]) {
+    await assert.rejects(gnotif.triggers(/** @type {any} */ (target)), TypeError);
+  }
+  assert.equal(calls, 0);
 });

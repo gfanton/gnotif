@@ -66,9 +66,17 @@ export class Gnotif {
     this.#serviceWorker = serviceWorker;
   }
 
-  /** @returns {Promise<Trigger[]>} the triggers the server offers */
-  async triggers() {
-    return /** @type {Trigger[]} */ (await this.#request("GET", "/v1/triggers"));
+  /**
+   * @param {string} target realm path whose verified triggers to list
+   * @returns {Promise<Trigger[]>} the triggers that realm offers
+   */
+  async triggers(target) {
+    if (typeof target !== "string" || target === "") {
+      throw new TypeError("target must be a non-empty realm path");
+    }
+    return /** @type {Trigger[]} */ (
+      await this.#request("GET", `/v1/triggers?target=${encodeURIComponent(target)}`)
+    );
   }
 
   /**
