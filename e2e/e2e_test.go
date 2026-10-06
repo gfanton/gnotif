@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -67,7 +68,7 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 		done <- server.Run(ctx, server.Config{
 			Listener:     ln,
 			Indexer:      s.indexer,
-			Registry:     "gno.land/r/dev/gnotif/v0",
+			Registry:     registryPath,
 			StartHeight:  1,
 			DB:           filepath.Join(t.TempDir(), "gnotif.db"),
 			Poll:         500 * time.Millisecond,
@@ -117,12 +118,10 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed the verified pingpong trigger")
 
 	// A user key can declare a trigger on pingpong's path, but the registry
-	// marks it unverified: gnotifd must neither list it nor push for it.
-	s.callPackage("devtest", "gno.land/r/dev/gnotif/v0", "Declare", pingpongPath, "TurnPlayed", "", "", "Spoof", "spoofed", "/")
-	assert.Never(t, func() bool {
-		ids, err := listed()
-		return err != nil || !slices.Equal(ids, []string{triggerID})
-	}, 3*time.Second, 250*time.Millisecond, "an unverified trigger reached the listing")
+	// marks it unverified. It is declared before the game, so the pushes
+	// below prove gnotifd read past its block.
+	spoofID := declaredID(t, s.callPackage("devtest", registryPath, "Declare", pingpongPath, "TurnPlayed", "", "", "Spoof", "spoofed", "/"))
+	require.NotEqual(t, triggerID, spoofID)
 
 	key, err := ecdh.P256().GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -152,6 +151,17 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 	require.Eventually(t, func() bool { return count() == 2 }, 30*time.Second, 100*time.Millisecond, "expected 2 pushes, got %d", count())
 	assert.Never(t, func() bool { return count() > 2 }, 3*time.Second, 100*time.Millisecond)
 
+	// gnotifd read the spoofed declaration's block and never stored it.
+	ids, err := listed()
+	require.NoError(t, err)
+	assert.Equal(t, []string{triggerID}, ids)
+	status, answer := putRaw(t, base+"/v1/subscription/optins", map[string]any{
+		"endpoint": endpoint,
+		"optins":   []map[string]string{{"trigger": spoofID, "value": s.addrs["player2"]}},
+	})
+	assert.Equal(t, http.StatusBadRequest, status, answer)
+	assert.Contains(t, answer, "unknown trigger")
+
 	// The pushes prove the indexer already holds the first Play's block.
 	ix := indexer.New(s.indexer, http.DefaultClient)
 	refs, _, err := ix.BlockTxs(context.Background(), playHeight)
@@ -177,6 +187,13 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 
 func put(t *testing.T, url string, body any) {
 	t.Helper()
+	status, answer := putRaw(t, url, body)
+	require.Equal(t, http.StatusNoContent, status, "PUT %s: %s", url, answer)
+}
+
+// putRaw sends a JSON PUT and returns the status and the answer's body.
+func putRaw(t *testing.T, url string, body any) (int, string) {
+	t.Helper()
 	b, err := json.Marshal(body)
 	require.NoError(t, err)
 	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(b))
@@ -187,5 +204,15 @@ func put(t *testing.T, url string, body any) {
 	defer resp.Body.Close()
 	var answer bytes.Buffer
 	answer.ReadFrom(resp.Body)
-	require.Equal(t, http.StatusNoContent, resp.StatusCode, "PUT %s: %s", url, answer.String())
+	return resp.StatusCode, answer.String()
+}
+
+var declaredResult = regexp.MustCompile(`\("(\w+)" string\)`)
+
+// declaredID returns the trigger id gnokey printed for a Declare call.
+func declaredID(t *testing.T, out string) string {
+	t.Helper()
+	m := declaredResult.FindStringSubmatch(out)
+	require.NotNil(t, m, "no returned id in gnokey output:\n%s", out)
+	return m[1]
 }

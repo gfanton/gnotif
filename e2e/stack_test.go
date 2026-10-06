@@ -23,7 +23,10 @@ import (
 // account gnodev premines and deploys with by default.
 const devtestMnemonic = "source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast"
 
-const pingpongPath = "gno.land/r/dev/pingpong/v0"
+const (
+	pingpongPath = "gno.land/r/dev/pingpong/v0"
+	registryPath = "gno.land/r/dev/gnotif/v0"
+)
 
 // gnodev outside a workspace does not resolve imports from its examples, so
 // the realms' dependencies are loaded from the gno clone explicitly,
