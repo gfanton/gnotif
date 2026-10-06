@@ -21,6 +21,8 @@ var ErrNoStartHeight = errors.New("start height required on first start")
 type Source interface {
 	Latest(ctx context.Context) (int64, error)
 	Fetch(ctx context.Context, w indexer.Window) (indexer.Batch, error)
+	BlockTxs(ctx context.Context, height int64) ([]indexer.TxRef, time.Time, error)
+	FetchTx(ctx context.Context, height int64, index int) (indexer.Batch, error)
 }
 
 // Config holds the watcher's dependencies and settings.
@@ -64,15 +66,16 @@ func (w *Watcher) Run(ctx context.Context) error {
 	}
 }
 
-// Tick processes one window. A failed tick leaves the cursor in place and
-// halves the next window, since the indexer refuses a query that returns
-// too many transactions; a successful one restores MaxWindow.
+// Tick processes one window. A failed tick halves the next window, since the
+// indexer refuses a query that returns too many transactions, and a
+// successful one doubles it, up to MaxWindow. A window of one block too large
+// to read whole is read one transaction at a time.
 func (w *Watcher) Tick(ctx context.Context) error {
 	if err := w.tick(ctx); err != nil {
 		w.window = max(1, w.window/2)
 		return err
 	}
-	w.window = w.cfg.MaxWindow
+	w.window = min(w.cfg.MaxWindow, 2*w.window)
 	return nil
 }
 
@@ -86,6 +89,11 @@ func (w *Watcher) tick(ctx context.Context) error {
 			return ErrNoStartHeight
 		}
 		cur = store.Cursor{HeightDone: w.cfg.StartHeight - 1}
+	}
+	// Every other path below stores a cursor without NextTx, so a block left
+	// half read is finished first.
+	if cur.NextTx > 0 {
+		return w.readBlock(ctx, cur)
 	}
 
 	// The indexer resolves the fields of one query concurrently, so a window
@@ -105,16 +113,14 @@ func (w *Watcher) tick(ctx context.Context) error {
 	}
 	end := min(cur.Bound, cur.HeightDone+w.window)
 
-	if err := w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
-		_, err := tx.Targets()
-		return err
-	}); err != nil {
-		return err
-	}
 	batch, err := w.cfg.Source.Fetch(ctx, indexer.Window{
 		From: cur.HeightDone,
 		To:   end,
 	})
+	if errors.Is(err, indexer.ErrTooLarge) && end == cur.HeightDone+1 {
+		w.cfg.Log.Warn("block too large, reading it one transaction at a time", "height", end, "err", err)
+		return w.readBlock(ctx, cur)
+	}
 	if err != nil {
 		return err
 	}
@@ -128,78 +134,142 @@ func (w *Watcher) tick(ctx context.Context) error {
 		})
 	}
 
-	queued, stale := 0, 0
+	var c counts
 	err = w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
-		triggers, err := tx.Triggers()
-		if err != nil {
+		var err error
+		if c, err = w.process(tx, batch.Events, batch.BlockTimes); err != nil {
 			return err
-		}
-		for _, e := range batch.Events {
-			if e.PkgPath == w.cfg.Registry {
-				changed, err := w.applyRegistry(tx, e)
-				if err != nil {
-					return err
-				}
-				if changed {
-					if triggers, err = tx.Triggers(); err != nil {
-						return err
-					}
-				}
-				continue
-			}
-			blockTime, ok := batch.BlockTimes[e.Height]
-			if !ok {
-				w.cfg.Log.Warn("skip event without block time", "height", e.Height, "tx", e.TxHash)
-				continue
-			}
-			if w.cfg.Now().Sub(blockTime) > w.cfg.MaxAge {
-				stale++
-				continue
-			}
-			n, err := w.enqueue(tx, triggers, e)
-			if err != nil {
-				return err
-			}
-			queued += n
 		}
 		return tx.SetCursor(store.Cursor{HeightDone: end, Bound: batch.Latest})
 	})
 	if err != nil {
 		return err
 	}
-	if stale > 0 {
-		w.cfg.Log.Warn("skipped stale events", "count", stale, "from", cur.HeightDone+1, "to", end, "max_age", w.cfg.MaxAge)
+	w.report(c, cur.HeightDone+1, end)
+	return nil
+}
+
+// readBlock reads block HeightDone+1 one transaction at a time from
+// cur.NextTx, storing the next index after each one. A transaction too large
+// to read is skipped and its events are lost; any other error stops the block
+// at that transaction.
+func (w *Watcher) readBlock(ctx context.Context, cur store.Cursor) error {
+	h := cur.HeightDone + 1
+	refs, at, err := w.cfg.Source.BlockTxs(ctx, h)
+	if err != nil {
+		return err
 	}
-	if queued > 0 && w.cfg.Wake != nil {
+	blockTimes := map[int64]time.Time{h: at}
+	var total counts
+	defer func() { w.report(total, h, h) }()
+	for _, ref := range refs {
+		if ref.Index < cur.NextTx {
+			continue
+		}
+		var events []trigger.Event
+		batch, err := w.cfg.Source.FetchTx(ctx, h, ref.Index)
+		switch {
+		case errors.Is(err, indexer.ErrTooLarge):
+			w.cfg.Log.Error("skip oversized transaction", "height", h, "index", ref.Index, "tx", ref.Hash, "err", err)
+		case err != nil:
+			return err
+		default:
+			events = batch.Events
+		}
+		next := store.Cursor{HeightDone: cur.HeightDone, Bound: cur.Bound, NextTx: ref.Index + 1}
+		var c counts
+		err = w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
+			var err error
+			if c, err = w.process(tx, events, blockTimes); err != nil {
+				return err
+			}
+			return tx.SetCursor(next)
+		})
+		if err != nil {
+			return err
+		}
+		total.queued += c.queued
+		total.stale += c.stale
+	}
+	return w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
+		return tx.SetCursor(store.Cursor{HeightDone: h, Bound: cur.Bound})
+	})
+}
+
+type counts struct{ queued, stale int }
+
+// process applies events in the order given, which must be chain order: a
+// trigger declared or removed by one event applies to every event after it.
+func (w *Watcher) process(tx *store.Tx, events []trigger.Event, blockTimes map[int64]time.Time) (counts, error) {
+	var c counts
+	for _, e := range events {
+		if e.PkgPath == w.cfg.Registry {
+			if err := w.applyRegistry(tx, e); err != nil {
+				return c, err
+			}
+			continue
+		}
+		blockTime, ok := blockTimes[e.Height]
+		if !ok {
+			w.cfg.Log.Warn("skip event without block time", "height", e.Height, "tx", e.TxHash)
+			continue
+		}
+		if w.cfg.Now().Sub(blockTime) > w.cfg.MaxAge {
+			c.stale++
+			continue
+		}
+		n, err := w.enqueue(tx, e)
+		if err != nil {
+			return c, err
+		}
+		c.queued += n
+	}
+	return c, nil
+}
+
+// report warns of the stale events read in heights from through to,
+// inclusive, and wakes the sender when pushes were queued.
+func (w *Watcher) report(c counts, from, to int64) {
+	if c.stale > 0 {
+		w.cfg.Log.Warn("skipped stale events", "count", c.stale, "from", from, "to", to, "max_age", w.cfg.MaxAge)
+	}
+	if c.queued > 0 && w.cfg.Wake != nil {
 		select {
 		case w.cfg.Wake <- struct{}{}:
 		default:
 		}
 	}
-	return nil
 }
 
-func (w *Watcher) applyRegistry(tx *store.Tx, e trigger.Event) (bool, error) {
+func (w *Watcher) applyRegistry(tx *store.Tx, e trigger.Event) error {
 	switch e.Type {
 	case "TriggerDeclared":
 		t, err := trigger.FromDeclared(e.Attrs)
 		if err != nil {
 			w.cfg.Log.Error("skip registry event", "height", e.Height, "tx", e.TxHash, "err", err)
-			return false, nil
+			return nil
 		}
-		return true, tx.PutTrigger(t)
+		if !t.Verified {
+			w.cfg.Log.Debug("skip unverified trigger", "id", t.ID, "target", t.Target, "height", e.Height, "tx", e.TxHash)
+			return nil
+		}
+		return tx.PutTrigger(t)
 	case "TriggerRemoved":
 		id, ok := e.Attr("id")
 		if !ok || id == "" {
 			w.cfg.Log.Error("skip registry event", "height", e.Height, "tx", e.TxHash, "err", "TriggerRemoved without id")
-			return false, nil
+			return nil
 		}
-		return true, tx.DeleteTrigger(id)
+		return tx.DeleteTrigger(id)
 	}
-	return false, nil
+	return nil
 }
 
-func (w *Watcher) enqueue(tx *store.Tx, triggers []trigger.Trigger, e trigger.Event) (int, error) {
+func (w *Watcher) enqueue(tx *store.Tx, e trigger.Event) (int, error) {
+	triggers, err := tx.Matching(e.PkgPath, e.Type)
+	if err != nil {
+		return 0, err
+	}
 	queued := 0
 	for _, t := range triggers {
 		if !t.Matches(e) {

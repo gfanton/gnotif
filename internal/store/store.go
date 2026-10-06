@@ -346,33 +346,6 @@ func (tx *Tx) DeleteTrigger(id string) error {
 	return nil
 }
 
-// Targets returns the distinct realms the triggers watch, sorted.
-func (tx *Tx) Targets() ([]string, error) {
-	rows, err := tx.tx.Query(`SELECT DISTINCT target FROM triggers ORDER BY target`)
-	if err != nil {
-		return nil, fmt.Errorf("read targets: %w", err)
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var target string
-		if err := rows.Scan(&target); err != nil {
-			return nil, fmt.Errorf("scan target: %w", err)
-		}
-		out = append(out, target)
-	}
-	return out, rows.Err()
-}
-
-// Triggers returns every stored trigger in id order.
-func (tx *Tx) Triggers() ([]trigger.Trigger, error) {
-	rows, err := tx.tx.Query(selectTriggers)
-	if err != nil {
-		return nil, fmt.Errorf("read triggers: %w", err)
-	}
-	return scanTriggers(rows)
-}
-
 // Matching returns the triggers on target for event, in id order.
 func (tx *Tx) Matching(target, event string) ([]trigger.Trigger, error) {
 	rows, err := tx.tx.Query(selectMatching, target, event)

@@ -127,14 +127,6 @@ func TestTriggersRoundTrip(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, []trigger.Pair{{Key: "mode", Value: "ranked"}}, got[0].Filter)
 	assert.Equal(t, "next", got[0].Param)
-
-	var targets []string
-	require.NoError(t, s.Update(ctx, func(tx *Tx) error {
-		var err error
-		targets, err = tx.Targets()
-		return err
-	}))
-	assert.Equal(t, []string{"gno.land/r/demo/game"}, targets)
 }
 
 func TestEnqueueIdempotent(t *testing.T) {
