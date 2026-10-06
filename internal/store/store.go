@@ -22,6 +22,9 @@ var ErrUnknownSubscription = errors.New("unknown subscription")
 // ErrSchemaVersion reports a database made by an older gnotifd.
 var ErrSchemaVersion = errors.New("database was made by an older gnotifd")
 
+// ErrSchemaNewer reports a database made by a newer gnotifd.
+var ErrSchemaNewer = errors.New("database was made by a newer gnotifd")
+
 // MaxPerTarget is the most triggers one realm may have; TargetTriggers
 // returns no more.
 const MaxPerTarget = 64
@@ -89,13 +92,19 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("%s: %w: start a new database with -start-height", path, ErrSchemaVersion)
 	}
-	if _, err := db.ExecContext(ctx, schema); err != nil {
+	if tables > 0 && version > schemaVersion {
 		db.Close()
-		return nil, fmt.Errorf("create schema: %w", err)
+		return nil, fmt.Errorf("%s: %w: run the gnotifd that made it, or start a new database with -start-height", path, ErrSchemaNewer)
 	}
+	// The version goes first so a crash mid-schema leaves a database the
+	// next Open accepts; every statement in schema is idempotent.
 	if _, err := db.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("set schema version: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, schema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create schema: %w", err)
 	}
 	return &Store{db: db}, nil
 }

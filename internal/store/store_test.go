@@ -477,3 +477,27 @@ func TestOpenRefusesOldSchema(t *testing.T) {
 	open(t, path).Close()
 	open(t, path)
 }
+
+func TestOpenRefusesNewerSchema(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "newer.db")
+	newer, err := sql.Open("sqlite", "file:"+path)
+	require.NoError(t, err)
+	_, err = newer.Exec(`CREATE TABLE cursor (id INTEGER PRIMARY KEY CHECK (id = 1), height_done INTEGER NOT NULL, bound INTEGER NOT NULL)`)
+	require.NoError(t, err)
+	_, err = newer.Exec(`PRAGMA user_version = 3`)
+	require.NoError(t, err)
+	require.NoError(t, newer.Close())
+
+	_, err = Open(ctx, path)
+	require.ErrorIs(t, err, ErrSchemaNewer)
+	assert.Contains(t, err.Error(), path)
+	assert.Contains(t, err.Error(), "start a new database with -start-height")
+
+	check, err := sql.Open("sqlite", "file:"+path)
+	require.NoError(t, err)
+	defer check.Close()
+	var version int
+	require.NoError(t, check.QueryRow(`PRAGMA user_version`).Scan(&version))
+	assert.Equal(t, 3, version)
+}
