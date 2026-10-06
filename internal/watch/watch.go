@@ -105,18 +105,15 @@ func (w *Watcher) tick(ctx context.Context) error {
 	}
 	end := min(cur.Bound, cur.HeightDone+w.window)
 
-	var targets []string
 	if err := w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
-		var err error
-		targets, err = tx.Targets()
+		_, err := tx.Targets()
 		return err
 	}); err != nil {
 		return err
 	}
 	batch, err := w.cfg.Source.Fetch(ctx, indexer.Window{
-		From:  cur.HeightDone,
-		To:    end,
-		Paths: append([]string{w.cfg.Registry}, targets...),
+		From: cur.HeightDone,
+		To:   end,
 	})
 	if err != nil {
 		return err

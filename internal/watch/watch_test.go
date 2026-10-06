@@ -99,9 +99,6 @@ func (f *fakeIndexer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	where := req.Variables.Where
 	win := indexer.Window{From: where.BlockHeight.Gt, To: where.BlockHeight.Lt - 1}
-	for _, o := range where.Response.Events.GnoEvent.Or {
-		win.Paths = append(win.Paths, o.PkgPath.Eq)
-	}
 	f.windows = append(f.windows, win)
 	if f.fail {
 		json.NewEncoder(w).Encode(map[string]any{"errors": []any{map[string]any{"message": "boom"}}})
@@ -115,7 +112,7 @@ func (f *fakeIndexer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var events []any
 		selected := false
 		for _, e := range tx.events {
-			selected = selected || slices.Contains(win.Paths, e.pkg)
+			selected = true
 			attrs := make([]any, 0, len(e.attrs))
 			for _, a := range e.attrs {
 				attrs = append(attrs, map[string]any{"key": a.Key, "value": a.Value})
@@ -298,18 +295,6 @@ func TestDeclareThenNotify(t *testing.T) {
 	default:
 		t.Fatal("no wake signal after queueing a push")
 	}
-}
-
-func TestPathsAreRegistryAndTargets(t *testing.T) {
-	h := newHarness(t, 1)
-	h.putTrigger(t, "0000001", "gno.land/r/demo/b")
-	h.putTrigger(t, "0000002", "gno.land/r/demo/a")
-	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
-	h.fake.set(func(f *fakeIndexer) { f.latest = 5 })
-	h.tick(t)
-	windows := h.fake.recorded()
-	require.Len(t, windows, 1)
-	assert.Equal(t, []string{registry, "gno.land/r/demo/a", "gno.land/r/demo/b"}, windows[0].Paths)
 }
 
 func TestRemovedTriggerStopsMatching(t *testing.T) {
