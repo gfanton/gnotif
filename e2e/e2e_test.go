@@ -9,10 +9,12 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -82,11 +84,10 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 		assert.NoError(t, <-done)
 	})
 
-	var triggerID string
-	require.Eventually(t, func() bool {
-		resp, err := http.Get(base + "/v1/triggers")
+	listed := func() (ids []string, err error) {
+		resp, err := http.Get(base + "/v1/triggers?target=" + url.QueryEscape(pingpongPath))
 		if err != nil {
-			return false
+			return nil, err
 		}
 		defer resp.Body.Close()
 		var ts []struct {
@@ -94,17 +95,34 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 			Target   string `json:"target"`
 			Verified bool   `json:"verified"`
 		}
-		if json.NewDecoder(resp.Body).Decode(&ts) != nil {
-			return false
+		if err := json.NewDecoder(resp.Body).Decode(&ts); err != nil {
+			return nil, err
 		}
 		for _, tr := range ts {
-			if tr.Target == pingpongPath && tr.Verified {
-				triggerID = tr.ID
-				return true
+			if tr.Target != pingpongPath || !tr.Verified {
+				return nil, fmt.Errorf("listing carries %+v", tr)
 			}
+			ids = append(ids, tr.ID)
 		}
-		return false
+		return ids, nil
+	}
+	var triggerID string
+	require.Eventually(t, func() bool {
+		ids, err := listed()
+		if err != nil || len(ids) != 1 {
+			return false
+		}
+		triggerID = ids[0]
+		return true
 	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed the verified pingpong trigger")
+
+	// A user key can declare a trigger on pingpong's path, but the registry
+	// marks it unverified: gnotifd must neither list it nor push for it.
+	s.callPackage("devtest", "gno.land/r/dev/gnotif/v0", "Declare", pingpongPath, "TurnPlayed", "", "", "Spoof", "spoofed", "/")
+	assert.Never(t, func() bool {
+		ids, err := listed()
+		return err != nil || !slices.Equal(ids, []string{triggerID})
+	}, 3*time.Second, 250*time.Millisecond, "an unverified trigger reached the listing")
 
 	key, err := ecdh.P256().GenerateKey(rand.Reader)
 	require.NoError(t, err)

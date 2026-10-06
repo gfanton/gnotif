@@ -139,15 +139,6 @@ func (s *Store) inTx(ctx context.Context, fn func(*sql.Tx) error) error {
 	return nil
 }
 
-// Triggers returns every stored trigger in id order.
-func (s *Store) Triggers(ctx context.Context) ([]trigger.Trigger, error) {
-	rows, err := s.db.QueryContext(ctx, selectTriggers)
-	if err != nil {
-		return nil, fmt.Errorf("read triggers: %w", err)
-	}
-	return scanTriggers(rows)
-}
-
 // TargetTriggers returns the triggers of one realm in id order, at most
 // MaxPerTarget.
 func (s *Store) TargetTriggers(ctx context.Context, target string) ([]trigger.Trigger, error) {
@@ -394,7 +385,6 @@ func (tx *Tx) Enqueue(p Push) (bool, error) {
 
 const (
 	selectTriggerColumns = `SELECT id, target, event, filter, param, title, body, link, declarer, verified`
-	selectTriggers       = selectTriggerColumns + ` FROM triggers ORDER BY id`
 	selectMatching       = selectTriggerColumns + ` FROM triggers WHERE target = ? AND event = ? ORDER BY id`
 )
 

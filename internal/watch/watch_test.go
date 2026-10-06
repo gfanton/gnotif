@@ -294,7 +294,7 @@ func (h *harness) bodies(t *testing.T) []string {
 
 func (h *harness) triggerIDs(t *testing.T) []string {
 	t.Helper()
-	ts, err := h.store.Triggers(context.Background())
+	ts, err := h.store.TargetTriggers(context.Background(), game)
 	require.NoError(t, err)
 	var ids []string
 	for _, tr := range ts {

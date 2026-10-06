@@ -5,8 +5,10 @@ package subscribe
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 
 	"github.com/gfanton/gnotif/internal/store"
 	"github.com/gfanton/gnotif/internal/trigger"
@@ -93,7 +95,16 @@ func (h *handler) vapid(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *handler) triggers(w http.ResponseWriter, r *http.Request) {
-	ts, err := h.cfg.Store.Triggers(r.Context())
+	target := r.URL.Query().Get("target")
+	switch {
+	case target == "":
+		writeError(w, http.StatusBadRequest, "target is required")
+		return
+	case len(target) > maxTarget:
+		writeError(w, http.StatusBadRequest, "invalid target")
+		return
+	}
+	ts, err := h.cfg.Store.TargetTriggers(r.Context(), target)
 	if err != nil {
 		h.internal(w, err)
 		return
@@ -143,14 +154,19 @@ func (h *handler) putOptins(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	ts, err := h.cfg.Store.Triggers(r.Context())
+	if len(req.Optins) > maxOptins {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("more than %d opt-ins", maxOptins))
+		return
+	}
+	ids := make([]string, 0, len(req.Optins))
+	for _, o := range req.Optins {
+		ids = append(ids, o.Trigger)
+	}
+	slices.Sort(ids)
+	byID, err := h.cfg.Store.TriggersByID(r.Context(), slices.Compact(ids))
 	if err != nil {
 		h.internal(w, err)
 		return
-	}
-	byID := make(map[string]trigger.Trigger, len(ts))
-	for _, t := range ts {
-		byID[t.ID] = t
 	}
 	if err := checkOptins(req.Optins, byID); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

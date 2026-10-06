@@ -130,7 +130,14 @@ func (s *stack) gnokey(stdin string, args ...string) string {
 // call sends a MsgCall to pingpong signed by key and returns gnokey's output.
 func (s *stack) call(key, fn string, args ...string) string {
 	s.t.Helper()
-	a := []string{"maketx", "call", "-pkgpath", pingpongPath, "-func", fn}
+	return s.callPackage(key, pingpongPath, fn, args...)
+}
+
+// callPackage sends a MsgCall to the package at pkgPath signed by key and
+// returns gnokey's output.
+func (s *stack) callPackage(key, pkgPath, fn string, args ...string) string {
+	s.t.Helper()
+	a := []string{"maketx", "call", "-pkgpath", pkgPath, "-func", fn}
 	for _, arg := range args {
 		a = append(a, "-args", arg)
 	}

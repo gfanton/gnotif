@@ -106,15 +106,58 @@ func TestVapid(t *testing.T) {
 }
 
 func TestTriggers(t *testing.T) {
+	game := `[{"id":"t1","target":"gno.land/r/demo/game","event":"TurnPlayed","filter":"mode=ranked","param":"next",
+		 "title":"Your turn","body":"Game {game}","link":"/?game={game}","declarer":"g1game","verified":true}]`
+	cases := map[string]struct {
+		query string
+		want  int
+		json  string // wanted body when want is 200
+		err   string // wanted error when want is 400
+	}{
+		"one realm":         {"?target=gno.land/r/demo/game", http.StatusOK, game, ""},
+		"percent-encoded":   {"?target=gno.land%2Fr%2Fdemo%2Fgame", http.StatusOK, game, ""},
+		"first of repeated": {"?target=gno.land/r/demo/game&target=gno.land/r/gov/dao", http.StatusOK, game, ""},
+		"unknown realm":     {"?target=gno.land/r/none", http.StatusOK, `[]`, ""},
+		"padded target":     {"?target=%20gno.land/r/demo/game", http.StatusOK, `[]`, ""},
+		"missing":           {"", http.StatusBadRequest, "", "target is required"},
+		"empty":             {"?target=", http.StatusBadRequest, "", "target is required"},
+		"256 bytes":         {"?target=" + strings.Repeat("a", 256), http.StatusOK, `[]`, ""},
+		"257 bytes":         {"?target=" + strings.Repeat("a", 257), http.StatusBadRequest, "", "invalid target"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			rec := h.do(t, http.MethodGet, "/v1/triggers"+tc.query, "")
+			require.Equal(t, tc.want, rec.Code, rec.Body.String())
+			if tc.want == http.StatusOK {
+				assert.JSONEq(t, tc.json, rec.Body.String())
+			} else {
+				assert.JSONEq(t, fmt.Sprintf(`{"error":%q}`, tc.err), rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestTriggersCapAndOrder(t *testing.T) {
 	h := newHarness(t)
-	rec := h.do(t, http.MethodGet, "/v1/triggers", "")
+	require.NoError(t, h.store.Update(context.Background(), func(tx *store.Tx) error {
+		for i := range store.MaxPerTarget + 1 {
+			if err := tx.PutTrigger(trigger.Trigger{
+				ID: fmt.Sprintf("many%03d", i), Target: "gno.land/r/many", Event: "E",
+				Title: "T", Link: "/", Declarer: "g1x", Verified: true,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+	rec := h.do(t, http.MethodGet, "/v1/triggers?target=gno.land/r/many", "")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.JSONEq(t, `[
-		{"id":"t1","target":"gno.land/r/demo/game","event":"TurnPlayed","filter":"mode=ranked","param":"next",
-		 "title":"Your turn","body":"Game {game}","link":"/?game={game}","declarer":"g1game","verified":true},
-		{"id":"t2","target":"gno.land/r/gov/dao","event":"ProposalCreated","filter":"","param":"",
-		 "title":"New proposal","body":"","link":"/","declarer":"g1someone","verified":false}
-	]`, rec.Body.String())
+	var got []triggerJSON
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.Len(t, got, store.MaxPerTarget)
+	assert.Equal(t, "many000", got[0].ID)
+	assert.Equal(t, fmt.Sprintf("many%03d", store.MaxPerTarget-1), got[len(got)-1].ID)
 }
 
 func TestPutSubscription(t *testing.T) {
@@ -194,6 +237,14 @@ func TestPutOptins(t *testing.T) {
 			assert.Equal(t, tc.want, rec.Code, rec.Body.String())
 		})
 	}
+
+	t.Run("51 entries are refused before any lookup", func(t *testing.T) {
+		h := newHarness(t)
+		require.NoError(t, h.store.Close())
+		rec := h.do(t, http.MethodPut, "/v1/subscription/optins", optins(fcm, many...))
+		assert.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+		assert.JSONEq(t, `{"error":"more than 50 opt-ins"}`, rec.Body.String())
+	})
 
 	t.Run("replaces the set", func(t *testing.T) {
 		h := newHarness(t)

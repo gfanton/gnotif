@@ -113,7 +113,7 @@ func TestUpdateRollsBack(t *testing.T) {
 		return boom
 	})
 	assert.ErrorIs(t, err, boom)
-	triggers, err := s.Triggers(ctx)
+	triggers, err := s.TargetTriggers(ctx, "gno.land/r/demo/game")
 	require.NoError(t, err)
 	assert.Empty(t, triggers)
 }
@@ -122,7 +122,7 @@ func TestTriggersRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	s := fresh(t)
 	putTrigger(t, s, "t1", "next")
-	got, err := s.Triggers(ctx)
+	got, err := s.TargetTriggers(ctx, "gno.land/r/demo/game")
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, []trigger.Pair{{Key: "mode", Value: "ranked"}}, got[0].Filter)

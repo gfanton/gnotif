@@ -14,6 +14,7 @@ import (
 const (
 	maxEndpoint = 1000
 	maxOptins   = 50
+	maxTarget   = 256
 	maxValue    = 4096
 	p256dhSize  = 65
 	authSize    = 16
@@ -61,9 +62,6 @@ func checkKey(name, value string, size int) error {
 }
 
 func checkOptins(optins []optinJSON, triggers map[string]trigger.Trigger) error {
-	if len(optins) > maxOptins {
-		return fmt.Errorf("more than %d opt-ins", maxOptins)
-	}
 	for _, o := range optins {
 		t, ok := triggers[o.Trigger]
 		switch {
