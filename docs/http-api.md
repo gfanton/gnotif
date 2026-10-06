@@ -41,7 +41,7 @@ The API has no accounts. A subscription is known by its push endpoint, which onl
 ]
 ```
 
-`filter` holds comma-separated `key=value` pairs, and `param` is empty for a trigger that takes no value. `title`, `body` and `link` are the templates as declared ([Getting started](getting-started.md#templates)).
+`filter` holds comma-separated `key=value` pairs, and `param` is empty for a trigger that takes no value. `title`, `body` and `link` are the templates as declared ([Triggers](triggers.md#templates)).
 
 ## Register a subscription
 

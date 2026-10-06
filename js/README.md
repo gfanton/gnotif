@@ -34,11 +34,21 @@ of the copy on the dapp's origin and defaults to `/sw.js`. A dapp served
 under a path, such as `/app/`, serves its copy from that path and passes
 `/app/sw.js`.
 
-### `triggers()`
+### `triggers(target)`
 
-Resolves the triggers the server offers. Each has `id`, `target`,
-`event`, `filter`, `param`, `title`, `body`, `link`, `declarer` and
-`verified`.
+Resolves the verified triggers of the realm at `target`, a realm path
+such as `gno.land/r/<you>/notify`: at most 64, in id order, or `[]` when
+the server knows none. Each has `id`, `target`, `event`, `filter`,
+`param`, `title`, `body`, `link`, `declarer` and `verified`.
+
+```js
+const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
+```
+
+A trigger's id can change, so call it on every page load rather than
+keeping an id. It rejects with a `TypeError`, before any request, when
+`target` is not a non-empty string, and throws a `GnotifError` with code
+`server` when the server answers an error.
 
 ### `enable()`
 

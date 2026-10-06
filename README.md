@@ -23,32 +23,26 @@ The page calls gnotifd only to subscribe and to choose its triggers. The notific
 
 ## Add notifications to a dapp
 
-These steps use the repository's placeholder paths under `gno.land/r/dev`. A deployed registry has its own path, under the namespace of whoever deployed it.
-
-1. **Emit an event** from your realm. pingpong, the demo game in `gno/r/pingpong/v0`, names the next player on every turn:
+1. **Emit an event** from your realm. This realm sends a message to an address:
 
    ```go
-   chain.Emit("TurnPlayed", "game", g.ID, "next", g.Next.String(), "turn", strconv.Itoa(g.Turn))
-   ```
-
-2. **Declare a trigger** in the registry. Declared by the realm itself, the trigger is verified:
-
-   ```go
-   import "gno.land/r/dev/gnotif/v0"
-
-   var declared bool
-
-   func DeclareTriggers(cur realm) {
-   	if declared {
-   		panic("triggers already declared")
-   	}
-   	declared = true
-   	gnotif.Declare(cross(cur), cur.PkgPath(), "TurnPlayed", "", "next",
-   		"Your turn", "Game {game}, turn {turn}", "/?game={game}")
+   // Notify sends msg to the browsers that opted in with the address to.
+   func Notify(cur realm, to address, msg string) {
+   	chain.Emit("Message", "to", to.String(), "msg", msg)
    }
    ```
 
-   This trigger notifies the browsers that opted in with the address in the event's `next` attribute. A click opens `/?game=<id>` on the dapp's own origin.
+2. **Declare a trigger** in the registry that gnotif.xyz reads, from the realm's `init` function, so the deploy declares it. Declared by the realm itself, the trigger is verified:
+
+   ```go
+   import "gno.land/r/<namespace>/gnotif/v0"
+
+   func init(cur realm) {
+   	gnotif.Declare(cross(cur), cur.PkgPath(), "Message", "", "to", "New message", "{msg}", "/")
+   }
+   ```
+
+   This trigger notifies the browsers that opted in with the address in the event's `to` attribute. A click opens `/` on the dapp's own origin.
 
 3. **Add the client** to the dapp's page, and serve a copy of its service worker from the dapp's origin:
 
@@ -61,22 +55,17 @@ These steps use the repository's placeholder paths under `gno.land/r/dev`. A dep
    import { Gnotif } from "gnotif";
 
    const gnotif = new Gnotif({ server: "https://gnotif.xyz" });
-   const yourTurn = (await gnotif.triggers()).find(
-     (t) => t.target === "gno.land/r/dev/pingpong/v0" && t.event === "TurnPlayed" && t.verified,
-   );
-   if (yourTurn === undefined) {
-     throw new Error("This gnotif server does not offer pingpong's trigger.");
-   }
+   const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
 
    button.addEventListener("click", async () => {
      await gnotif.enable();
-     await gnotif.setOptins([{ trigger: yourTurn.id, value: playerAddress }]);
+     await gnotif.setOptins([{ trigger: message.id, value: address }]);
    });
    ```
 
-   `enable()` asks for permission, so call it from a click.
+   `triggers()` lists your realm's verified triggers, here the one from step 2, where `<you>` is the address that deployed the realm. `enable()` asks for permission, so call it from a click.
 
-[Getting started](docs/getting-started.md) covers each step in full and runs the whole loop on a local chain with the demo dapp in `demo/`.
+[Getting started](docs/getting-started.md) covers each step and tries the realm on onyx.
 
 ## Run gnotifd
 
@@ -93,7 +82,8 @@ gnotifd -indexer https://indexer.onyx.testnets.gno.land/graphql/query \
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md): from realm to page, and the demo on a local chain.
+- [Getting started](docs/getting-started.md): from realm to page, tried on onyx.
+- [Triggers](docs/triggers.md): the fields, templates and matching rules, the verified mark and the limit per realm.
 - [How it works](docs/how-it-works.md): the watch window, storage, delivery outcomes and the rules for gnotif servers.
 - [Browser client](js/README.md): the `gnotif` npm package.
 - [HTTP API](docs/http-api.md): the `/v1` endpoints, errors and CORS.

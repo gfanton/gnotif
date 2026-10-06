@@ -67,6 +67,7 @@ func TestBuildDocs(t *testing.T) {
 	redirect := readOut(t, out, "docs/index.html")
 	assert.Contains(t, redirect, `<meta http-equiv="refresh" content="0; url=/docs/getting-started/">`)
 	assert.Contains(t, redirect, `<a href="/docs/getting-started/">`)
+	assert.Contains(t, readOut(t, out, "docs/getting-started/index.html"), `rel="next" href="/docs/triggers/"`, "the triggers reference follows the getting started")
 
 	assert.NotEmpty(t, readOut(t, out, "style.css"))
 	highlightCSS := readOut(t, out, "highlight.css")
@@ -102,11 +103,12 @@ func TestBuildLanding(t *testing.T) {
 	assert.Contains(t, text, "there is no notification server to run")
 	assert.Contains(t, text, "chain.Emit(")
 	assert.Contains(t, text, "gnotif.Declare(")
+	assert.Contains(t, text, "func init(cur realm)", "the realm declares its trigger at deploy")
 	assert.Contains(t, text, "new Gnotif(")
-	assert.Contains(t, text, "yourTurn === undefined")
+	assert.Contains(t, text, `gnotif.triggers("gno.land/r/<you>/notify")`, "the page asks for its own realm's triggers")
 	assert.Contains(t, html, "https://gnotif.xyz")
 	assert.GreaterOrEqual(t, strings.Count(html, `class="chroma"`), 3)
-	for _, anchor := range []string{"#1-emit-an-event", "#2-declare-a-trigger", "#3-add-the-client-to-the-page"} {
+	for _, anchor := range []string{"#1-emit-an-event", "#2-declare-the-trigger", "#3-add-the-client-to-your-page"} {
 		assert.Contains(t, html, `href="/docs/getting-started/`+anchor+`"`)
 	}
 	for _, node := range []string{"dapp realm", "gnotif registry", "tx-indexer", "gnotifd", "push service", "sw.js"} {

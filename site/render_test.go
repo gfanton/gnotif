@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -28,17 +29,31 @@ func TestRenderPage(t *testing.T) {
 	}
 }
 
+// pageBySlug finds a listed page without depending on its place in the list.
+func pageBySlug(t *testing.T, slug string) Page {
+	t.Helper()
+	i := slices.IndexFunc(pages, func(p Page) bool { return p.Slug == slug })
+	require.GreaterOrEqual(t, i, 0, "no page %q", slug)
+	return pages[i]
+}
+
 func TestRenderPageGettingStarted(t *testing.T) {
 	r, err := renderPage(repoRoot, pages[0])
 	require.NoError(t, err)
 	assert.Equal(t, Heading{Level: 2, ID: "1-emit-an-event", Text: "1. Emit an event"}, r.Headings[0])
-	assert.Contains(t, r.Headings, Heading{Level: 3, ID: "templates", Text: "Templates"})
-	assert.Contains(t, string(r.Body), `href="/docs/how-it-works/#what-the-verified-mark-means"`)
+	assert.Contains(t, string(r.Body), `href="/docs/triggers/#a-triggers-id-can-change"`)
 	assert.Contains(t, string(r.Body), `class="chroma"`)
 }
 
+func TestRenderPageTriggers(t *testing.T) {
+	r, err := renderPage(repoRoot, pageBySlug(t, "triggers"))
+	require.NoError(t, err)
+	assert.Contains(t, r.Headings, Heading{Level: 2, ID: "a-triggers-id-can-change", Text: "A trigger's id can change"})
+	assert.Contains(t, string(r.Body), `href="/docs/how-it-works/#what-the-verified-mark-means"`)
+}
+
 func TestRenderPageHowItWorks(t *testing.T) {
-	r, err := renderPage(repoRoot, pages[1])
+	r, err := renderPage(repoRoot, pageBySlug(t, "how-it-works"))
 	require.NoError(t, err)
 	assert.Contains(t, string(r.Body), `href="/docs/http-api/#replace-a-rotated-subscription"`)
 }

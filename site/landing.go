@@ -15,55 +15,43 @@ type step struct {
 
 var steps = [3]step{
 	{
-		Label:    "Emit",
-		Title:    "Emit an event from your realm",
-		Text:     "pingpong, the demo game, names the next player on every turn.",
-		Lang:     "go",
-		Code:     `chain.Emit("TurnPlayed", "game", g.ID, "next", g.Next.String(), "turn", strconv.Itoa(g.Turn))`,
+		Label: "Emit",
+		Title: "Emit an event from your realm",
+		Text:  "A realm with one function, <code>Notify</code>, emits a message and the address it is for.",
+		Lang:  "go",
+		Code: `func Notify(cur realm, to address, msg string) {
+	chain.Emit("Message", "to", to.String(), "msg", msg)
+}`,
 		DocsHref: "/docs/getting-started/#1-emit-an-event",
 	},
 	{
 		Label: "Declare",
 		Title: "Declare a trigger in the registry",
-		Text:  "The realm declares the trigger itself, so the registry marks it verified. Call <code>DeclareTriggers</code> once after the deploy.",
+		Text:  "The realm declares the trigger itself, in <code>init</code>, so the deploy declares it and the registry marks it verified.",
 		Lang:  "go",
 		Code: `import "` + registryPath + `"
 
-var declared bool
-
-func DeclareTriggers(cur realm) {
-	if declared {
-		panic("triggers already declared")
-	}
-	declared = true
-	gnotif.Declare(cross(cur), cur.PkgPath(), "TurnPlayed", "", "next",
-		"Your turn", "Game {game}, turn {turn}", "/?game={game}")
+func init(cur realm) {
+	gnotif.Declare(cross(cur), cur.PkgPath(), "Message", "", "to",
+		"New message", "{msg}", "/")
 }`,
-		DocsHref: "/docs/getting-started/#2-declare-a-trigger",
+		DocsHref: "/docs/getting-started/#2-declare-the-trigger",
 	},
 	{
 		Label: "Subscribe",
 		Title: "Subscribe the browser from your page",
-		Text:  "Copy <code>node_modules/gnotif/src/sw.js</code> to the folder your site serves at its root. From a click, call <code>enable()</code>, then opt the browser in with the player's address.",
+		Text:  "Copy <code>node_modules/gnotif/src/sw.js</code> to the folder your site serves at its root. From a click, call <code>enable()</code>, then opt the browser in with the user's address.",
 		Lang:  "js",
 		Code: `import { Gnotif } from "gnotif";
 
 const gnotif = new Gnotif({ server: "` + serverURL + `" });
-const yourTurn = (await gnotif.triggers()).find(
-  (t) =>
-    t.target === "` + pingpongPath + `" &&
-    t.event === "TurnPlayed" &&
-    t.verified,
-);
-if (yourTurn === undefined) {
-  throw new Error("This gnotif server does not offer pingpong's trigger.");
-}
+const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
 
 button.addEventListener("click", async () => {
   await gnotif.enable();
-  await gnotif.setOptins([{ trigger: yourTurn.id, value: playerAddress }]);
+  await gnotif.setOptins([{ trigger: message.id, value: address }]);
 });`,
-		DocsHref: "/docs/getting-started/#3-add-the-client-to-the-page",
+		DocsHref: "/docs/getting-started/#3-add-the-client-to-your-page",
 	},
 }
 
