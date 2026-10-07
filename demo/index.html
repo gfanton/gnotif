@@ -1,511 +1,272 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <title>gnotif demo</title>
-  <link rel="icon" href="data:,">
-  <style>
-    /* Primitives are gnoweb's (gno v1.5.0); components use only the semantic tokens below. */
-    :root {
-      color-scheme: light dark;
-
-      --p-white: oklch(1 0 0);
-      --p-gray-50: oklch(0.9551 0 0);
-      --p-gray-100: oklch(0.9128 0 0);
-      --p-gray-200: oklch(0.7984 0 0);
-      --p-gray-300: oklch(0.683 0 0);
-      --p-gray-400: oklch(0.5863 0 0);
-      --p-gray-500: oklch(0.52 0 0);
-      --p-gray-600: oklch(0.4609 0 0);
-      --p-gray-700: oklch(0.28 0 0);
-      --p-gray-750: oklch(0.24 0 0);
-      --p-gray-850: oklch(0.165 0 0);
-      --p-gray-900: oklch(0.14 0 0);
-      --p-green-50: oklch(0.94553 0.00891 180.286);
-      --p-green-400: oklch(0.6863 0.0819 173.69);
-      --p-green-600: oklch(0.4798 0.0801 170.52);
-      --p-green-950: oklch(0.26 0.055 170);
-      --p-red-400: oklch(0.6786 0.1655 36.32);
-      --p-red-900: oklch(0.3691 0.101 26.47);
-
-      --color-bg: var(--p-white);
-      --color-surface: var(--p-gray-50);
-      --color-text-strong: var(--p-gray-900);
-      --color-text: var(--p-gray-600);
-      --color-text-subtle: var(--p-gray-500);
-      --color-divider: var(--p-gray-100);
-      --color-border-input: var(--p-gray-400);
-      --color-accent: var(--p-green-600);
-      --color-accent-fill: var(--p-green-600);
-      --color-on-accent: var(--p-white);
-      --color-accent-weak: var(--p-green-50);
-      --color-danger: var(--p-red-900);
-      --shadow-float: 0 1px 2px oklch(0 0 0 / 0.06), 0 8px 24px oklch(0 0 0 / 0.08);
-
-      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-      --font-mono: ui-monospace, Menlo, Consolas, "Roboto Mono", "DejaVu Sans Mono", monospace;
-      --text-sm: 0.875rem;
-      --text-base: 1rem;
-      --text-lg: 1.25rem;
-      --text-xl: 1.5rem;
-      --text-display: clamp(2rem, 1.4rem + 2.5vw, 2.625rem);
-
-      --space-1: 0.25rem;
-      --space-2: 0.5rem;
-      --space-3: 0.75rem;
-      --space-4: 1rem;
-      --space-6: 1.5rem;
-      --space-8: 2rem;
-      --space-12: 3rem;
-      --space-16: 4rem;
-
-      --radius-sm: 4px;
-      --radius: 6px;
-      --radius-float: 12px;
-      --transition-colors: color 150ms cubic-bezier(0.4, 0, 0.2, 1), background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
-      --check: 1.25rem;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --color-bg: var(--p-gray-850);
-        --color-surface: var(--p-gray-750);
-        --color-text-strong: var(--p-gray-100);
-        --color-text: var(--p-gray-200);
-        --color-text-subtle: var(--p-gray-300);
-        --color-divider: var(--p-gray-700);
-        --color-border-input: var(--p-gray-500);
-        --color-accent: var(--p-green-400);
-        --color-accent-weak: var(--p-green-950);
-        --color-danger: var(--p-red-400);
-        --shadow-float: none;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      :root { --transition-colors: none; }
-    }
-
-    *, *::before, *::after { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      background: var(--color-bg);
-      color: var(--color-text);
-      font: var(--text-base)/1.5 var(--font-sans);
-    }
-
-    h1, h2, p, ol, ul, dl, dd, figure { margin: 0; }
-
-    a {
-      color: var(--color-accent);
-      text-underline-offset: 0.2em;
-    }
-
-    :focus-visible {
-      outline: 2px solid var(--color-accent);
-      outline-offset: 2px;
-    }
-
-    .mono {
-      font-family: var(--font-mono);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .icon {
-      width: 1em;
-      height: 1em;
-      flex: none;
-    }
-
-    .page {
-      display: grid;
-      grid-template-areas: "turn" "header" "status" "steps";
-      gap: var(--space-8);
-      max-width: 64rem;
-      margin: 0 auto;
-      padding: var(--space-8) var(--space-4) var(--space-16);
-    }
-
-    @media (min-width: 60rem) {
-      .page {
-        grid-template-columns: minmax(0, 1fr) 18rem;
-        grid-template-areas: "turn turn" "header header" "steps status";
-        column-gap: var(--space-12);
-      }
-
-      .status {
-        position: sticky;
-        top: var(--space-8);
-        align-self: start;
-      }
-    }
-
-    /* ---- Landing from a notification */
-
-    .turn {
-      grid-area: turn;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: var(--space-4);
-      padding: var(--space-6);
-      border: 1px solid var(--color-accent);
-      border-radius: var(--radius);
-      background: var(--color-accent-weak);
-    }
-
-    .turn[hidden] { display: none; }
-
-    .turn h2 {
-      color: var(--color-text-strong);
-      font-size: var(--text-display);
-      line-height: 1.15;
-      text-wrap: balance;
-      overflow-wrap: anywhere;
-    }
-
-    /* ---- Header */
-
-    header {
-      grid-area: header;
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-      max-width: 40rem;
-    }
-
-    .brand {
-      color: var(--color-text-strong);
-      font: 700 var(--text-sm)/1.5 var(--font-mono);
-    }
-
-    .brand span {
-      color: var(--color-text-subtle);
-      font-weight: 400;
-    }
-
-    h1 {
-      color: var(--color-text-strong);
-      font-size: var(--text-display);
-      line-height: 1.15;
-      letter-spacing: -0.01em;
-      text-wrap: balance;
-    }
-
-    body:has(.turn:not([hidden])) h1 {
-      font-size: var(--text-xl);
-    }
-
-    .lead {
-      font-size: var(--text-lg);
-      text-wrap: pretty;
-    }
-
-    /* ---- Status panel */
-
-    .status {
-      grid-area: status;
-      padding: var(--space-4) var(--space-6);
-      border-radius: var(--radius);
-      background: var(--color-surface);
-    }
-
-    .status h2 {
-      padding-bottom: var(--space-2);
-      color: var(--color-text-strong);
-      font-size: var(--text-base);
-    }
-
-    .status dl > div {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: var(--space-4);
-      padding: var(--space-2) 0;
-      border-top: 1px solid var(--color-divider);
-    }
-
-    .status dt {
-      color: var(--color-text-subtle);
-      font-size: var(--text-sm);
-    }
-
-    .status dd {
-      color: var(--color-text-strong);
-      font-weight: 600;
-      text-align: end;
-      overflow-wrap: anywhere;
-    }
-
-    .status dl > div.stacked {
-      flex-direction: column;
-      gap: 0;
-    }
-
-    .status dd.mono {
-      font-size: var(--text-sm);
-      font-weight: 400;
-      text-align: start;
-    }
-
-    /* ---- Steps */
-
-    .steps {
-      grid-area: steps;
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-8);
-      padding: 0;
-      list-style: none;
-      counter-reset: step;
-    }
-
-    .step {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-      counter-increment: step;
-    }
-
-    .step h2 {
-      display: flex;
-      align-items: center;
-      gap: var(--space-3);
-      color: var(--color-text-strong);
-      font-size: var(--text-lg);
-      line-height: 1.3;
-    }
-
-    .step h2::before {
-      content: counter(step);
-      display: grid;
-      place-items: center;
-      width: 1.75rem;
-      height: 1.75rem;
-      flex: none;
-      border: 1px solid var(--color-border-input);
-      border-radius: 50%;
-      color: var(--color-text-strong);
-      font: 600 var(--text-sm)/1 var(--font-mono);
-    }
-
-    .hint {
-      color: var(--color-text-subtle);
-      font-size: var(--text-sm);
-    }
-
-    #address {
-      width: 100%;
-      min-height: 2.75rem;
-      padding: var(--space-2) var(--space-3);
-      border: 1px solid var(--color-border-input);
-      border-radius: var(--radius);
-      background: var(--color-bg);
-      color: var(--color-text-strong);
-      font: var(--text-base)/1.5 var(--font-mono);
-    }
-
-    #address::placeholder { color: var(--color-text-subtle); }
-
-    .triggers {
-      padding: 0;
-      list-style: none;
-    }
-
-    .triggers > li {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-      padding: var(--space-3) 0;
-      border-top: 1px solid var(--color-divider);
-    }
-
-    .triggers > li:last-child { border-bottom: 1px solid var(--color-divider); }
-
-    .trigger {
-      display: grid;
-      grid-template-columns: var(--check) minmax(0, 1fr);
-      column-gap: var(--space-3);
-      row-gap: var(--space-1);
-      cursor: pointer;
-    }
-
-    .trigger input {
-      grid-row: span 2;
-      width: var(--check);
-      height: var(--check);
-      margin: 0.125rem 0 0;
-      accent-color: var(--color-accent-fill);
-      cursor: pointer;
-    }
-
-    .trigger-head {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      column-gap: var(--space-3);
-    }
-
-    .trigger-title {
-      color: var(--color-text-strong);
-      font-weight: 600;
-    }
-
-    .trigger-meta {
-      color: var(--color-text-subtle);
-      font: var(--text-sm)/1.5 var(--font-mono);
-      overflow-wrap: anywhere;
-    }
-
-    .mark {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-1);
-      color: var(--color-text-subtle);
-      font-size: var(--text-sm);
-    }
-
-    .mark.verified {
-      color: var(--color-accent);
-      font-weight: 600;
-      align-self: center;
-    }
-
-    .preview {
-      display: flex;
-      flex-direction: column;
-      max-width: 22rem;
-      margin-inline-start: calc(var(--check) + var(--space-3));
-      padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-divider);
-      border-radius: var(--radius-float);
-      background: var(--color-surface);
-      box-shadow: var(--shadow-float);
-    }
-
-    .preview-origin {
-      color: var(--color-text-subtle);
-      font-size: var(--text-sm);
-    }
-
-    .preview-title {
-      color: var(--color-text-strong);
-      font-weight: 600;
-    }
-
-    .preview-body { color: var(--color-text); }
-
-    .preview-body code {
-      color: var(--color-text-strong);
-      font: 0.9em var(--font-mono);
-    }
-
-    .note { color: var(--color-text-subtle); }
-
-    .error { color: var(--color-danger); }
-
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-3);
-    }
-
-    .button {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      min-height: 2.75rem;
-      padding: var(--space-2) var(--space-4);
-      border: 1px solid var(--color-border-input);
-      border-radius: var(--radius);
-      background: transparent;
-      color: var(--color-text-strong);
-      font: 600 var(--text-base)/1.5 var(--font-sans);
-      text-decoration: none;
-      cursor: pointer;
-      transition: var(--transition-colors);
-    }
-
-    .button:hover { background: var(--color-surface); }
-
-    .button.primary {
-      border-color: var(--color-accent-fill);
-      background: var(--color-accent-fill);
-      color: var(--color-on-accent);
-    }
-
-    .button.primary:hover {
-      background: color-mix(in oklch, var(--color-accent-fill), black 15%);
-    }
-
-    .button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .button[hidden] { display: none; }
-
-    #message:empty { display: none; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>gnotif demo · Send yourself a notification</title>
+<meta name="description" content="Turn on notifications for your gno.land address, send yourself a message through the echo realm, and get it as a browser notification.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e0f11'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23f7a224'/%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+/* Signal, as gnotif.xyz's style.css defines it: matte near-black canvas, mono display, one amber indicator. */
+:root {
+  color-scheme: dark;
+  --color-canvas: oklch(0.17 0.008 70);
+  --color-surface: oklch(0.21 0.009 70);
+  --color-surface-raised: oklch(0.26 0.01 70);
+  --color-text: oklch(0.94 0.008 80);
+  --color-text-muted: oklch(0.66 0.012 75);
+  --color-line: oklch(0.30 0.01 70);
+  --color-indicator: oklch(0.78 0.16 70);
+  --color-on-indicator: oklch(0.17 0.01 70);
+  --color-error: oklch(0.78 0.12 30);
+
+  --font-display: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-display: clamp(2rem, 1.2rem + 3vw, 3.25rem);
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  --gutter: clamp(1rem, 4vw, 3rem);
+  --measure: 68ch;
+  --page: 46rem;
+  --radius: 4px;
+  --radius-float: 8px;
+  --shadow-float: 0 12px 32px oklch(0 0 0 / 0.35);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --color-canvas: oklch(0.985 0.005 85);
+    --color-surface: oklch(0.955 0.008 85);
+    --color-surface-raised: oklch(1 0 0);
+    --color-text: oklch(0.2 0.012 70);
+    --color-text-muted: oklch(0.45 0.014 70);
+    --color-line: oklch(0.87 0.01 80);
+    --color-indicator: oklch(0.64 0.16 62);
+    --color-on-indicator: oklch(0.15 0.01 62);
+    --color-error: oklch(0.5 0.17 30);
+  }
+}
+
+/* ---- Base */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
+h1, h2 { font-family: var(--font-display); font-weight: 500; line-height: 1.15; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h1 { font-size: var(--text-display); }
+h2 { font-size: var(--text-xl); }
+p { margin: 0; text-wrap: pretty; }
+a { color: inherit; text-decoration-color: var(--color-text-muted); text-underline-offset: 0.2em; }
+a:hover { text-decoration-color: var(--color-indicator); }
+:focus-visible { outline: 2px solid var(--color-indicator); outline-offset: 2px; }
+code, pre { font-family: var(--font-display); font-size: 0.92em; }
+[hidden] { display: none !important; }
+
+.skip { position: absolute; left: -999px; top: var(--space-4); padding: var(--space-2) var(--space-3); background: var(--color-surface-raised); border-radius: var(--radius); }
+.skip:focus { left: var(--space-4); }
+
+.eyebrow { font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
+.indicator { display: inline-block; width: 0.55em; height: 0.55em; border-radius: 50%; background: var(--color-indicator); vertical-align: 0.05em; }
+.mono { font-family: var(--font-display); overflow-wrap: anywhere; }
+
+/* ---- Wordmark, nav and footer */
+.wordmark { font-family: var(--font-display); font-weight: 500; font-size: 1.625rem; letter-spacing: -0.03em; text-decoration: none; display: inline-block; line-height: 1; white-space: nowrap; }
+.wordmark.small { font-size: 1rem; }
+.wordmark .i { position: relative; display: inline-block; }
+.wordmark .dot { position: absolute; left: 50%; top: 0.08em; width: 0.17em; height: 0.17em; border-radius: 50%; background: var(--color-indicator); transform: translateX(-50%); }
+.wordmark .dot::after { content: ""; position: absolute; inset: -0.35em; border-radius: 50%; border: 0.05em solid var(--color-indicator); opacity: 0; animation: ping 2.4s ease-out infinite; }
+@keyframes ping { 0% { transform: scale(0.3); opacity: 0.9; } 70%, 100% { transform: scale(1.4); opacity: 0; } }
+
+.nav, .footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--gutter); }
+.nav { border-bottom: 1px solid var(--color-line); }
+.brand { display: flex; align-items: center; gap: var(--space-3); margin: 0; }
+.tag { font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); padding: 0.1em var(--space-2); border: 1px solid var(--color-line); border-radius: var(--radius); line-height: 1.6; }
+.nav nav, .footer nav { display: flex; align-items: center; gap: var(--space-6); flex-wrap: wrap; }
+.nav nav a { font-family: var(--font-display); font-size: var(--text-sm); letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; color: var(--color-text-muted); }
+.nav nav a:hover { color: var(--color-text); }
+.footer { flex-wrap: wrap; border-top: 1px solid var(--color-line); margin-top: var(--space-16); color: var(--color-text-muted); font-size: var(--text-sm); }
+.footer nav a { text-decoration: none; }
+.footer nav a:hover { color: var(--color-text); }
+.footer .mono { font-size: var(--text-xs); }
+
+/* The chain line: the one fact every visitor reads before acting. */
+.chain { padding: var(--space-3) var(--gutter); border-bottom: 1px solid var(--color-line); font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); }
+.chain b { font-weight: 500; color: var(--color-text); }
+.chain code { font-size: inherit; }
+
+/* ---- Buttons and fields */
+.button { display: inline-block; font-family: var(--font-display); font-size: var(--text-sm); line-height: 1.55; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); background: transparent; color: inherit; text-decoration: none; cursor: pointer; }
+.button:hover { border-color: var(--color-text-muted); }
+.button.primary { background: var(--color-indicator); color: var(--color-on-indicator); border-color: var(--color-indicator); font-weight: 500; }
+.button.primary:hover { filter: brightness(1.08); }
+.button:disabled { opacity: 0.55; cursor: not-allowed; }
+.button.small { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); letter-spacing: 0.06em; text-transform: uppercase; }
+
+.field { display: flex; flex-direction: column; gap: var(--space-2); }
+.field label { font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); }
+.row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.row input { flex: 1 1 16rem; min-width: 0; }
+input[type="text"] { font: inherit; font-size: var(--text-base); line-height: 1.55; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-canvas); color: var(--color-text); }
+input[type="text"].mono { font-family: var(--font-display); font-size: var(--text-sm); }
+input::placeholder { color: var(--color-text-muted); opacity: 1; }
+input:hover { border-color: var(--color-text-muted); }
+.hint { font-size: var(--text-sm); color: var(--color-text-muted); max-width: var(--measure); }
+.actions { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+
+/* ---- Page */
+.page { max-width: var(--page); margin-inline: auto; padding: var(--space-12) var(--gutter) 0; display: flex; flex-direction: column; gap: var(--space-12); }
+.intro { display: flex; flex-direction: column; gap: var(--space-4); }
+.lede { color: var(--color-text-muted); font-size: var(--text-lg); max-width: var(--measure); }
+
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.step { display: flex; flex-direction: column; gap: var(--space-6); padding-block: var(--space-12); border-top: 1px solid var(--color-line); }
+.step-head { display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* The state line: the dot lights only while this browser can receive. */
+.state { display: flex; align-items: baseline; gap: var(--space-3); font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); }
+.state .indicator { flex: none; width: 0.6rem; height: 0.6rem; background: var(--color-line); align-self: center; }
+.state.on .indicator { background: var(--color-indicator); }
+.state.on { color: var(--color-text); }
+
+.status { font-size: var(--text-sm); color: var(--color-text-muted); max-width: var(--measure); }
+.status:empty { display: none; }
+.status.error { color: var(--color-error); }
+.status .mono { font-size: var(--text-xs); }
+
+/* ---- The notification, previewed */
+.preview { display: flex; flex-direction: column; gap: var(--space-3); }
+.preview .eyebrow { letter-spacing: 0.06em; }
+.toast { width: 100%; max-width: 24rem; display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); align-items: start; padding: var(--space-3) var(--space-4); background: var(--color-surface-raised); border: 1px solid var(--color-line); border-radius: var(--radius-float); box-shadow: var(--shadow-float); font-family: var(--font-body); font-size: var(--text-sm); line-height: 1.35; }
+.toast-icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: var(--radius); background: var(--color-canvas); }
+.toast-icon .indicator { width: 0.7rem; height: 0.7rem; }
+.toast-text { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.toast-text b { font-weight: 600; }
+.toast-text span, .toast-text small { color: var(--color-text-muted); overflow-wrap: anywhere; }
+.toast-text small { font-size: var(--text-xs); }
+
+/* ---- The gnokey command */
+.code { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius); min-width: 0; }
+.code-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); border-bottom: 1px solid var(--color-line); font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
+.code pre { margin: 0; padding: var(--space-3) var(--space-4); font-size: var(--text-sm); line-height: 1.6; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 600px) {
+  .nav nav a:not(:first-child) { display: none; }
+  .actions .button { width: 100%; text-align: center; }
+  .row { flex-direction: column; }
+  .row input { flex: none; }
+}
+
+/* Reduced motion: nothing moves. Last, so it wins over every animation above. */
+@media (prefers-reduced-motion: reduce) {
+  .wordmark .dot::after { animation: none; }
+}
+</style>
 </head>
 <body>
-  <!-- Icons from Lucide (lucide.dev), ISC license. -->
-  <template id="icon-verified">
-    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg>
-  </template>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <p class="brand"><a class="wordmark" href="https://gnotif.xyz" aria-label="gnotif">gnot<span class="i">ı<span class="dot"></span></span>f</a><span class="tag">demo</span></p>
+  <nav aria-label="Site">
+    <a href="https://gnotif.xyz/docs/getting-started/">Docs</a>
+    <a id="realm-link" href="#">Realm</a>
+  </nav>
+</header>
+<p class="chain" role="note">
+  <span>Runs on <b id="chain-name"></b> (chain <code id="chain-id"></code>) with test GNOT only.</span>
+  <a href="https://docs.gno.land/users/interact-with-gnokey/">Get test GNOT →</a>
+</p>
 
-  <main class="page">
-    <section class="turn" id="turn" aria-labelledby="turn-title" hidden>
-      <h2 id="turn-title">It's your turn in game <span class="mono" id="turn-game"></span></h2>
-      <a class="button primary" id="turn-link" target="_blank" rel="noopener">
-        <span>Open game <span class="mono" id="turn-link-game"></span> on gnoweb</span>
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
-      </a>
-    </section>
+<main id="main" class="page">
+  <div class="intro">
+    <h1>Send yourself a notification.</h1>
+    <p class="lede">Turn on notifications for your gno.land address, then call the echo realm with a message. It comes back to this browser as a push notification, even with the tab closed.</p>
+  </div>
 
-    <header>
-      <p class="brand">gnotif <span>demo</span></p>
-      <h1>Get a notification when it's your turn</h1>
-      <p class="lead">Play <a id="realm-link" target="_blank" rel="noopener">pingpong</a> on gno.land, and this browser tells you when your opponent passes you the turn, even with this tab closed.</p>
-    </header>
-
-    <aside class="status" aria-labelledby="status-title">
-      <h2 id="status-title">This browser</h2>
-      <dl>
-        <div><dt>Permission</dt><dd id="permission">Checking…</dd></div>
-        <div><dt>Subscribed</dt><dd id="subscribed">Checking…</dd></div>
-        <div><dt>Following</dt><dd id="following">Checking…</dd></div>
-        <div class="stacked"><dt>gnotif server</dt><dd class="mono" id="server"></dd></div>
-      </dl>
-    </aside>
-
-    <ol class="steps" role="list">
-      <li class="step">
-        <h2 id="address-title">Your address</h2>
-        <p class="hint" id="address-hint">The gno.land address you play pingpong with.</p>
-        <input type="text" id="address" placeholder="g1…" autocomplete="off" spellcheck="false" aria-labelledby="address-title" aria-describedby="address-hint">
-      </li>
-      <li class="step">
-        <h2>Pick your notifications</h2>
-        <p class="hint">Verified ones were declared by the realm they watch.</p>
-        <ul class="triggers" id="triggers" role="list">
-          <li class="note">Loading notifications…</li>
-        </ul>
-      </li>
-      <li class="step">
-        <h2>Turn them on</h2>
-        <p class="hint" id="switch-hint"></p>
-        <div class="actions">
-          <button type="button" class="button primary" id="enable">Turn on notifications</button>
-          <button type="button" class="button" id="disable" hidden>Turn off</button>
+  <ol class="steps">
+    <li class="step">
+      <div class="step-head">
+        <p class="eyebrow">Step 1 of 2</p>
+        <h2>Turn on notifications</h2>
+      </div>
+      <div class="field">
+        <label for="address">Your gno.land address</label>
+        <div class="row">
+          <input type="text" id="address" class="mono" placeholder="g1…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="address-hint">
+          <button type="button" class="button" id="connect" hidden>Connect Adena</button>
         </div>
-        <p id="message" role="status" aria-live="polite"></p>
-      </li>
-    </ol>
-  </main>
-  <script type="module" src="./app.mjs"></script>
+        <p class="hint" id="address-hint">The address you will send the message from.</p>
+      </div>
+      <div class="actions">
+        <button type="button" class="button primary" id="enable">Turn on notifications</button>
+        <button type="button" class="button" id="disable" hidden>Turn off</button>
+      </div>
+      <p class="state" id="state"><i class="indicator" aria-hidden="true"></i><span id="state-text">Checking…</span></p>
+      <p class="status" id="message" role="status" aria-live="polite"></p>
+    </li>
+
+    <li class="step">
+      <div class="step-head">
+        <p class="eyebrow">Step 2 of 2</p>
+        <h2>Send yourself a message</h2>
+      </div>
+      <div class="field">
+        <label for="msg">Message</label>
+        <input type="text" id="msg" placeholder="Hello, me" autocomplete="off" maxlength="200">
+      </div>
+      <div class="preview">
+        <span class="eyebrow">notification · this browser</span>
+        <div class="toast" role="img" aria-label="Preview of the notification">
+          <span class="toast-icon"><i class="indicator"></i></span>
+          <div class="toast-text"><b id="toast-title">Echo</b><span id="toast-body"></span><small><span id="toast-host"></span> · a few seconds after the call</small></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="button" id="send" hidden>Send with Adena</button>
+      </div>
+      <p class="status" id="mismatch"></p>
+      <div class="code">
+        <div class="code-head"><span>sh · gnokey</span><button type="button" class="button small" id="copy">Copy</button></div>
+        <pre><code id="command"></code></pre>
+      </div>
+      <p class="hint">Run it with the key of the address in step 1. The notification goes to whoever sends.</p>
+      <p class="status" id="sent" role="status" aria-live="polite"></p>
+    </li>
+  </ol>
+</main>
+
+<footer class="footer">
+  <span class="wordmark small">gnot<span class="i">ı<span class="dot"></span></span>f</span>
+  <nav aria-label="Footer">
+    <a href="https://gnotif.xyz">gnotif.xyz</a>
+    <a id="realm-link-foot" href="#">Realm on gnoweb</a>
+    <span class="mono" id="server"></span>
+  </nav>
+</footer>
+<script type="module" src="./app.mjs"></script>
 </body>
 </html>

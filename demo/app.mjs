@@ -1,13 +1,16 @@
 import { Gnotif, GnotifError } from "./gnotif.js";
 import { isAddress } from "./address.mjs";
-import { gnoweb, pingpong, server } from "./config.js";
+import { connect, sendEcho } from "./adena.mjs";
+import { gnokeyCommand } from "./echo-tx.mjs";
+import { chain, echo, gnoweb, server } from "./config.js";
 
 const gnotif = new Gnotif({ server, serviceWorker: "/sw.js" });
 const el = (id) => document.getElementById(id);
-// The server cannot read opt-ins back, so the page keeps the last ones it set.
+// The server cannot read opt-ins back, so the page keeps the last one it set.
 const STORAGE_KEY = "gnotif-demo";
-const realmURL = gnoweb.replace(/\/$/, "") + pingpong.replace(/^gno\.land/, "");
-let triggers = [];
+const realmURL = gnoweb.replace(/\/$/, "") + echo.replace(/^gno\.land/, "");
+const adena = globalThis.adena;
+let trigger = null;
 let on = false;
 let pending = Promise.resolve();
 
@@ -17,25 +20,24 @@ function stored() {
 }
 
 function save(optins) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ address: el("address").value.trim(), optins }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ address: address(), optins }));
 }
 
-function element(tag, className, text) {
-  const e = document.createElement(tag);
-  e.className = className;
-  if (text !== undefined) {
-    e.textContent = text;
-  }
-  return e;
+function address() {
+  return el("address").value.trim();
 }
 
-function plural(n) {
-  return `${n} trigger${n === 1 ? "" : "s"}`;
+function message() {
+  return el("msg").value.trim() || el("msg").placeholder;
 }
 
-function say(text, isError = false) {
-  el("message").textContent = text;
-  el("message").classList.toggle("error", isError);
+function short(a) {
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+function say(id, text, isError = false) {
+  el(id).textContent = text;
+  el(id).classList.toggle("error", isError);
 }
 
 function errorText(err) {
@@ -47,122 +49,94 @@ function errorText(err) {
   return err.message;
 }
 
-function mark(verified) {
-  const m = element("span", verified ? "mark verified" : "mark", verified ? "Verified" : "Not verified");
-  if (verified) {
-    m.prepend(el("icon-verified").content.cloneNode(true));
+// optin throws when the address is empty or malformed.
+function optin() {
+  const a = address();
+  if (!a) {
+    throw new Error("Enter your address, or connect Adena.");
   }
-  return m;
-}
-
-// preview draws the notification a trigger sends, with its {key} placeholders.
-function preview(t) {
-  const body = element("p", "preview-body");
-  for (const part of t.body.split(/(\{\w+\})/)) {
-    body.append(/^\{\w+\}$/.test(part) ? element("code", "", part) : part);
+  if (!isAddress(a)) {
+    throw new Error(`"${a}" isn't a valid gno address. Expected g1 followed by 38 letters and digits.`);
   }
-  const figure = element("figure", "preview");
-  figure.setAttribute("aria-label", "Notification preview");
-  figure.append(element("p", "preview-origin", location.host), element("p", "preview-title", t.title), body);
-  return figure;
+  return [{ trigger: trigger.id, value: a }];
 }
 
-function renderTriggers(saved) {
-  if (triggers.length === 0) {
-    el("triggers").replaceChildren(element("li", "note", "No notifications on offer yet. pingpong declares its trigger in its init function when it is deployed."));
-    return;
-  }
-  el("triggers").replaceChildren(...triggers.map((t) => {
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.value = t.id;
-    box.checked = !saved || saved.optins.some((o) => o.trigger === t.id);
-    box.addEventListener("change", () => {
-      if (on) {
-        sync();
-      }
-    });
-    const head = element("span", "trigger-head");
-    head.append(element("span", "trigger-title", t.title), mark(t.verified));
-    const label = element("label", "trigger");
-    label.append(box, head, element("span", "trigger-meta", `${t.event} on ${t.target}`));
-    const item = document.createElement("li");
-    item.append(label);
-    item.append(preview(t));
-    return item;
-  }));
-}
-
-// selectedOptins throws when a checked trigger needs the address and it is empty or malformed.
-function selectedOptins() {
-  const address = el("address").value.trim();
-  return [...el("triggers").querySelectorAll("input:checked")].map((box) => {
-    const t = triggers.find((x) => x.id === box.value);
-    if (t.param && !address) {
-      throw new Error(`Enter your address: "${t.title}" needs it.`);
-    }
-    if (t.param && !isAddress(address)) {
-      throw new Error(`"${address}" isn't a valid gno address. Expected g1 followed by 38 letters and digits.`);
-    }
-    return { trigger: t.id, value: t.param ? address : "" };
-  });
-}
-
-async function setOptins(optins) {
+async function setOptin() {
+  const optins = optin();
   await gnotif.setOptins(optins);
   save(optins);
-  say(`Notifications on for ${plural(optins.length)}.`);
+}
+
+// One amber button at a time: the next action in the flow.
+function setPrimary() {
+  el("enable").classList.toggle("primary", !on);
+  el("send").classList.toggle("primary", on && Boolean(adena));
+  el("copy").classList.toggle("primary", on && !adena);
 }
 
 async function refresh() {
   on = await gnotif.enabled();
   const saved = stored();
-  el("permission").textContent = "Notification" in globalThis
-    ? { granted: "Granted", denied: "Blocked", default: "Not granted" }[Notification.permission]
-    : "Not supported";
-  el("subscribed").textContent = on ? "Yes" : "No";
-  el("following").textContent = !on ? "None" : saved ? plural(saved.optins.length) : "Unknown";
-  el("switch-hint").textContent = on
-    ? "Notifications are on. Changes to your address or choices save as you make them."
-    : "Your browser asks for permission once. Notifications then arrive even with this tab closed.";
-  el("enable").textContent = saved ? "Turn notifications on again" : "Turn on notifications";
+  const blocked = "Notification" in globalThis && Notification.permission === "denied";
+  el("state").classList.toggle("on", on);
+  el("state-text").textContent = on && saved
+    ? `On for ${saved.address}`
+    : on ? "On" : blocked ? "Blocked in the browser's site settings" : "Off";
+  el("enable").textContent = saved && !on ? "Turn notifications on again" : "Turn on notifications";
   el("enable").hidden = on;
   el("disable").hidden = !on;
+  setPrimary();
 }
 
 // Opt-in changes run one at a time, so the last change is the one the server keeps.
 function sync() {
   pending = pending.then(async () => {
     try {
-      await setOptins(selectedOptins());
+      await setOptin();
+      say("message", `Notifications now go to ${short(address())}.`);
     } catch (err) {
-      say(errorText(err), true);
+      say("message", errorText(err), true);
     }
     await refresh();
-  }).catch((err) => say(err.message, true));
+  }).catch((err) => say("message", err.message, true));
 }
 
 function busy(state) {
-  el("enable").disabled = state;
-  el("disable").disabled = state;
+  for (const id of ["enable", "disable", "connect", "send"]) {
+    el(id).disabled = state;
+  }
+}
+
+function noteMismatch(caller) {
+  const a = address();
+  const differs = a !== "" && caller !== a;
+  say("mismatch", differs
+    ? `Adena sends from ${short(caller)}, but this browser listens for ${short(a)}. The notification goes to ${short(caller)}.`
+    : "");
+}
+
+function renderMessage() {
+  const msg = message();
+  el("toast-body").textContent = trigger ? trigger.body.replaceAll("{msg}", msg) : msg;
+  el("command").textContent = gnokeyCommand(chain, echo, msg);
 }
 
 el("enable").addEventListener("click", async () => {
-  let optins;
   try {
-    optins = selectedOptins();
+    optin();
   } catch (err) {
-    say(err.message, true);
+    say("message", err.message, true);
     el("address").focus();
     return;
   }
   busy(true);
-  say("Turning on notifications…");
+  say("message", "Turning on notifications…");
   try {
     await gnotif.enable();
-    await setOptins(optins);
+    await setOptin();
+    say("message", "Notifications on. Send yourself a message in step 2.");
   } catch (err) {
-    say(errorText(err), true);
+    say("message", errorText(err), true);
   }
   busy(false);
   await refresh();
@@ -173,45 +147,100 @@ el("disable").addEventListener("click", async () => {
   try {
     await gnotif.disable();
     localStorage.removeItem(STORAGE_KEY);
-    say("Notifications off.");
+    say("message", "Notifications off.");
   } catch (err) {
-    say(errorText(err), true);
+    say("message", errorText(err), true);
   }
   busy(false);
   await refresh();
 });
 
+el("connect").addEventListener("click", async () => {
+  busy(true);
+  say("message", "Waiting for Adena…");
+  try {
+    el("address").value = await connect(adena, chain);
+    say("message", `Adena connected as ${short(address())}.`);
+    say("mismatch", "");
+    if (on) {
+      sync();
+    }
+  } catch (err) {
+    say("message", err.message, true);
+  }
+  busy(false);
+});
+
+el("send").addEventListener("click", async () => {
+  if (!el("msg").value.trim()) {
+    say("sent", "Write a message first.", true);
+    el("msg").focus();
+    return;
+  }
+  busy(true);
+  say("sent", "Waiting for Adena…");
+  try {
+    const { caller, hash } = await sendEcho(adena, chain, echo, message());
+    noteMismatch(caller);
+    say("sent", on
+      ? `Sent. The notification arrives in a few seconds.${hash ? ` Transaction ${hash}.` : ""}`
+      : "Sent, but notifications are off in this browser. Turn them on in step 1 to get the next one.");
+  } catch (err) {
+    say("sent", err.message, true);
+  }
+  busy(false);
+});
+
+el("copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(el("command").textContent);
+    el("copy").textContent = "Copied";
+    setTimeout(() => { el("copy").textContent = "Copy"; }, 1500);
+  } catch {
+    say("sent", "Copying failed. Select the command and copy it yourself.", true);
+  }
+});
+
 el("address").addEventListener("change", () => {
+  say("mismatch", "");
   if (on) {
     sync();
   }
 });
 
-const game = new URLSearchParams(location.search).get("game");
-if (game) {
-  el("turn-game").textContent = game;
-  el("turn-link-game").textContent = game;
-  el("turn-link").href = `${realmURL}:game/${encodeURIComponent(game)}`;
-  el("turn").hidden = false;
-}
+el("msg").addEventListener("input", renderMessage);
+
+el("chain-name").textContent = chain.name;
+el("chain-id").textContent = chain.id;
 el("realm-link").href = realmURL;
+el("realm-link-foot").href = realmURL;
 el("server").textContent = server;
+el("toast-host").textContent = location.host;
+el("connect").hidden = !adena;
+el("send").hidden = !adena;
+renderMessage();
 
 const saved = stored();
 if (saved) {
   el("address").value = saved.address;
 }
 try {
-  triggers = await gnotif.triggers(pingpong);
-  renderTriggers(saved);
+  [trigger] = await gnotif.triggers(echo);
+  if (!trigger) {
+    say("message", `${server} lists no trigger for ${echo} yet. Deploy the echo realm first.`, true);
+  } else {
+    el("toast-title").textContent = trigger.title;
+    renderMessage();
+  }
 } catch (err) {
-  el("triggers").replaceChildren(element("li", "note error", `Cannot load notifications from ${server}: ${err.message}`));
+  say("message", `Cannot load the echo trigger from ${server}: ${err.message}`, true);
 }
+el("enable").disabled = !trigger;
 try {
   await refresh();
   if (!on && saved) {
-    say("This browser stopped receiving notifications. Turn them on again to resume.");
+    say("message", "This browser stopped receiving notifications. Turn them on again to resume.");
   }
 } catch (err) {
-  say(err.message, true);
+  say("message", err.message, true);
 }
