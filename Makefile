@@ -73,8 +73,9 @@ site-serve: site ## Build and serve the website on http://localhost:3001
 deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>, without tests
 	test -n "$(NS)" || { echo "deploy-pkgs: set NS=gno.land/r/<namespace>" >&2; exit 1; }
 	rm -rf $(TOOLS)/deploy
-	mkdir -p $(TOOLS)/deploy/gnotif/v0 $(TOOLS)/deploy/pingpong/v0
+	mkdir -p $(TOOLS)/deploy/gnotif/v0 $(TOOLS)/deploy/echo/v0 $(TOOLS)/deploy/pingpong/v0
 	cp -R gno/r/gnotif/v0/. $(TOOLS)/deploy/gnotif/v0/
+	cp -R demo/gno.land/r/echo/v0/. $(TOOLS)/deploy/echo/v0/
 	cp -R demo/gno.land/r/pingpong/v0/. $(TOOLS)/deploy/pingpong/v0/
 	find $(TOOLS)/deploy \( -name '*_test.gno' -o -name filetests \) -prune -exec rm -rf {} +
 	find $(TOOLS)/deploy -type f | while read -r f; do \
