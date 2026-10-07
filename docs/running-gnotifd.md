@@ -37,7 +37,7 @@ Load them into the terminal you start gnotifd from:
 export $(cat vapid.env)
 ```
 
-Keep the pair for the life of the server, secret, and outside any source checkout. A push service accepts a push only when it is signed with the key its subscription was made with, so a new pair stops every push until each page calls `enable()` again.
+Keep the pair for the life of the server, keep the private key secret, and keep `vapid.env` outside any source checkout. A push service accepts a push only when it is signed with the key its subscription was made with, so a new pair stops every push until each page calls `enable()` again.
 
 ## Start gnotifd
 
@@ -49,7 +49,7 @@ gnotifd -indexer https://indexer.onyx.testnets.gno.land/graphql/query \
 
 `<contact>` is an email address or https URL where push services can reach you, such as `ops@example.org`.
 
-gnotifd listens on `127.0.0.1:8080` and writes `gnotif.db` in the current directory. It logs to standard error. Stopping it with Ctrl-C or SIGTERM loses no notification and sends none twice.
+gnotifd listens on `127.0.0.1:8080` and writes `gnotif.db` in the current directory. It logs to standard error. Stopping it with Ctrl-C or SIGTERM loses no queued push and sends none twice.
 
 Dapp pages call gnotifd from their own origins, and a page served over https cannot call a plain http URL on another host, so put gnotifd behind a reverse proxy that terminates TLS.
 
@@ -75,13 +75,13 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 
 `-registry` is the path the registry is deployed at. gnotifd builds its triggers only from that path's events, and keeps only the verified ones.
 
-`-start-height` matters only while the database is empty: the first start reads the chain from that height, and gnotifd refuses to start without it. Later starts resume where the database stopped and ignore the flag. Use a height at or before the registry's first event. [Deploying the registry](deploying-realms.md#4-deploy-the-registry) notes the indexer's height right before the deploy for this. A height far below the deploy only costs time: gnotifd reads at most 1,000 blocks per poll.
+`-start-height` matters only while the database is empty: the first start reads the chain from that height, and gnotifd refuses to start without it. Later starts resume where the database stopped and ignore the flag. Use a height at or before the registry's first event. [Deploying the registry](deploying-realms.md#4-deploy-the-registry) notes the indexer's height right before the deploy for this. A height far below the deploy only costs time ([How gnotif works](how-it-works.md#how-gnotifd-reads-the-chain)).
 
 While it catches up, gnotifd skips realm events older than `-max-age`, so a restart after downtime sends no burst of stale notifications. It always applies the registry's events. Against a chain that makes blocks only on transactions, such as a local gnodev, raise `-max-age`, to `1h` for instance: the first block after a quiet spell can carry an old time.
 
 When the indexer reports a height below what gnotifd already stored, gnotifd logs `indexer behind stored bound` on every poll until the indexer catches up, and waits for it. That happens when the indexer re-syncs from scratch, or when several indexers answer behind one URL.
 
-When the indexer's answer for a single transaction is too large to read, gnotifd skips that transaction and logs `skip oversized transaction` as an error, with its height, index and hash. That transaction's events are lost, and every other transaction is read.
+When the indexer's answer for a single transaction is too large to read, gnotifd skips that transaction and logs `skip oversized transaction` as an error, with its height, index and hash. That transaction's events are lost, and every other transaction is read. When the lost events declared or removed a trigger, gnotifd's triggers no longer match the registry's.
 
 ## The push service allowlist
 
@@ -100,7 +100,13 @@ An entry `*.suffix` matches any host under `suffix` on the default port. Any oth
 
 The database is one SQLite file in WAL mode: while gnotifd runs, `gnotif.db` sits next to `gnotif.db-wal` and `gnotif.db-shm`. Stop gnotifd before copying the database, and copy any `-wal` or `-shm` file left beside it.
 
-The subscriptions and opt-ins exist only in the database. To start a new database, name a new file with `-db` and give `-start-height`. The triggers come back from the chain, and each browser turns notifications on again from its dapp's page. Start a new database after losing one, or to move gnotifd to a new registry: a new registry numbers its triggers from `0000001` again, so an old opt-in would follow the new trigger that takes its id. Start one too when gnotifd refuses a database made by another release, which it leaves untouched. A release that changes the database's layout stops on an older database with `database was made by an older gnotifd: start a new database with -start-height`. An older release stops on a newer database with `database was made by a newer gnotifd`: run the gnotifd that made it, or start a new database.
+The subscriptions and opt-ins exist only in the database. To start a new database, name a new file with `-db` and give a `-start-height` at or before the registry's deploy; each browser then turns notifications on again from its dapp's page. Start a new database when:
+
+- the database file is lost;
+- gnotifd moves to a new registry, which numbers its triggers from `0000001` again, so the old opt-ins would follow the wrong triggers;
+- gnotifd refuses the file, which it leaves untouched:
+  - `database was made by an older gnotifd: start a new database with -start-height` means an older release made the file, before a change to the database's layout;
+  - `database was made by a newer gnotifd` means a newer release made the file. Run the gnotifd that made it instead, since a new database drops every subscription.
 
 ## Run the container image
 

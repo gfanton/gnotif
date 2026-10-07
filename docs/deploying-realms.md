@@ -54,7 +54,7 @@ gnokey maketx addpkg -pkgpath gno.land/r/<namespace>/gnotif/v0 -pkgdir .tools/de
 
 The deploy uses about 20 million gas, and the chain holds about 1.9 GNOT as the registry's storage deposit. [Getting started](getting-started.md#4-try-it-on-onyx) explains the flags.
 
-onyx checks a new realm before it goes live, which takes a few seconds. Wait until the registry's page opens on gnoweb, at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0`. It lists no trigger until a realm declares one. If the page never opens, the realm failed the check: lint again, then deploy again to the same path with the same key, which replaces the package that never went live.
+onyx checks a new realm before it goes live, which takes a few seconds. Wait until the registry's page opens on gnoweb, at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0`. It lists no trigger until a realm declares one. A realm that does not compile never goes live. If the page never opens, lint again and check that the key can pay the storage deposit, then deploy again to the same path with the same key. The new deploy replaces the package that never went live.
 
 ## 5. Point gnotifd at the registry
 

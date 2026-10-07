@@ -29,7 +29,7 @@ func init(cur realm) {
 
 A browser opts in with a player's address, and hears about the turns that pass to that address. A click on the notification opens the page at `/?game=<id>`, which links to the game on gnoweb.
 
-No trigger watches `GameInvited`, since anyone can invite any address: a player's first notification is a turn, which comes only after they accept ([Who an event can notify](../docs/triggers.md#who-an-event-can-notify)).
+No trigger watches `GameInvited`, since anyone can invite any address ([Who an event can notify](../docs/triggers.md#who-an-event-can-notify)). A player's first notification is a turn, which comes only after they accept the game.
 
 ## Run it on a local chain
 
@@ -82,12 +82,19 @@ Run every command from the repository root. Steps 3, 5, 6 and 8 keep running, so
    .tools/tx-indexer start -db-path .tools/indexer-db -listen-address 127.0.0.1:8546
    ```
 
-6. Make the VAPID key pair that signs gnotifd's pushes, in a file that only you can read, load it, and start gnotifd:
+6. Make the VAPID key pair that signs gnotifd's pushes, in a file that only you can read. Run this block once:
 
    ```sh
    touch .tools/vapid.env
    chmod 600 .tools/vapid.env
    go run ./cmd/gnotifd keygen > .tools/vapid.env
+   ```
+
+   Running it again makes a new pair, and the browser then gets no notification until you turn notifications off and on in the demo.
+
+   Load the pair and start gnotifd. To restart gnotifd, run this block only:
+
+   ```sh
    export $(cat .tools/vapid.env)
    go run ./cmd/gnotifd -indexer http://127.0.0.1:8546/graphql/query \
      -registry gno.land/r/dev/gnotif/v0 -start-height 1 -max-age 1h \

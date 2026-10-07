@@ -25,9 +25,9 @@ The trigger's declarer is the realm's address, so only the realm can remove it, 
 
 ## The verified mark
 
-A trigger is verified when the caller of `Declare` is the realm at its target path. The mark means "declared by the realm at the target path". It holds because only the owner of a namespace can deploy under it ([How gnotif works](how-it-works.md#what-the-verified-mark-means)).
+A trigger that a realm declares for itself, as above, carries the [verified mark](how-it-works.md#what-the-verified-mark-means).
 
-Anyone can also call `Declare` directly, as a transaction, with any target. The registry stores such a trigger without the mark, and its declarer pays its storage deposit. gnotifd ignores unverified triggers: it never stores, lists or notifies for one.
+Anyone can also call `Declare` directly, as a transaction, with any target. The registry stores such a trigger without the mark, and its declarer pays its storage deposit. gnotifd ignores it ([How gnotif works](how-it-works.md#triggers-come-from-the-registrys-events)).
 
 ## At most 64 triggers per realm
 
@@ -49,7 +49,10 @@ So a page never keeps a trigger id. It asks for the ids with `triggers(target)` 
 | `param` | attribute whose value a browser opts in with; empty notifies every browser that opted in | empty, or 1 to 64 bytes of `A-Z a-z 0-9 _` |
 | `title` | notification title template | 1 to 64 bytes |
 | `body` | notification body template | at most 255 bytes |
-| `link` | path template opened on click, on the dapp's own origin | a path of at most 256 bytes, starting with a single `/`; no control characters or backslash |
+| `link` | path template opened on click, on the dapp's own origin | a path of at most 256 bytes, starting with a single `/`; no ASCII control characters or backslash |
+| `id` | the trigger's id | set by the registry |
+| `declarer` | address that called `Declare` | set by the registry |
+| `verified` | `true` when the trigger carries the verified mark | set by the registry |
 
 `Declare` panics on the first field that breaks its rule, which reverts the transaction. The rules keep a trigger from imitating the verified mark or sending a dapp's users to another site ([How gnotif works](how-it-works.md#what-the-verified-mark-means)).
 

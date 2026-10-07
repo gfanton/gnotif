@@ -11,7 +11,7 @@ gnotifd never reads the registry's state. It rebuilds its triggers from the even
 | `TriggerDeclared` | `id`, `target`, `event`, `filter`, `param`, `title`, `body`, `link`, `declarer`, `verified` (`true` or `false`) |
 | `TriggerRemoved` | `id` |
 
-gnotifd applies these events only when they come from the package path given with `-registry`. It stores a trigger only when `verified` is `true`: it skips any other `TriggerDeclared`, so it never lists, matches or notifies for an unverified trigger. It logs a `TriggerDeclared` it cannot read as an error and skips it. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
+gnotifd applies these events only when they come from the package path given with `-registry`. It stores a trigger only when `verified` is `true`: it skips any other `TriggerDeclared`, so it never lists, matches or notifies for an unverified trigger. It logs a `TriggerDeclared` it cannot read as an error and skips it. A `TriggerRemoved` deletes the trigger with its opt-ins, but a push the trigger already queued is still sent. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
 
 [Triggers](triggers.md) covers each field and the [limit of 64 per realm](triggers.md#at-most-64-triggers-per-realm).
 
@@ -21,7 +21,7 @@ gnotifd applies these events only when they come from the package path given wit
 
 The mark rests on the chain refusing deploys under a namespace to anyone but its owner. On onyx, a key deploys under its own address, `gno.land/r/<address>/...`, or under a name it registered. On a chain without that rule, whoever deploys a realm at a path earns the mark for that path.
 
-Anyone can declare a trigger without the mark, on any realm. gnotifd ignores such a trigger, and the registry bounds what any trigger can do:
+Anyone can declare a trigger without the mark, on any realm. The registry bounds what any trigger can do:
 
 - its names are identifiers and its target holds only the characters of a realm path, so its rendered text cannot imitate the mark;
 - its link is a path, which always opens on the dapp's own origin, so a stranger's trigger cannot send the dapp's users to another site;
@@ -35,6 +35,10 @@ gnotifd polls the indexer every `-poll` interval, 5 seconds by default.
 - After a failure, it reads the same blocks again with a smaller window.
 - It never queues the same push twice, so reading a block again sends nothing new.
 - It skips a single transaction too large to read, logs an error, and loses only that transaction's events ([Running gnotifd](running-gnotifd.md#the-indexer-and-the-start-height)).
+
+## Storage
+
+One SQLite file holds the triggers, the subscriptions with their opt-ins, and the queued pushes. [Running gnotifd](running-gnotifd.md#storage-and-backups) covers its backups and when to start a new one.
 
 ## Delivery outcomes
 

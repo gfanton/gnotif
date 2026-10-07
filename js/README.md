@@ -118,7 +118,9 @@ A click opens the notification's link on the dapp's origin. A link that
 lands on another origin opens the service worker's scope instead: the
 path `sw.js` is served from, `/` for a dapp at the root of its origin.
 "New activity" opens the scope too. A click focuses an open tab of the
-dapp, or opens a new one.
+dapp, or opens a new one. A tab the service worker does not control,
+such as the one where `enable()` first ran, is focused but not moved to
+the link.
 
 When the browser renews its push subscription, `sw.js` sends the new one
 to the server in place of the old, so the opt-ins carry over.
