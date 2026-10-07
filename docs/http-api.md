@@ -1,6 +1,6 @@
 # HTTP API
 
-gnotifd serves its API under `/v1/`. Request and response bodies are JSON. Every `/v1/` answer allows any origin, so a dapp's page calls the API from its own origin. The `gnotif` npm package wraps these calls ([the client's README](../js/README.md)).
+gnotifd serves its API under `/v1/`. Request and response bodies are JSON. Every `/v1/` answer allows any origin, and `OPTIONS` answers a browser's preflight with 204, so a dapp's page calls the API from its own origin. The API uses no cookies or other credentials. The `gnotif` npm package wraps these calls ([the client's README](../js/README.md)).
 
 | Method and path | Body | Answer |
 |---|---|---|
@@ -22,7 +22,7 @@ The API has no accounts. A subscription is known by its push endpoint, which onl
 
 ## List a realm's triggers
 
-`GET /v1/triggers?target=<realm path>` answers the verified triggers whose target is that realm, in id order. The registry allows a realm 64 verified triggers, so the list holds at most 64. For `target=gno.land/r/dev/pingpong/v0`:
+`GET /v1/triggers?target=<realm path>` answers the verified triggers whose target is that realm, in id order. For `target=gno.land/r/dev/pingpong/v0`:
 
 ```json
 [
@@ -41,7 +41,7 @@ The API has no accounts. A subscription is known by its push endpoint, which onl
 ]
 ```
 
-`filter` holds comma-separated `key=value` pairs, and `param` is empty for a trigger that takes no value. `title`, `body` and `link` are the templates as declared ([Triggers](triggers.md#templates)).
+[Triggers](triggers.md#fields) describes each field.
 
 A realm without verified triggers gets `[]`.
 
@@ -79,7 +79,7 @@ A browser may replace its push subscription with a new endpoint. The service wor
 }
 ```
 
-The subscription stored at `oldEndpoint` takes the new endpoint and keys, and keeps its opt-ins and queued pushes. When `oldEndpoint` is not stored, or the new endpoint already is, the request acts as one without `oldEndpoint`. Knowing an endpoint is the only proof the API asks for, so `oldEndpoint` needs no other.
+The subscription stored at `oldEndpoint` takes the new endpoint and keys, and keeps its opt-ins and queued pushes. When `oldEndpoint` is not stored, or the new endpoint already is, the request acts as one without `oldEndpoint`.
 
 ## Set the opt-ins
 
@@ -119,24 +119,7 @@ An error answers JSON with a message:
 |---|---|---|
 | 400 | `GET /v1/triggers` has a missing or empty `target`, or one over 256 bytes | `target is required`, `invalid target` |
 | 400 | the body is not JSON, or a field has the wrong type | `invalid JSON body` |
-| 400 | a subscription breaks a rule | `endpoint longer than 1000 bytes`, `endpoint must be an https URL`, `endpoint must not carry user information`, `push service <host> is not allowed`, `p256dh must be 65 bytes in base64url`, `auth must be 16 bytes in base64url`, `p256dh must be a P-256 public key` |
-| 400 | an opt-in breaks a rule | `more than 50 opt-ins`, `unknown trigger "<id>"`, `trigger <id> takes no value`, `trigger <id> needs a value for <param>`, `value longer than 4096 bytes`, `value has leading or trailing white space` |
+| 400 | a subscription or an opt-in breaks a rule | a message naming the rule |
 | 404 | `PUT /v1/subscription/optins` or `DELETE /v1/subscription` names an endpoint the server does not store | `unknown subscription` |
 | 413 | the body is over 8,192 bytes | `request body too large` |
 | 500 | the server failed, and logged why | `internal error` |
-
-The opt-ins are checked before the subscription is looked up, so an invalid set answers 400 even for an unknown endpoint.
-
-A method that a `/v1/` path does not take answers 405 in plain text, with an `Allow` header. A path outside `/v1/` answers 404 in plain text.
-
-## CORS
-
-Every `/v1/` answer carries:
-
-```
-Access-Control-Allow-Origin: *
-Access-Control-Allow-Methods: GET, PUT, DELETE, OPTIONS
-Access-Control-Allow-Headers: Content-Type
-```
-
-`OPTIONS` on any `/v1/` path answers 204, which serves the preflight a browser sends before a JSON `PUT` or `DELETE`. The API uses no cookies or other credentials, so any page may call it.

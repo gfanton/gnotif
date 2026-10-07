@@ -29,7 +29,7 @@ func init(cur realm) {
 
 A browser opts in with a player's address, and hears about the turns that pass to that address. A click on the notification opens the page at `/?game=<id>`, which links to the game on gnoweb.
 
-No trigger watches `GameInvited`: anyone can invite any address, so a notification for it would let a stranger make that address's browser ring. `Play` refuses a game the opponent has not accepted, so a player's first notification comes after they accept.
+No trigger watches `GameInvited`, since anyone can invite any address: a player's first notification is a turn, which comes only after they accept ([Who an event can notify](../docs/triggers.md#who-an-event-can-notify)).
 
 ## Run it on a local chain
 
@@ -82,18 +82,20 @@ Run every command from the repository root. Steps 3, 5, 6 and 8 keep running, so
    .tools/tx-indexer start -db-path .tools/indexer-db -listen-address 127.0.0.1:8546
    ```
 
-6. Start gnotifd:
+6. Make the VAPID key pair that signs gnotifd's pushes, in a file that only you can read, load it, and start gnotifd:
 
    ```sh
-   export $(go run ./cmd/gnotifd keygen)
+   touch .tools/vapid.env
+   chmod 600 .tools/vapid.env
+   go run ./cmd/gnotifd keygen > .tools/vapid.env
+   export $(cat .tools/vapid.env)
    go run ./cmd/gnotifd -indexer http://127.0.0.1:8546/graphql/query \
      -registry gno.land/r/dev/gnotif/v0 -start-height 1 -max-age 1h \
      -vapid-subject <contact> -db .tools/gnotif.db
    ```
 
-   - The first line makes the VAPID key pair that signs gnotifd's pushes, and keeps it in this terminal only. Restart gnotifd from this terminal with the second line alone: a new pair stops the pushes to the browser until you turn notifications off and on in the demo. [Running gnotifd](../docs/running-gnotifd.md#make-the-vapid-keys) keeps a pair in a file instead.
    - `<contact>` is where push services can reach you: any email address or https URL of yours.
-   - gnodev makes a block only when a transaction arrives, so the first block after a quiet spell can carry an old time. gnotifd sends nothing for an event older than `-max-age`, which is 10 minutes by default and one hour here.
+   - `-max-age 1h` lets gnotifd notify for gnodev's blocks, whose time can be old ([Running gnotifd](../docs/running-gnotifd.md#the-indexer-and-the-start-height)).
 
 7. Open a game as player1 against player2, and accept it as player2. Replace `<player2 address>` with the address that `gnokey list` printed:
 
@@ -135,14 +137,22 @@ gnodev keeps its chain in memory, so a restarted gnodev starts an empty chain. T
 rm -rf .tools/indexer-db .tools/gnotif.db*
 ```
 
-Then repeat steps 3 to 7, and turn notifications off and on in the demo, so that the new database learns this browser's subscription. Until you do, the page still shows its old "Following" count: it keeps the opt-ins it last sent in the browser's local storage, because the server cannot read opt-ins back.
+Then repeat steps 3 to 7, and turn notifications off and on in the demo, so that the new database learns this browser's subscription.
 
 `make clean` removes `.tools/`, with the tools, the keys and the databases.
 
 ## Deploy it to onyx
 
-1. Deploy a registry and start a gnotifd that reads it, as [Deploying the registry](../docs/deploying-realms.md) shows. Its first step, `make deploy-pkgs NS=gno.land/r/<namespace>`, also writes pingpong's copy to `.tools/deploy/pingpong/v0`, importing your registry, and its lint step checks both copies.
-2. Once the registry is `live`, deploy `.tools/deploy/pingpong/v0` at `gno.land/r/<namespace>/pingpong/v0` with `gno_addpkg`, and wait for `live`. onyx enables a new package a few seconds after its deploy, and runs pingpong's `init` then, so the trigger is declared with no other call.
+1. Deploy a registry and start a gnotifd that reads it, as [Deploying the registry](../docs/deploying-realms.md) shows. Its first step, `make deploy-pkgs NS=gno.land/r/<namespace>`, also writes pingpong's copy to `.tools/deploy/pingpong/v0`, importing your registry, and its lint step checks pingpong too.
+2. Once the registry's page opens on gnoweb, deploy pingpong with the same key. gnokey asks for your passphrase:
+
+   ```sh
+   gnokey maketx addpkg -pkgpath gno.land/r/<namespace>/pingpong/v0 -pkgdir .tools/deploy/pingpong/v0 \
+     -gas-wanted 40000000 -gas-fee 80000ugnot -max-deposit 20000000ugnot \
+     -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 mykey
+   ```
+
+   onyx enables pingpong a few seconds after its deploy, and runs its `init` then, so the trigger is declared with no other call.
 3. Check that the registry lists the trigger as verified, on gnoweb at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0:target/gno.land/r/<namespace>/pingpong/v0`.
 4. Point the page at the deploy in `config.js`: `server` to your gnotifd's URL, `pingpong` to `gno.land/r/<namespace>/pingpong/v0`, and `gnoweb` to `https://onyx.testnets.gno.land`.
 5. Serve this folder at the root of a site, with `gnotif.js` and `sw.js` copied from `js/src/`, as `make demo` does.

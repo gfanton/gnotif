@@ -37,9 +37,9 @@ under a path, such as `/app/`, serves its copy from that path and passes
 ### `triggers(target)`
 
 Resolves the verified triggers of the realm at `target`, a realm path
-such as `gno.land/r/<you>/notify`: at most 64, in id order, or `[]` when
-the server knows none. Each has `id`, `target`, `event`, `filter`,
-`param`, `title`, `body`, `link`, `declarer` and `verified`.
+such as `gno.land/r/<you>/notify`, in id order, or `[]` when the server
+knows none. [Triggers](../docs/triggers.md#fields) describes their
+fields.
 
 ```js
 const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
@@ -52,27 +52,18 @@ keeping an id. It rejects with a `TypeError`, before any request, when
 
 ### `enable()`
 
-Subscribes the browser and registers it with the server, and resolves
-the subscription as `PushSubscriptionJSON`. Call it from a user gesture
-such as a click, or the browser may refuse or hide the permission
-prompt. In order, it:
-
-1. asks for notification permission;
-2. registers the service worker as `sw.js?server=<server>`, which tells
-   it where to send a renewed subscription;
-3. subscribes with the server's VAPID key, replacing a subscription made
-   with another key;
-4. sends the subscription to the server.
+Asks for notification permission, subscribes the browser, and registers
+it with the server. It resolves the subscription as
+`PushSubscriptionJSON`. Call it from a user gesture such as a click, or
+the browser may refuse or hide the permission prompt.
 
 It throws a `GnotifError` with code:
 
 - `unsupported` when the browser has no service worker, Push or
   Notification API.
-- `denied` when permission is not granted. The browser asks the user
-  only while permission is `default`. Once the user has blocked
-  notifications for the site, permission is `denied`, and `enable()`
-  throws `denied` at once without a prompt. Only the browser's site
-  settings lift the block.
+- `denied` when permission is not granted. Once the user has blocked
+  notifications for the site, `enable()` throws `denied` at once, without
+  a prompt, until the browser's site settings lift the block.
 - `server` when the server answers an error, to the request for its
   VAPID key (`GET /v1/vapid`) or to the subscription.
 
@@ -100,10 +91,8 @@ revokes permission, even though the subscription remains. Offer
 Unsubscribes the browser first, then asks the server to delete the
 subscription. A 404, which means the server does not know the
 subscription, is not an error. It throws a `GnotifError` with code
-`inactive` when the browser holds no push subscription. On any other
-server error it throws `server`, and the browser is already
-unsubscribed: the server keeps the subscription until a push to it
-comes back expired.
+`inactive` when the browser holds no push subscription, and `server` on
+any other server error.
 
 ## Errors
 
@@ -128,14 +117,8 @@ subscription whose pushes show nothing.
 A click opens the notification's link on the dapp's origin. A link that
 lands on another origin opens the service worker's scope instead: the
 path `sw.js` is served from, `/` for a dapp at the root of its origin.
-"New activity" opens the scope too.
-
-- With a tab open under the scope, it focuses the first such tab, and
-  navigates it to the link when the service worker controls that tab. A
-  tab is controlled when it loaded after the service worker activated.
-  `sw.js` never claims open tabs, so the tab where `enable()` first ran
-  stays uncontrolled until it reloads, and a click only focuses it.
-- With no tab open under the scope, it opens one at the link.
+"New activity" opens the scope too. A click focuses an open tab of the
+dapp, or opens a new one.
 
 When the browser renews its push subscription, `sw.js` sends the new one
 to the server in place of the old, so the opt-ins carry over.

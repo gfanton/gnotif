@@ -1,13 +1,11 @@
 # Deploying the registry
 
-These steps deploy a gnotif registry to onyx (`onyx-1`), for an operator who runs a gnotif server on their own registry. The steps use gnomcp, a Model Context Protocol (MCP) server that gives an AI client tools to read and write a gno.land chain. The repository's realms sit under the placeholder namespace `gno.land/r/dev`, and `make deploy-pkgs` writes copies under yours. [The demo's README](../demo/README.md#deploy-it-to-onyx) deploys pingpong on top of the registry.
+These steps deploy a gnotif registry to onyx (`onyx-1`), for an operator who runs a gnotif server on their own registry. The repository's realms sit under the placeholder namespace `gno.land/r/dev`, and `make deploy-pkgs` writes copies under yours.
 
 ## Before you start
 
 - **A namespace the deploying key owns.** On onyx a key deploys under its own address, `gno.land/r/<address>`, or under a name it registered. The chain refuses a deploy under anyone else's namespace, and the [verified mark](how-it-works.md#what-the-verified-mark-means) relies on that.
-- **gnomcp connected to onyx.** `gno_status` reports the chain id, `onyx-1`.
-- **gnomcp's agent key, never a personal key.** The agent key is the key gnomcp holds and signs with: `gno_key_address` shows it, and `gno_key_generate` makes one on a testnet. Every deploy and call is public, with the address that signed it.
-- **Funds for the storage deposits.** `gno_faucet_fund` funds the agent key on onyx.
+- **gnokey and a key that holds test GNOT on onyx**, as in [Getting started](getting-started.md#4-try-it-on-onyx). The deploy command names the key `mykey`: use your key's name. Every deploy is public, with the address that signed it, so use a key made for this rather than a personal one.
 
 ## 1. Write the deploy copies
 
@@ -15,7 +13,7 @@ These steps deploy a gnotif registry to onyx (`onyx-1`), for an operator who run
 make deploy-pkgs NS=gno.land/r/<namespace>
 ```
 
-This writes `.tools/deploy/gnotif/v0`, and pingpong's copy for the demo in `.tools/deploy/pingpong/v0`, without their tests. It rewrites every `gno.land/r/dev` in them to your namespace: both module paths and pingpong's import of the registry. It also writes `.tools/deploy/gnowork.toml`, which makes the copies one workspace for the lint in step 3. The marker sits beside the packages, outside them, and is not deployed.
+This writes `.tools/deploy/gnotif/v0`, and pingpong's copy for the demo in `.tools/deploy/pingpong/v0`, without their tests. It rewrites every `gno.land/r/dev` in them to your namespace: both module paths and pingpong's import of the registry.
 
 ## 2. Check the copies for personal data
 
@@ -25,27 +23,17 @@ A deployed file is public and permanent. Read every file the deploy will send, a
 find .tools/deploy -type f
 ```
 
-## 3. Lint the copies with the chain's toolchain
+## 3. Lint the realms
 
-onyx parks every new package until an automatic approver type-checks it and enables it. A package that fails the check stays parked, and the chain reports it exactly like one still waiting. A dry run does not type-check. Lint the copies with the gno release onyx runs before deploying them.
-
-The Makefile's toolchain is that release: CI pins it as `GNO_VERSION` in [ci.yml](../.github/workflows/ci.yml), and the README's [Develop](../README.md#develop) section installs it with the realms' dependencies. Check that onyx still runs it:
+onyx enables a new package only once an automatic check finds that it compiles. Lint the realms before deploying them:
 
 ```sh
-curl -s https://rpc.onyx.testnets.gno.land/status | grep build_version
+make gno-lint
 ```
 
-When onyx reports another release, move the pin to it and pass the realm tests with it before deploying.
+It lints the repository's realms with gno v1.5.0, the release CI pins as `GNO_VERSION` in [ci.yml](../.github/workflows/ci.yml). The README's [Develop](../README.md#develop) section installs it with the realms' dependencies. The deploy copies differ from the realms only by namespace.
 
-Then lint the copies with the Makefile's toolchain. The workspace marker makes pingpong's import of the registry resolve to the copy beside it. `store` is the Makefile's `GNO_STORE`:
-
-```sh
-store=$HOME/.cache/gno-toolchains/onyx
-gnoroot="$(go env GOMODCACHE)/github.com/gnolang/gno@$(go version -m "$store/gno" | awk '$1 == "mod" {print $3}')"
-(cd .tools/deploy && GNOROOT="$gnoroot" GNOHOME="$store/gnohome" "$store/gno" lint ./...)
-```
-
-`GNOROOT` points the binary at the standard library of its own release.
+To check that onyx still runs v1.5.0, open https://rpc.onyx.testnets.gno.land/status and read `build_version`. When onyx runs another release, move the pin to it and pass the realm tests with it before deploying.
 
 ## 4. Deploy the registry
 
@@ -56,16 +44,17 @@ curl -s -X POST https://indexer.onyx.testnets.gno.land/graphql/query \
   -H 'Content-Type: application/json' -d '{"query":"{ latestBlockHeight }"}'
 ```
 
-Deploy `.tools/deploy/gnotif/v0` at `gno.land/r/<namespace>/gnotif/v0` with `gno_addpkg`. It waits for the approver and reports `package_status`:
+Deploy the registry. gnokey asks for your passphrase:
 
-| `package_status` | Meaning | Next |
-|---|---|---|
-| `live` | enabled and callable | go on |
-| `inert` | parked, not callable | when it is still parked a minute later: lint again, check that the key can pay the storage deposit, then deploy to the same path with the same key, which replaces the parked package |
-| `redeploy_parked` | a new version is parked; the previous one keeps serving | as for `inert` |
-| `unknown` | the chain gave no usable answer | read the path with `gno_read` before going on |
+```sh
+gnokey maketx addpkg -pkgpath gno.land/r/<namespace>/gnotif/v0 -pkgdir .tools/deploy/gnotif/v0 \
+  -gas-wanted 40000000 -gas-fee 80000ugnot -max-deposit 20000000ugnot \
+  -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 mykey
+```
 
-The registry's page renders on gnoweb, at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0`, or with `gno_render` on `gno.land/r/<namespace>/gnotif/v0`. It lists no trigger until a realm declares one.
+The deploy uses about 20 million gas, and the chain holds about 1.9 GNOT as the registry's storage deposit. [Getting started](getting-started.md#4-try-it-on-onyx) explains the flags.
+
+onyx checks a new realm before it goes live, which takes a few seconds. Wait until the registry's page opens on gnoweb, at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0`. It lists no trigger until a realm declares one. If the page never opens, the realm failed the check: lint again, then deploy again to the same path with the same key, which replaces the package that never went live.
 
 ## 5. Point gnotifd at the registry
 
