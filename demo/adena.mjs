@@ -70,8 +70,8 @@ function check(answer, chain, accepted = []) {
   if (answer.status === "success" || accepted.includes(answer.type)) {
     return answer;
   }
-  const error = answer.data?.error;
-  const reason = typeof error === "string" && error !== "" ? `: ${error}` : "";
+  const error = typeof answer.data?.error === "string" ? answer.data.error.replace(/\.+$/, "") : "";
+  const reason = error !== "" ? `: ${error}` : "";
   const known = messages(chain, reason)[answer.type];
   const description = answer.message === "" ? "." : `: ${answer.message}`;
   throw new AdenaError(answer.type, known ?? `Adena answered ${answer.type}${description}`);

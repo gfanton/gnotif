@@ -169,6 +169,11 @@ test("a rejection stands alone, a chain failure carries the chain's reason", asy
   await assert.rejects(sendEcho(failed, chain, pkgPath, "hello"), { message: "The transaction failed on the chain: out of gas." });
 });
 
+test("a chain reason that ends in a period does not double it", async () => {
+  const wallet = fakeAdena({ answers: { DoContract: fail("TRANSACTION_FAILED", { hash: "abc123", error: "insufficient funds." }) } });
+  await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello"), { message: "The transaction failed on the chain: insufficient funds." });
+});
+
 test("a chain failure without a reason says only that it failed", async () => {
   for (const data of [{ hash: "abc123", error: null }, {}]) {
     const wallet = fakeAdena({ answers: { DoContract: fail("TRANSACTION_FAILED", data) } });
