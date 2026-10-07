@@ -97,19 +97,7 @@ button.addEventListener("click", async () => {
 
 ## 4. Try it on onyx
 
-Install gnokey, the gno.land command-line tool. This needs Go:
-
-```sh
-go install github.com/gnolang/gno/gno.land/cmd/gnokey@v1.5.0
-```
-
-Make a key. gnokey asks for a passphrase, then prints the key's address, which starts with `g1`, and a mnemonic. Write the mnemonic down: it is the only way to recover the key.
-
-```sh
-gnokey add mykey
-```
-
-Get test GNOT for that address from the onyx faucet, at https://faucet.gno.land.
+This step needs gnokey, the gno.land command-line tool, and a key that holds test GNOT on onyx. If you don't have them yet, [Interacting with Gno.land using gnokey](https://docs.gno.land/users/interact-with-gnokey/) covers installing gnokey, making a key and getting test GNOT from the faucet. The commands below name the key `mykey`: use your key's name.
 
 Make a folder named `notify`. Save the realm from step 2 in it as `notify.gno`, and add a file named `gnomod.toml`:
 
@@ -118,7 +106,7 @@ module = "gno.land/r/<you>/notify"
 gno = "0.9"
 ```
 
-Here and in the commands below, replace `<you>` with your address.
+Here and in the commands below, replace `<you>` with your key's address, which starts with `g1`.
 
 From inside the `notify` folder, deploy the realm. gnokey asks for your passphrase:
 
