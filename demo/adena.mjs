@@ -78,6 +78,20 @@ function check(answer, chain, accepted = []) {
 }
 
 /**
+ * findAdena resolves to the injected Adena wallet, or undefined without one.
+ * The extension injects window.adena after the page's scripts run, so a page
+ * still loading is checked again once it has loaded.
+ * @param {{ adena?: Adena, document: { readyState: string }, addEventListener(type: "load", fn: () => void, options: { once: boolean }): void }} win
+ * @returns {Promise<Adena | undefined>}
+ */
+export function findAdena(win) {
+  if (win.adena !== undefined || win.document.readyState === "complete") {
+    return Promise.resolve(win.adena);
+  }
+  return new Promise((resolve) => win.addEventListener("load", () => resolve(win.adena), { once: true }));
+}
+
+/**
  * connect establishes the site with Adena, moves it to chain, and returns the
  * active account's address. It refuses an account on another chain.
  * @param {Adena} adena window.adena

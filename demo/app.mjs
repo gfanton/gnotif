@@ -1,5 +1,5 @@
 import { Gnotif, GnotifError } from "./gnotif.js";
-import { connect, sendEcho } from "./adena.mjs";
+import { connect, findAdena, sendEcho } from "./adena.mjs";
 import { gnokeyCommand } from "./echo-tx.mjs";
 import { chain, echo, gnoweb, server } from "./config.js";
 import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
@@ -9,7 +9,8 @@ const el = (id) => document.getElementById(id);
 // The server cannot read opt-ins back, so the page keeps the last one it set.
 const STORAGE_KEY = "gnotif-demo";
 const realmURL = gnoweb.replace(/\/$/, "") + echo.replace(/^gno\.land/, "");
-const adena = globalThis.adena;
+/** @type {import("./adena.mjs").Adena | undefined} */
+let adena;
 let trigger = null;
 let on = false;
 let pending = Promise.resolve();
@@ -209,8 +210,14 @@ el("realm-link").href = realmURL;
 el("realm-link-foot").href = realmURL;
 el("server").textContent = server;
 el("toast-host").textContent = location.host;
-el("connect").hidden = !adena;
-el("send").hidden = !adena;
+el("connect").hidden = true;
+el("send").hidden = true;
+void findAdena(globalThis).then((found) => {
+  adena = found;
+  el("connect").hidden = adena === undefined;
+  el("send").hidden = adena === undefined;
+  setPrimary();
+});
 renderMessage();
 
 const saved = stored();

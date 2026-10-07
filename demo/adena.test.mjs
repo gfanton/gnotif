@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AdenaError, connect, sendEcho } from "./adena.mjs";
+import { AdenaError, connect, findAdena, sendEcho } from "./adena.mjs";
 import { callMessage, gas } from "./echo-tx.mjs";
 
 const chain = { id: "onyx-1", name: "Gno.land onyx testnet", rpc: "https://rpc.onyx.testnets.gno.land:443" };
@@ -194,4 +194,39 @@ test("a failed AddNetwork stops the sequence", async () => {
   const wallet = fakeAdena({ on: "dev", answers: { AddNetwork: fail("ADD_NETWORK_REJECTED") } });
   await assert.rejects(connect(wallet, chain), (err) => err.type === "ADD_NETWORK_REJECTED");
   assert.ok(!names(wallet).includes("GetAccount"));
+});
+
+/** A window whose document is in readyState, with a load event to fire. */
+function fakeWindow(readyState, adena) {
+  const listeners = [];
+  return {
+    adena,
+    document: { readyState },
+    addEventListener(type, fn) {
+      if (type === "load") {
+        listeners.push(fn);
+      }
+    },
+    load() {
+      listeners.forEach((fn) => fn());
+    },
+  };
+}
+
+test("findAdena answers at once when Adena is already there", async () => {
+  const wallet = {};
+  assert.equal(await findAdena(fakeWindow("loading", wallet)), wallet);
+});
+
+test("findAdena waits for the page to load, as Adena injects itself late", async () => {
+  const win = fakeWindow("interactive", undefined);
+  const found = findAdena(win);
+  const wallet = {};
+  win.adena = wallet;
+  win.load();
+  assert.equal(await found, wallet);
+});
+
+test("findAdena answers undefined on a loaded page without Adena", async () => {
+  assert.equal(await findAdena(fakeWindow("complete", undefined)), undefined);
 });
