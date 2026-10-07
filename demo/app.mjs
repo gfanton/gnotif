@@ -1,5 +1,5 @@
 import { Gnotif, GnotifError } from "./gnotif.js";
-import { connect, findAdena, sendEcho } from "./adena.mjs";
+import { connect, findAdena, sendEcho, shortAddress as short, walletLabel } from "./adena.mjs";
 import { gnokeyCommand } from "./echo-tx.mjs";
 import { chain, echo, gnoweb, server } from "./config.js";
 import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
@@ -30,10 +30,6 @@ function address() {
 
 function message() {
   return el("msg").value.trim() || el("msg").placeholder;
-}
-
-function short(a) {
-  return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
 function say(id, text, isError = false) {
@@ -149,16 +145,21 @@ el("disable").addEventListener("click", async () => {
 });
 
 el("connect").addEventListener("click", async () => {
+  const before = el("connect-label").textContent;
   busy(true);
+  el("connect-label").textContent = walletLabel("pending");
   say("message", "Waiting for Adena…");
   try {
     el("address").value = await connect(adena, chain);
+    el("connect-label").textContent = walletLabel("connected", address());
+    el("connect-dot").hidden = false;
     say("message", `Adena connected as ${short(address())}.`);
     say("mismatch", "");
     if (on) {
       sync();
     }
   } catch (err) {
+    el("connect-label").textContent = before;
     say("message", err.message, true);
   }
   busy(false);
@@ -170,7 +171,9 @@ el("send").addEventListener("click", async () => {
     el("msg").focus();
     return;
   }
+  const before = el("send").textContent;
   busy(true);
+  el("send").textContent = walletLabel("pending");
   say("mismatch", "");
   say("sent", "Waiting for Adena…");
   try {
@@ -182,6 +185,7 @@ el("send").addEventListener("click", async () => {
   } catch (err) {
     say("sent", err.message, true);
   }
+  el("send").textContent = before;
   busy(false);
 });
 

@@ -126,6 +126,7 @@ code, pre { font-family: var(--font-display); font-size: 0.92em; }
 .button.primary:hover { filter: brightness(1.08); }
 .button:disabled { opacity: 0.55; cursor: not-allowed; }
 .button.small { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); letter-spacing: 0.06em; text-transform: uppercase; }
+.button .indicator { margin-right: var(--space-2); }
 
 .field { display: flex; flex-direction: column; gap: var(--space-2); }
 .field label { font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); }
@@ -217,7 +218,7 @@ input:hover { border-color: var(--color-text-muted); }
         <label for="address">Your gno.land address</label>
         <div class="row">
           <input type="text" id="address" class="mono" placeholder="g1…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="address-hint">
-          <button type="button" class="button" id="connect" hidden>Connect Adena</button>
+          <button type="button" class="button" id="connect" hidden><i class="indicator" id="connect-dot" aria-hidden="true" hidden></i><span id="connect-label">Connect Adena</span></button>
         </div>
         <p class="hint" id="address-hint">The address you will send the message from.</p>
       </div>

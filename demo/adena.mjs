@@ -92,6 +92,32 @@ export function findAdena(win) {
 }
 
 /**
+ * @param {string} address
+ * @returns {string} the address cut to its start and end, such as "g1zrjy…z25d"
+ */
+export function shortAddress(address) {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+/**
+ * walletLabel is the text of an Adena button: its action, the wait for the
+ * Adena popup, or the connected account.
+ * @param {"idle" | "pending" | "connected"} state
+ * @param {string} [address] the connected account, for "connected"
+ * @returns {string}
+ */
+export function walletLabel(state, address = "") {
+  switch (state) {
+    case "pending":
+      return "Approve in Adena…";
+    case "connected":
+      return `Adena · ${shortAddress(address)}`;
+    default:
+      return "Connect Adena";
+  }
+}
+
+/**
  * connect establishes the site with Adena, moves it to chain, and returns the
  * active account's address. It refuses an account on another chain.
  * @param {Adena} adena window.adena

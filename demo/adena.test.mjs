@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AdenaError, connect, findAdena, sendEcho } from "./adena.mjs";
+import { AdenaError, connect, findAdena, sendEcho, shortAddress, walletLabel } from "./adena.mjs";
 import { callMessage, gas } from "./echo-tx.mjs";
 
 const chain = { id: "onyx-1", name: "Gno.land onyx testnet", rpc: "https://rpc.onyx.testnets.gno.land:443" };
@@ -229,4 +229,14 @@ test("findAdena waits for the page to load, as Adena injects itself late", async
 
 test("findAdena answers undefined on a loaded page without Adena", async () => {
   assert.equal(await findAdena(fakeWindow("complete", undefined)), undefined);
+});
+
+test("walletLabel says what the Adena button does in each state", () => {
+  assert.equal(walletLabel("idle"), "Connect Adena");
+  assert.equal(walletLabel("pending"), "Approve in Adena…");
+  assert.equal(walletLabel("connected", address), "Adena · g1zrjy…z25d");
+});
+
+test("shortAddress keeps the start and the end of an address", () => {
+  assert.equal(shortAddress(address), "g1zrjy…z25d");
 });
