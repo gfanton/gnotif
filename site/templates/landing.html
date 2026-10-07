@@ -1,6 +1,6 @@
 {{define "title"}}gnotif · Web Push for gno.land dapps{{end}}
 {{define "content"}}
-<section class="hero">
+<section class="hero intro">
   <div class="hero-inner">
   <h1><span class="l1">Realm event in.</span> <span class="l2">Browser notification out.</span></h1>
   <div class="signal" aria-label="A realm event becoming a browser notification">
@@ -91,10 +91,15 @@
   addEventListener('resize', size);
 
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // The ring leaves the dot when it lights, 1.9s into each example.
+  // The ring leaves the dot when it lights. The stylesheet holds that time in
+  // seconds, and it is shorter on narrow screens.
+  function lightsAt() {
+    var css = getComputedStyle(hero);
+    return (parseFloat(css.getPropertyValue('--intro')) + parseFloat(css.getPropertyValue('--t-light'))) * 1000;
+  }
   function echo() {
     if (reduced) return;
-    setTimeout(function () { hero.classList.add('echo'); }, 1900);
+    setTimeout(function () { size(); hero.classList.add('echo'); }, lightsAt());
   }
   hero.addEventListener('animationend', function (e) { if (e.animationName === 'echo') hero.classList.remove('echo'); });
   echo();
@@ -109,6 +114,7 @@
     old.classList.add('leaving'); dots[i].classList.remove('on');
     setTimeout(function () {
       old.classList.remove('active', 'leaving');
+      hero.classList.remove('intro');
       i = (i + 1) % scenes.length;
       scenes[i].classList.add('active'); dots[i].classList.add('on');
       size(); echo();

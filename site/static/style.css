@@ -90,14 +90,6 @@ ul, ol { margin: 0; padding-left: 1.25em; }
 .wordmark .dot { position: absolute; left: 50%; top: 0.08em; width: 0.17em; height: 0.17em; border-radius: 50%; background: var(--color-indicator); transform: translateX(-50%); }
 .wordmark .dot::after { content: ""; position: absolute; inset: -0.35em; border-radius: 50%; border: 0.05em solid var(--color-indicator); opacity: 0; animation: ping 2.4s ease-out infinite; }
 @keyframes ping { 0% { transform: scale(0.3); opacity: 0.9; } 70%, 100% { transform: scale(1.4); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .wordmark .dot::after { animation: none; }
-  .sig-line, .scene.active .sig-line { clip-path: none; animation: none; }
-  .sig-dot .indicator, .sig-dot::before { opacity: 1; animation: none; }
-  .scene.active .sig-dot .indicator::after, .scene.active .sig-pulse, .hero.echo::before { animation: none; }
-  .sig-out .toast, .scene.active .toast { opacity: 1; animation: none; }
-  .scroll-hint svg { animation: none; }
-}
 
 /* ---- Nav and footer */
 .nav, .footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--gutter); }
@@ -122,13 +114,17 @@ ul, ol { margin: 0; padding-left: 1.25em; }
 main > section { padding: var(--space-16) var(--gutter); max-width: 1280px; margin-inline: auto; }
 main > section + section { border-top: 1px solid var(--color-line); }
 
-.hero { position: relative; overflow: clip; isolation: isolate; display: flex; flex-direction: column; justify-content: center; max-width: none; padding-inline: 0; min-height: calc(100svh - 5.5rem); padding-block: var(--space-12) var(--space-16); }
+/* The signal timings are in seconds: the landing script reads --intro and --t-light to time the echo. */
+.hero { --intro: 0s; --t-type: 0.2s; --t-pulse: 1.3s; --t-light: 1.9s; --t-toast: 2.2s; position: relative; overflow: clip; isolation: isolate; display: flex; flex-direction: column; justify-content: center; max-width: none; padding-inline: 0; min-height: calc(100svh - 5.5rem); padding-block: var(--space-12) var(--space-16); }
 .hero-inner { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-12); width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: var(--gutter); }
 /* The echo: one hairline ring leaves the dot as it lights and fades across the hero, behind everything. */
 .hero::before { content: ""; position: absolute; left: var(--echo-x, 50%); top: var(--echo-y, 50%); width: 0; height: 0; border-radius: 50%; border: 1px solid var(--color-indicator-echo); transform: translate(-50%, -50%); opacity: 0; pointer-events: none; z-index: -1; }
 .hero.echo::before { animation: echo 4.2s cubic-bezier(0.25, 0.4, 0.5, 1) forwards; }
 @keyframes echo { 0% { width: 0; height: 0; opacity: 1; } 55% { opacity: 0.6; } 100% { width: 130vmax; height: 130vmax; opacity: 0; } }
-.hero h1 { font-size: clamp(2.4rem, 1.4rem + 4.2vw, 4.75rem); line-height: 1.05; }
+/* The headline comes in first; the example and the buttons follow, and the first example waits for them. */
+.hero.intro { --intro: 0.6s; }
+.hero h1 { font-size: clamp(2rem, 1rem + 4.5vw, 4.75rem); line-height: 1.05; animation: rise 0.6s ease-out both; }
+.hero .signal, .hero-actions { animation: rise 0.6s ease-out 0.35s both; }
 .hero h1 .l1, .hero h1 .l2 { display: inline-block; }
 @media (min-width: 1100px) { .hero h1 .l1, .hero h1 .l2 { white-space: nowrap; } }
 .hero h1 .l2 { color: var(--color-text-muted); }
@@ -154,25 +150,26 @@ main > section + section { border-top: 1px solid var(--color-line); }
 .sig-in .sig-label { grid-column: 1; }
 .sig-out .sig-label { grid-column: 3; }
 .sig-line { grid-column: 1; grid-row: 2; margin: 0; min-width: 0; font-family: var(--font-display); font-size: clamp(0.95rem, 0.45rem + 1.2vw, 1.4rem); line-height: 1.5; color: var(--color-text-muted); white-space: pre-wrap; overflow-wrap: anywhere; clip-path: inset(0 100% 0 0); }
-.scene.active .sig-line { animation: type 1.1s steps(38, end) 0.2s forwards; }
+.scene.active .sig-line { animation: type 1.1s steps(38, end) calc(var(--intro) + var(--t-type)) forwards; }
 .sig-line .ev { color: var(--color-text); }
 .sig-wire { grid-column: 2; grid-row: 2; position: relative; height: 1px; background: repeating-linear-gradient(90deg, var(--color-line) 0 6px, transparent 6px 12px); }
 .sig-pulse { position: absolute; top: 50%; left: 0; width: 2.5rem; height: 2px; transform: translate(-100%, -50%); background: linear-gradient(90deg, transparent, var(--color-indicator)); opacity: 0; }
-.scene.active .sig-pulse { animation: travel 0.7s ease-in 1.3s forwards; }
+.scene.active .sig-pulse { animation: travel 0.7s ease-in calc(var(--intro) + var(--t-pulse)) forwards; }
 .sig-dot { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 50%; background: var(--color-canvas); border: 1px solid var(--color-line); }
 .sig-dot::before { content: ""; position: absolute; inset: -6rem; border-radius: 50%; background: var(--glow-indicator); opacity: 0; pointer-events: none; }
-.scene.active .sig-dot::before { animation: lamp 0.6s ease-out 1.9s forwards; }
+.scene.active .sig-dot::before { animation: lamp 0.6s ease-out calc(var(--intro) + var(--t-light)) forwards; }
 .sig-dot .indicator { width: 0.85rem; height: 0.85rem; position: relative; opacity: 0.3; }
-.scene.active .sig-dot .indicator { animation: light 0.3s ease-out 1.9s forwards; }
+.scene.active .sig-dot .indicator { animation: light 0.3s ease-out calc(var(--intro) + var(--t-light)) forwards; }
 .sig-dot .indicator::after { content: ""; position: absolute; inset: -0.7rem; border-radius: 50%; border: 2px solid var(--color-indicator); opacity: 0; }
-.scene.active .sig-dot .indicator::after { animation: ping 1.4s ease-out 2s 2; }
+.scene.active .sig-dot .indicator::after { animation: ping 1.4s ease-out calc(var(--intro) + var(--t-light) + 0.1s) 2; }
 .sig-out .toast { grid-column: 3; grid-row: 2; opacity: 0; }
-.scene.active .toast { animation: slide 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 2.2s forwards; }
+.scene.active .toast { animation: slide 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--intro) + var(--t-toast)) forwards; }
 .scene-dots { list-style: none; margin: var(--space-8) 0 0; padding: 0; display: flex; gap: var(--space-2); justify-content: center; }
 .scene-dots li { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--color-line); }
 .scene-dots li.on { background: var(--color-indicator); }
 @keyframes type { to { clip-path: inset(0 -2% 0 0); } }
 @keyframes travel { 0% { opacity: 1; left: 0; } 100% { opacity: 0; left: 50%; } }
+@keyframes travel-down { 0% { opacity: 1; top: 0; } 100% { opacity: 0; top: 50%; } }
 @keyframes lamp { to { opacity: 1; } }
 @keyframes light { to { opacity: 1; } }
 @keyframes slide { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
@@ -257,14 +254,18 @@ main > section + section { border-top: 1px solid var(--color-line); }
   .step { grid-template-columns: 1fr; }
   .hero { min-height: 0; }
   .scroll-hint { display: none; }
-  .scene { grid-template-columns: 1fr; grid-template-rows: none; gap: var(--space-4); }
-  .sig-in, .sig-out { display: block; min-width: 0; }
+  .hero { --t-pulse: 0.3s; --t-light: 0.8s; --t-toast: 1.1s; }
+  .scene { grid-template-columns: 1fr; grid-template-rows: none; gap: var(--space-4); justify-items: center; text-align: center; }
+  .sig-in, .sig-out { display: block; width: 100%; min-width: 0; }
   .sig-label, .sig-line, .sig-wire, .sig-out .toast { grid-column: auto; grid-row: auto; }
   .sig-label { display: block; margin-bottom: var(--space-3); }
+  .sig-line { text-wrap-style: balance; }
   .sig-line, .scene.active .sig-line { clip-path: none; animation: none; }
-  .sig-wire { height: 3.5rem; width: 1px; justify-self: start; margin-left: 1.5rem; background: repeating-linear-gradient(180deg, var(--color-line) 0 6px, transparent 6px 12px); }
-  .sig-pulse { display: none; }
+  .sig-wire { height: var(--space-24); width: 1px; background: repeating-linear-gradient(180deg, var(--color-line) 0 6px, transparent 6px 12px); }
+  .sig-pulse { left: 50%; top: 0; width: 2px; height: var(--space-8); transform: translate(-50%, -100%); background: linear-gradient(180deg, transparent, var(--color-indicator)); }
+  .scene.active .sig-pulse { animation: travel-down 0.5s ease-in calc(var(--intro) + var(--t-pulse)) forwards; }
   .sig-dot::before { inset: -3rem; }
+  .sig-out .toast { margin-inline: auto; text-align: left; }
   .flow { grid-template-columns: 1fr; }
   .node + .node::before { content: "↓"; left: var(--space-4); top: calc(-1 * var(--space-4)); width: auto; transform: translate(0, -50%); }
   .docs { grid-template-columns: 1fr; gap: var(--space-6); }
@@ -277,4 +278,15 @@ main > section + section { border-top: 1px solid var(--color-line); }
 @media (max-width: 600px) {
   .nav nav a:not(:first-child), .install { display: none; }
   .actions, .actions .button { width: 100%; text-align: center; }
+}
+
+/* Reduced motion: everything in place at once. Last in the file, so it wins over every animation above. */
+@media (prefers-reduced-motion: reduce) {
+  .wordmark .dot::after { animation: none; }
+  .hero h1, .hero .signal, .hero-actions { animation: none; }
+  .sig-line, .scene.active .sig-line { clip-path: none; animation: none; }
+  .sig-dot .indicator, .sig-dot::before { opacity: 1; }
+  .scene.active .sig-dot .indicator, .scene.active .sig-dot::before, .scene.active .sig-dot .indicator::after, .scene.active .sig-pulse, .hero.echo::before { animation: none; }
+  .sig-out .toast, .scene.active .toast { opacity: 1; animation: none; }
+  .scroll-hint svg { animation: none; }
 }
