@@ -165,6 +165,6 @@ func init(cur realm) {
 }
 ```
 
-No trigger watches `GameInvited`, since anyone can invite any address ([Who an event can notify](../docs/triggers.md#who-an-event-can-notify)). A player's first notification is a turn, which comes only after they accept the game.
+No trigger watches `GameInvited`, since anyone can invite any address ([Who an event can notify](../docs/triggers.md#who-an-event-can-notify)). No player hears of a game before the invited player accepts it, since `Play` refuses a game that has not started.
 
 The test in [`e2e/`](../e2e) runs pingpong on a local chain with tx-indexer and gnotifd: one player opens a game, the other accepts, and only the turns passed to the opted-in player send a push. `make e2e` runs it.

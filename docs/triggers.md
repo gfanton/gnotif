@@ -25,7 +25,7 @@ The trigger's declarer is the realm's address, so only the realm can remove it, 
 
 ## The verified mark
 
-A trigger that a realm declares for itself, as above, carries the [verified mark](how-it-works.md#what-the-verified-mark-means).
+A trigger that a realm declares for itself from `init` carries the [verified mark](how-it-works.md#what-the-verified-mark-means).
 
 Anyone can also call `Declare` directly, as a transaction, with any target. The registry stores such a trigger without the mark, and its declarer pays its storage deposit. gnotifd ignores it ([How gnotif works](how-it-works.md#triggers-come-from-the-registrys-events)).
 

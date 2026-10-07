@@ -65,7 +65,7 @@ Install the package:
 npm install gnotif
 ```
 
-The browser shows notifications through a [service worker](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API), a script that keeps running after your page is closed. A browser only accepts one served by your own site, so copy the package's to the folder your site serves at its root, such as `public/` in Vite or Next.js:
+The browser shows notifications through a [service worker](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API), a script the browser runs for your site even when the page is closed. A browser only accepts one served by your own site, so copy the package's `sw.js` to the folder your site serves at its root, such as `public/` in Vite or Next.js:
 
 ```sh
 cp node_modules/gnotif/src/sw.js public/sw.js
