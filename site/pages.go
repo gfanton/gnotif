@@ -29,6 +29,7 @@ const (
 	repoBlobURL = repoURL + "/blob/main/"
 	repoEditURL = repoURL + "/edit/main/"
 	serverURL   = "https://gnotif.xyz"
+	demoURL     = "https://demo.gnotif.xyz"
 	npmURL      = "https://www.npmjs.com/package/gnotif"
 
 	// registryPath is the registry behind serverURL. The placeholder
