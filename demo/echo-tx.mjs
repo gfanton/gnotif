@@ -21,7 +21,7 @@ export function shellQuote(s) {
 export function gnokeyCommand(chain, pkgPath, msg) {
   return `gnokey maketx call -pkgpath ${pkgPath} -func Echo -args ${shellQuote(msg)}`
     + ` -gas-wanted ${gas.wanted} -gas-fee ${gas.fee}ugnot`
-    + ` -chainid ${chain.id} -remote ${chain.rpc} -broadcast <your key>`;
+    + ` -chainid ${chain.id} -remote ${chain.rpc} <your key>`;
 }
 
 /**

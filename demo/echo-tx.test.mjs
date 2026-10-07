@@ -21,12 +21,12 @@ test("shellQuote escapes a single quote as '\\''", () => {
   assert.equal(shellQuote("''"), "''\\'''\\'''");
 });
 
-test("gnokeyCommand builds a broadcast call to Echo on the configured chain", () => {
+test("gnokeyCommand builds a call to Echo on the configured chain", () => {
   assert.equal(
     gnokeyCommand(chain, pkgPath, "hello"),
     "gnokey maketx call -pkgpath gno.land/r/dev/echo/v0 -func Echo -args 'hello'"
       + ` -gas-wanted ${gas.wanted} -gas-fee ${gas.fee}ugnot`
-      + " -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 -broadcast <your key>",
+      + " -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 <your key>",
   );
 });
 
