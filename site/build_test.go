@@ -86,7 +86,7 @@ func TestBuildLanding(t *testing.T) {
 	assert.Contains(t, html, "Browser notification out.")
 	assert.Contains(t, html, `href="/docs/getting-started/" class="button primary">Add it to your dapp`)
 	assert.Contains(t, html, `href="https://demo.gnotif.xyz" class="button">Try the demo`)
-	assert.Contains(t, html, `<a href="https://demo.gnotif.xyz">Demo</a>`, "the nav links the demo")
+	assert.Equal(t, 2, strings.Count(html, `<a href="https://demo.gnotif.xyz">Demo</a>`), "the nav and the footer link the demo")
 	assert.Contains(t, html, `class="hero-more" href="#how"`)
 	assert.Contains(t, html, `<section class="flow-section" id="how">`)
 	assert.Contains(t, html, `class="scroll-hint"`)
