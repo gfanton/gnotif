@@ -19,6 +19,7 @@ func Echo(cur realm, msg string) {
 	chain.Emit("Echo", "to", cur.Previous().Address().String(), "msg", msg)
 }
 
+// Render serves one page for every path: what Echo does and where to try it.
 func Render(_ string) string {
 	return "# Echo\n\n" +
 		"Call `Echo` with a message, and gnotif shows it as a notification in the browsers " +

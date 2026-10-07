@@ -43,6 +43,8 @@ jobs:
           cache-dependency-path: js/package-lock.json
       - run: npm ci
       - run: npm test
+      - run: node --test 'demo/*.test.mjs'
+        working-directory: .
       - run: npm run check
       - run: npm run types
 

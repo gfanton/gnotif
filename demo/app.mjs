@@ -1,8 +1,8 @@
 import { Gnotif, GnotifError } from "./gnotif.js";
-import { isAddress } from "./address.mjs";
 import { connect, sendEcho } from "./adena.mjs";
 import { gnokeyCommand } from "./echo-tx.mjs";
 import { chain, echo, gnoweb, server } from "./config.js";
+import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
 
 const gnotif = new Gnotif({ server, serviceWorker: "/sw.js" });
 const el = (id) => document.getElementById(id);
@@ -49,16 +49,8 @@ function errorText(err) {
   return err.message;
 }
 
-// optin throws when the address is empty or malformed.
 function optin() {
-  const a = address();
-  if (!a) {
-    throw new Error("Enter your address, or connect Adena.");
-  }
-  if (!isAddress(a)) {
-    throw new Error(`"${a}" isn't a valid gno address. Expected g1 followed by 38 letters and digits.`);
-  }
-  return [{ trigger: trigger.id, value: a }];
+  return optinsFor(trigger, address());
 }
 
 async function setOptin() {
@@ -102,17 +94,17 @@ function sync() {
 }
 
 function busy(state) {
-  for (const id of ["enable", "disable", "connect", "send"]) {
+  for (const id of ["disable", "connect", "send"]) {
     el(id).disabled = state;
   }
+  el("enable").disabled = !canEnable(state, trigger);
 }
 
 function noteMismatch(caller) {
-  const a = address();
-  const differs = a !== "" && caller !== a;
-  say("mismatch", differs
-    ? `Adena sends from ${short(caller)}, but this browser listens for ${short(a)}. The notification goes to ${short(caller)}.`
-    : "");
+  const listening = listenerMismatch(caller, on, stored());
+  say("mismatch", listening === undefined
+    ? ""
+    : `Adena sends from ${short(caller)}, but this browser listens for ${short(listening)}. The notification goes to ${short(caller)}.`);
 }
 
 function renderMessage() {
@@ -178,6 +170,7 @@ el("send").addEventListener("click", async () => {
     return;
   }
   busy(true);
+  say("mismatch", "");
   say("sent", "Waiting for Adena…");
   try {
     const { caller, hash } = await sendEcho(adena, chain, echo, message());
@@ -225,8 +218,8 @@ if (saved) {
   el("address").value = saved.address;
 }
 try {
-  [trigger] = await gnotif.triggers(echo);
-  if (!trigger) {
+  [trigger = null] = await gnotif.triggers(echo);
+  if (trigger === null) {
     say("message", `${server} lists no trigger for ${echo} yet. Deploy the echo realm first.`, true);
   } else {
     el("toast-title").textContent = trigger.title;
@@ -235,7 +228,7 @@ try {
 } catch (err) {
   say("message", `Cannot load the echo trigger from ${server}: ${err.message}`, true);
 }
-el("enable").disabled = !trigger;
+el("enable").disabled = !canEnable(false, trigger);
 try {
   await refresh();
   if (!on && saved) {

@@ -8,7 +8,7 @@ This folder holds the realms and the page:
 |---|---|
 | `gno.land/r/echo/v0/` | the echo realm, which the page calls |
 | `gno.land/r/pingpong/v0/` | pingpong, an example of a two-player dapp |
-| `index.html`, `app.mjs`, `address.mjs`, `adena.mjs`, `echo-tx.mjs` | the page, a static dapp that opts the browser in with the `gnotif` client |
+| `index.html`, `app.mjs`, `address.mjs`, `adena.mjs`, `echo-tx.mjs`, `optin.mjs` | the page, a static dapp that opts the browser in with the `gnotif` client |
 | `config.js` | the gnotif server, the echo realm, the chain and the gnoweb that the page uses |
 
 ## The echo realm

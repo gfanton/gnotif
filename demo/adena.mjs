@@ -1,9 +1,34 @@
-// The Adena sequence, against the injected window.adena. Every answer is
-// { status, type, message, data }; the page branches on `type` only, since
-// the numeric codes differ between the extension and its SDK.
+// The Adena sequence, against the injected window.adena. The page branches on
+// an answer's `status` and `type`, never on its numeric `code`, since the codes
+// differ between the extension and its SDK.
 import { callMessage, gas } from "./echo-tx.mjs";
 
 const SITE = "gnotif demo";
+
+/**
+ * An answer from window.adena. `message` is Adena's fixed description of
+ * `type`. `data` holds D on success, and a failure's details otherwise, such
+ * as the chain's reason for a failed transaction in `error`.
+ * @template D
+ * @typedef {{ status: string, type: string, message: string, data: D & { error?: unknown } }} Answer
+ */
+
+/**
+ * The window.adena methods the demo calls.
+ * @typedef {object} Adena
+ * @property {(site: string) => Promise<Answer<unknown>>} AddEstablish
+ * @property {() => Promise<Answer<{ chainId: string }>>} GetNetwork
+ * @property {(chainId: string) => Promise<Answer<unknown>>} SwitchNetwork
+ * @property {(network: { chainId: string, chainName: string, rpcUrl: string }) => Promise<Answer<unknown>>} AddNetwork
+ * @property {() => Promise<Answer<{ address: string, chainId: string }>>} GetAccount
+ * @property {(params: {
+ *   messages: ReturnType<typeof callMessage>[],
+ *   memo?: string,
+ *   gasFee?: number,
+ *   gasWanted?: number,
+ *   networkInfo?: { chainId: string, rpcUrl: string },
+ * }) => Promise<Answer<{ hash?: string }>>} DoContract
+ */
 
 /** A failure Adena reported, with its `type` and a message for the visitor. */
 export class AdenaError extends Error {
@@ -20,13 +45,14 @@ export class AdenaError extends Error {
 
 /**
  * @param {{ name: string }} chain
- * @param {string} detail Adena's own message, as ": <message>", or ""
+ * @param {string} reason the chain's reason for a failed transaction, as ": <reason>", or ""
+ * @returns {Record<string, string | undefined>}
  */
-const messages = (chain, detail) => ({
+const messages = (chain, reason) => ({
   TRANSACTION_REJECTED: "You rejected the transaction in Adena.",
   WALLET_LOCKED: "Adena is locked. Unlock it, then try again.",
   NETWORK_TIMEOUT: `Adena could not reach ${chain.name}. Try again in a moment.`,
-  TRANSACTION_FAILED: `The transaction failed on the chain${detail}.`,
+  TRANSACTION_FAILED: `The transaction failed on the chain${reason}.`,
   ACCOUNT_MISMATCH: "Adena's active account changed. Connect again.",
   UNADDED_NETWORK: `Adena does not know the ${chain.name} network.`,
 });
@@ -34,23 +60,27 @@ const messages = (chain, detail) => ({
 /**
  * check returns the answer when Adena reports success, or one of the
  * accepted failure types, and throws an AdenaError otherwise.
- * @param {{ status: string, type: string, message?: string }} answer
+ * @template D
+ * @param {Answer<D>} answer
  * @param {{ name: string }} chain
  * @param {string[]} accepted failure types that count as success here
+ * @returns {Answer<D>}
  */
 function check(answer, chain, accepted = []) {
   if (answer.status === "success" || accepted.includes(answer.type)) {
     return answer;
   }
-  const detail = answer.message ? `: ${answer.message}` : "";
-  const known = messages(chain, detail)[answer.type];
-  throw new AdenaError(answer.type, known ?? `Adena answered ${answer.type}${detail}.`);
+  const error = answer.data?.error;
+  const reason = typeof error === "string" && error !== "" ? `: ${error}` : "";
+  const known = messages(chain, reason)[answer.type];
+  const description = answer.message === "" ? "." : `: ${answer.message}`;
+  throw new AdenaError(answer.type, known ?? `Adena answered ${answer.type}${description}`);
 }
 
 /**
  * connect establishes the site with Adena, moves it to chain, and returns the
  * active account's address. It refuses an account on another chain.
- * @param {object} adena window.adena
+ * @param {Adena} adena window.adena
  * @param {{ id: string, name: string, rpc: string }} chain
  * @returns {Promise<string>}
  */
@@ -75,7 +105,7 @@ export async function connect(adena, chain) {
 /**
  * sendEcho connects, then has Adena sign and broadcast Echo(msg) from the
  * active account.
- * @param {object} adena window.adena
+ * @param {Adena} adena window.adena
  * @param {{ id: string, name: string, rpc: string }} chain
  * @param {string} pkgPath the echo realm
  * @param {string} msg
@@ -88,6 +118,7 @@ export async function sendEcho(adena, chain, pkgPath, msg) {
     gasFee: gas.fee,
     gasWanted: gas.wanted,
     memo: "",
+    networkInfo: { chainId: chain.id, rpcUrl: chain.rpc },
   });
   if (sent.type !== "TRANSACTION_SUCCESS") {
     check({ ...sent, status: "failure" }, chain);

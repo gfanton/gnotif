@@ -8,7 +8,9 @@ const pkgPath = "gno.land/r/dev/echo/v0";
 const address = "g1zrjyzatudmadgqu39d5wfamhdvf0adwlxkz25d";
 
 const ok = (type, data) => ({ code: 0, status: "success", type, message: type, data });
-const fail = (type, message = type) => ({ code: 4000, status: "failure", type, message, data: null });
+// Adena's `message` is a fixed description of the type; the details, such as
+// the chain's reason for a failed transaction, are in `data`.
+const fail = (type, data = {}, message = `Adena's description of ${type}.`) => ({ code: 4000, status: "failure", type, message, data });
 
 // fakeAdena answers like the extension's window.adena and records every call.
 // `on` is the wallet's current chain, `known` the chains it can switch to without
@@ -99,7 +101,8 @@ test("sendEcho runs the sequence and calls Echo with the message", async () => {
     gasFee: gas.fee,
     gasWanted: gas.wanted,
     memo: "",
-  });
+    networkInfo: { chainId: chain.id, rpcUrl: chain.rpc },
+  }, "networkInfo pins the chain Adena signs for");
 });
 
 test("sendEcho never calls DoContract when the account is on another chain", async () => {
@@ -107,6 +110,35 @@ test("sendEcho never calls DoContract when the account is on another chain", asy
   await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello"), AdenaError);
   assert.ok(!names(wallet).includes("DoContract"));
 });
+
+// Each refusal names the wallet options, the failure type sendEcho throws, and
+// the calls made up to the refusal.
+const refusals = {
+  "GetNetwork fails": [{ answers: { GetNetwork: fail("WALLET_LOCKED") } }, "WALLET_LOCKED", ["AddEstablish", "GetNetwork"]],
+  "GetAccount fails": [{ answers: { GetAccount: fail("NO_ACCOUNT") } }, "NO_ACCOUNT", ["AddEstablish", "GetNetwork", "GetAccount"]],
+  "the visitor rejects the switch": [
+    { on: "dev", answers: { SwitchNetwork: fail("SWITCH_NETWORK_REJECTED") } },
+    "SWITCH_NETWORK_REJECTED",
+    ["AddEstablish", "GetNetwork", "SwitchNetwork"],
+  ],
+  // AddNetwork answers success without adding the chain, so the second switch still finds it unadded.
+  "the switch after AddNetwork fails": [
+    { on: "dev", answers: { AddNetwork: ok("ADD_NETWORK_SUCCESS", {}) } },
+    "UNADDED_NETWORK",
+    ["AddEstablish", "GetNetwork", "SwitchNetwork", "AddNetwork", "SwitchNetwork"],
+  ],
+};
+for (const [name, [options, type, calls]] of Object.entries(refusals)) {
+  test(`sendEcho never calls DoContract when ${name}`, async () => {
+    const wallet = fakeAdena(options);
+    await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello"), (err) => {
+      assert.ok(err instanceof AdenaError);
+      assert.equal(err.type, type);
+      return true;
+    });
+    assert.deepEqual(names(wallet), calls);
+  });
+}
 
 test("sendEcho maps each failure type to its own message", async () => {
   const cases = {
@@ -118,7 +150,7 @@ test("sendEcho maps each failure type to its own message", async () => {
   };
   const messages = new Set();
   for (const [type, pattern] of Object.entries(cases)) {
-    const wallet = fakeAdena({ answers: { DoContract: fail(type, "details from adena") } });
+    const wallet = fakeAdena({ answers: { DoContract: fail(type) } });
     await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello"), (err) => {
       assert.ok(err instanceof AdenaError, type);
       assert.equal(err.type, type);
@@ -130,18 +162,25 @@ test("sendEcho maps each failure type to its own message", async () => {
   assert.equal(messages.size, Object.keys(cases).length, "each type has its own message");
 });
 
-test("a rejection stands alone, a chain failure carries Adena's detail", async () => {
-  const rejected = fakeAdena({ answers: { DoContract: fail("TRANSACTION_REJECTED", "user rejected") } });
+test("a rejection stands alone, a chain failure carries the chain's reason", async () => {
+  const rejected = fakeAdena({ answers: { DoContract: fail("TRANSACTION_REJECTED") } });
   await assert.rejects(sendEcho(rejected, chain, pkgPath, "hello"), { message: "You rejected the transaction in Adena." });
-  const failed = fakeAdena({ answers: { DoContract: fail("TRANSACTION_FAILED", "out of gas") } });
+  const failed = fakeAdena({ answers: { DoContract: fail("TRANSACTION_FAILED", { hash: "abc123", error: "out of gas" }) } });
   await assert.rejects(sendEcho(failed, chain, pkgPath, "hello"), { message: "The transaction failed on the chain: out of gas." });
 });
 
+test("a chain failure without a reason says only that it failed", async () => {
+  for (const data of [{ hash: "abc123", error: null }, {}]) {
+    const wallet = fakeAdena({ answers: { DoContract: fail("TRANSACTION_FAILED", data) } });
+    await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello"), { message: "The transaction failed on the chain." });
+  }
+});
+
 test("an unknown failure type keeps Adena's own message", async () => {
-  const wallet = fakeAdena({ answers: { AddEstablish: fail("NOT_CONNECTED", "connection refused by user") } });
+  const wallet = fakeAdena({ answers: { AddEstablish: fail("NOT_CONNECTED", {}, "A connection has not been established.") } });
   await assert.rejects(connect(wallet, chain), (err) => {
     assert.equal(err.type, "NOT_CONNECTED");
-    assert.match(err.message, /connection refused by user/);
+    assert.equal(err.message, "Adena answered NOT_CONNECTED: A connection has not been established.");
     return true;
   });
 });

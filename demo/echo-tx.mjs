@@ -29,6 +29,10 @@ export function gnokeyCommand(chain, pkgPath, msg) {
  * @param {string} caller
  * @param {string} pkgPath
  * @param {string} msg
+ * @returns {{
+ *   type: "/vm.m_call",
+ *   value: { caller: string, send: string, max_deposit: string, pkg_path: string, func: string, args: string[] },
+ * }}
  */
 export function callMessage(caller, pkgPath, msg) {
   return {
