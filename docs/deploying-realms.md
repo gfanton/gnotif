@@ -13,7 +13,7 @@ These steps deploy a gnotif registry to onyx (`onyx-1`), for an operator who run
 make deploy-pkgs NS=gno.land/r/<namespace>
 ```
 
-This writes `.tools/deploy/gnotif/v0`, and pingpong's copy for the demo in `.tools/deploy/pingpong/v0`, without their tests. It rewrites every `gno.land/r/dev` in them to your namespace: both module paths and pingpong's import of the registry.
+This writes `.tools/deploy/gnotif/v0`, the demo's echo realm in `.tools/deploy/echo/v0` and the pingpong example in `.tools/deploy/pingpong/v0`, without their tests. It rewrites every `gno.land/r/dev` in them to your namespace: the module paths and the realms' imports of the registry.
 
 ## 2. Check the copies for personal data
 

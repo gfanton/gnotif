@@ -38,7 +38,7 @@ gnotif.xyz is a public gnotifd that any dapp can use. To run your own, follow [R
 - [HTTP API](docs/http-api.md): the `/v1` endpoints and their errors.
 - [Running gnotifd](docs/running-gnotifd.md): flags, VAPID keys, the push service allowlist, the indexer, backups and the container image.
 - [Deploying the registry](docs/deploying-realms.md): deploy your own registry on onyx.
-- [The demo](demo/README.md): pingpong, run on a local chain or deployed to onyx.
+- [The demo](demo/README.md): echo, which sends you your own message as a notification, run on a local chain or deployed to onyx. pingpong, a two-player example, sits beside it.
 
 ## Develop
 
