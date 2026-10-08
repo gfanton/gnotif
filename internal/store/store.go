@@ -84,7 +84,8 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("read schema version: %w", err)
 	}
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table'`).Scan(&tables); err != nil {
+	// Litestream adds its own tables, possibly before the first Open.
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\_litestream\_%' ESCAPE '\'`).Scan(&tables); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("count tables: %w", err)
 	}

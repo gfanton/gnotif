@@ -478,6 +478,35 @@ func TestOpenRefusesOldSchema(t *testing.T) {
 	open(t, path)
 }
 
+func TestOpenIgnoresLitestreamTables(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "replicated.db")
+	replicated, err := sql.Open("sqlite", "file:"+path)
+	require.NoError(t, err)
+	_, err = replicated.Exec(`CREATE TABLE _litestream_seq (id INTEGER PRIMARY KEY, seq INTEGER); CREATE TABLE _litestream_lock (id INTEGER)`)
+	require.NoError(t, err)
+	require.NoError(t, replicated.Close())
+
+	s := open(t, path)
+	var version int
+	require.NoError(t, s.db.QueryRow(`PRAGMA user_version`).Scan(&version))
+	assert.Equal(t, schemaVersion, version)
+	require.NoError(t, s.Close())
+
+	open(t, path)
+}
+
+func TestOpenRefusesOldSchemaBesideLitestreamTables(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	old, err := sql.Open("sqlite", "file:"+path)
+	require.NoError(t, err)
+	_, err = old.Exec(`CREATE TABLE cursor (id INTEGER PRIMARY KEY CHECK (id = 1), height_done INTEGER NOT NULL, bound INTEGER NOT NULL); CREATE TABLE _litestream_seq (id INTEGER PRIMARY KEY, seq INTEGER)`)
+	require.NoError(t, err)
+	require.NoError(t, old.Close())
+
+	_, err = Open(context.Background(), path)
+	require.ErrorIs(t, err, ErrSchemaVersion)
+}
+
 func TestOpenRefusesNewerSchema(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "newer.db")
