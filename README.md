@@ -44,7 +44,7 @@ gnotif.xyz is a public gnotifd that any dapp can use. To run your own, follow [R
 
 ## Develop
 
-`make test` runs the realm tests, the Go tests and the browser client's tests. It needs Go, Node.js and gno v1.5.0, the release onyx runs, which CI pins as `GNO_VERSION` in [ci.yml](.github/workflows/ci.yml):
+`make test` runs the realm tests, the Go tests and the browser client's tests. It needs Go, Node.js and gno v1.5.0, the release onyx runs, which the [Makefile](Makefile) pins as `GNO_REF` for CI too:
 
 ```sh
 GOBIN=$HOME/.cache/gno-toolchains/onyx go install github.com/gnolang/gno/gnovm/cmd/gno@v1.5.0
