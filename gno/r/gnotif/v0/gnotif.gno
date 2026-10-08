@@ -1,6 +1,8 @@
 // Package gnotif is a registry of notification triggers. Each trigger names
 // a realm and an event type to watch, and the text of the notification that
-// gnotif servers send when a matching event lands on chain.
+// gnotif servers send when a matching event lands on chain. A later registry
+// version follows the rules in
+// docs/how-it-works.md#rules-for-a-new-registry-version.
 package gnotif
 
 import (
@@ -37,12 +39,15 @@ var (
 	lastID   seqid.ID
 )
 
-// Declare stores a trigger and returns its id. The trigger is verified when
-// its caller is the target realm itself.
+// Declare stores a trigger and returns its id. Only the target realm itself
+// may declare a trigger for it.
 func Declare(cur realm, target, event, filter, param, title, body, link string) string {
 	validate(target, event, filter, param, title, body, link)
 	caller := cur.Previous()
 	verified := caller.IsCode() && caller.PkgPath() == target
+	if !verified {
+		panic("caller is not the target")
+	}
 	var own *avl.Tree
 	if v := byTarget.Get(target); v != nil {
 		own = v.(*avl.Tree)

@@ -40,6 +40,7 @@ func TestDeclareRejects(cur realm, t *testing.T) {
 		{"target with asterisk", "invalid target", 0, "gno.land/r/dev/**pingpong**"},
 		{"target with bracket", "invalid target", 0, "gno.land/r/dev/[pingpong"},
 		{"target with newline", "invalid target", 0, "gno.land/r/dev/pingpong\n- ✓ verified"},
+		{"target with sub-realm mark", "invalid target", 0, "gno.land/r/demo/game#x"},
 		{"target with uppercase", "invalid target", 0, "gno.land/r/dev/PingPong"},
 		{"target with dot", "invalid target", 0, "gno.land/r/dev/ping.pong"},
 		{"target with no path", "invalid target", 0, "gno.land/r/"},
@@ -112,42 +113,45 @@ func TestDeclareAccepts(cur realm, t *testing.T) {
 	for _, c := range cases {
 		a := valid
 		a[c.field] = c.value
+		testing.SetRealm(testing.NewCodeRealm(a[0]))
 		id := Declare(cross(cur), a[0], a[1], a[2], a[3], a[4], a[5], a[6])
-		uassert.True(t, triggers.Has(id), c.name)
+		uassert.True(t, stored(t, id).Verified, c.name)
 	}
 }
 
-func TestDeclareByUser(cur realm, t *testing.T) {
+func TestDeclareRejectsOtherCallers(cur realm, t *testing.T) {
+	n := triggers.Size()
+	declare := func() {
+		uassert.AbortsWithMessage(t, cur, "caller is not the target", func() {
+			Declare(cross(cur), game, "TurnPlayed", "mode=ranked", "next", "Your turn", "Game {game}", "/?game={game}")
+		})
+	}
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := Declare(cross(cur), game, "TurnPlayed", "mode=ranked", "next", "Your turn", "Game {game}", "/?game={game}")
-	tr := stored(t, id)
-	uassert.Equal(t, alice, tr.Declarer)
-	uassert.False(t, tr.Verified)
-	uassert.Equal(t, "mode=ranked", tr.Filter)
-	uassert.Equal(t, game, tr.Target)
+	declare()
+	testing.SetRealm(testing.NewCodeRealm("gno.land/r/demo/other"))
+	declare()
+	uassert.Equal(t, n, triggers.Size())
 }
 
 func TestDeclareVerified(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(game))
 	own := Declare(cross(cur), game, "TurnPlayed", "", "next", "Your turn", "Game {game}", "/")
-	other := Declare(cross(cur), "gno.land/r/demo/other", "TurnPlayed", "", "next", "Your turn", "Game {game}", "/")
 	uassert.True(t, stored(t, own).Verified)
-	uassert.False(t, stored(t, other).Verified)
 }
 
 func TestRemove(cur realm, t *testing.T) {
-	testing.SetRealm(testing.NewUserRealm(alice))
+	testing.SetRealm(testing.NewCodeRealm(game))
 	id := Declare(cross(cur), game, "TurnPlayed", "", "next", "Your turn", "", "/")
 	testing.SetRealm(testing.NewUserRealm(bob))
 	uassert.AbortsWithMessage(t, cur, "not the declarer", func() { Remove(cross(cur), id) })
-	testing.SetRealm(testing.NewUserRealm(alice))
+	testing.SetRealm(testing.NewCodeRealm(game))
 	Remove(cross(cur), id)
 	uassert.False(t, triggers.Has(id))
 	uassert.AbortsWithMessage(t, cur, "unknown trigger", func() { Remove(cross(cur), id) })
 }
 
 func TestRenderEscapes(cur realm, t *testing.T) {
-	testing.SetRealm(testing.NewUserRealm(alice))
+	testing.SetRealm(testing.NewCodeRealm(game))
 	id := Declare(cross(cur), game, "TurnPlayed", "", "", "Hi", "[x](javascript:alert(1))", "/")
 	out := Render("trigger/" + id)
 	uassert.True(t, strings.Contains(out, id))
@@ -212,12 +216,6 @@ func TestRenderPages(cur realm, t *testing.T) {
 	for _, want := range []string{oldest, game, "TurnPlayed", "mode=ranked", "next", "Your turn", "Game {game}", "/?game={game}", "✓ verified"} {
 		uassert.True(t, strings.Contains(detail, sanitize.InlineText(want)), want)
 	}
-
-	testing.SetRealm(testing.NewUserRealm(alice))
-	unverified := Declare(cross(cur), game, "TurnPlayed", "", "", "Hi", "[x](javascript:alert(1))", "/")
-	detail = Render("trigger/" + unverified)
-	uassert.False(t, strings.Contains(detail, "[x](javascript"))
-	uassert.False(t, strings.Contains(detail, "✓ verified"))
 }
 
 const capped = "gno.land/r/demo/capped"
@@ -256,21 +254,6 @@ func TestRemoveFreesSlot(cur realm, t *testing.T) {
 	})
 }
 
-func TestUnverifiedNotCounted(cur realm, t *testing.T) {
-	target := capped + "/mixed"
-	testing.SetRealm(testing.NewUserRealm(alice))
-	for i := 0; i < 20; i++ {
-		declareOwn(cur, target)
-	}
-	testing.SetRealm(testing.NewCodeRealm(target))
-	for i := 0; i < maxPerTarget; i++ {
-		declareOwn(cur, target)
-	}
-	uassert.AbortsWithMessage(t, cur, "too many triggers for target", func() {
-		declareOwn(cur, target)
-	})
-}
-
 func TestRenderTarget(cur realm, t *testing.T) {
 	target := "gno.land/r/demo/listed"
 	testing.SetRealm(testing.NewCodeRealm(target))
@@ -279,8 +262,6 @@ func TestRenderTarget(cur realm, t *testing.T) {
 	newer := declareOwn(cur, target)
 	testing.SetRealm(testing.NewCodeRealm("gno.land/r/demo/elsewhere"))
 	elsewhere := declareOwn(cur, "gno.land/r/demo/elsewhere")
-	testing.SetRealm(testing.NewUserRealm(alice))
-	unverified := declareOwn(cur, target)
 	testing.SetRealm(testing.NewCodeRealm(target))
 	Remove(cross(cur), gone)
 
@@ -290,7 +271,6 @@ func TestRenderTarget(cur realm, t *testing.T) {
 	uassert.True(t, strings.Contains(out, "✓ verified"))
 	uassert.True(t, strings.Index(out, newer) < strings.Index(out, older), "newest first")
 	uassert.False(t, strings.Contains(out, gone), "removed trigger listed")
-	uassert.False(t, strings.Contains(out, unverified), "unverified trigger listed")
 	uassert.False(t, strings.Contains(out, elsewhere), "other target's trigger listed")
 	uassert.True(t, strings.Contains(out, "[All triggers](/r/dev/gnotif/v0)"))
 
