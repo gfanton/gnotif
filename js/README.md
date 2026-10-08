@@ -30,7 +30,7 @@ const gnotif = new Gnotif({ network: "onyx", serviceWorker: "/sw.js" });
 ```
 
 `network` names the gno.land network and its hosted server: `"onyx"`,
-served by https://gnotif.xyz/onyx, is the default and the only one for
+served by `https://gnotif.xyz/onyx`, is the default and the only one for
 now. `server` points the client at another gnotif server, such as your
 own gnotifd; `network` is then only a label. `gnotif.network` and
 `gnotif.server` read both back. `serviceWorker` is the URL

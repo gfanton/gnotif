@@ -44,6 +44,7 @@ func TestBuildDocs(t *testing.T) {
 				last = at
 			}
 			assert.Contains(t, html, `aria-current="page" href="`+p.URL()+`"`)
+			assert.NotContains(t, html, `href="`+serverURL, "the server's base URL serves no page, so the docs never link it")
 
 			r, err := renderPage(repoRoot, p)
 			require.NoError(t, err)

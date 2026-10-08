@@ -1,6 +1,6 @@
 # Getting started
 
-This guide adds browser notifications to a gno.land dapp in four steps. Your realm emits an event. A trigger in the gnotif registry says who that event notifies. Your page opts the browser in with the `gnotif` npm package. Then you try it on the onyx testnet, where the public onyx server at https://gnotif.xyz/onyx sends the notifications.
+This guide adds browser notifications to a gno.land dapp in four steps. Your realm emits an event. A trigger in the gnotif registry says who that event notifies. Your page opts the browser in with the `gnotif` npm package. Then you try it on the onyx testnet, where the public onyx server at `https://gnotif.xyz/onyx` sends the notifications.
 
 The example is a small realm with one function, `Notify`, that sends a message to an address. For a complete dapp, see the demo at https://demo.gnotif.xyz.
 
