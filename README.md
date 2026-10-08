@@ -1,25 +1,8 @@
-# gnotif
+# <img src="site/static/favicon.svg" width="32" height="32" alt=""> gnotif
 
 gnotif sends browser notifications when something happens on a gno.land chain, even when the page that asked for them is closed. A dapp's realm emits events, and a trigger declared in the gnotif registry realm says which event notifies whom. gnotifd, the gnotif server, reads the chain through [tx-indexer](https://github.com/gnolang/tx-indexer) and sends a Web Push for each match. The dapp's page subscribes the browser with the `gnotif` npm package.
 
 Public server: [gnotif.xyz](https://gnotif.xyz). Live demo: [demo.gnotif.xyz](https://demo.gnotif.xyz). Version 0, onyx testnet only.
-
-```
-+-- gno.land chain --------------------------------+
-|  dapp realm ----Declare----> gnotif registry     |
-+------+----------------------------+--------------+
-       | realm events               | TriggerDeclared, TriggerRemoved
-       v                            v
-+--------------------------------------------------+
-|                    tx-indexer                    |
-+------------------------+-------------------------+
-                         | polled over GraphQL
-                         v
-dapp page --/v1-->    gnotifd --Web Push--> push service
-    ^                                            |
-    | opens the link on click                    |
-    +---- sw.js on the dapp's origin <-----------+
-```
 
 The page calls gnotifd only to subscribe and to choose its triggers. The notification travels through the browser's push service and is shown by `sw.js`, the service worker the dapp serves from its own origin, so it arrives even when no tab of the dapp is open.
 

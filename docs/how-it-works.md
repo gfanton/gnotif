@@ -2,6 +2,23 @@
 
 gnotifd is one process with one SQLite file. A watch loop reads realm events from tx-indexer and queues a push for every opt-in an event matches. A delivery loop sends the queued pushes. An HTTP server takes the browsers' subscriptions and opt-ins. The two loops share only the queue, kept in the database, so a slow push service never holds back reading the chain, and a crash between them loses nothing.
 
+```
++-- gno.land chain --------------------------------+
+|  dapp realm ----Declare----> gnotif registry     |
++------+----------------------------+--------------+
+       | realm events               | TriggerDeclared, TriggerRemoved
+       v                            v
++--------------------------------------------------+
+|                    tx-indexer                    |
++------------------------+-------------------------+
+                         | polled over GraphQL
+                         v
+dapp page --/v1-->    gnotifd --Web Push--> push service
+    ^                                            |
+    | opens the link on click                    |
+    +---- sw.js on the dapp's origin <-----------+
+```
+
 ## Triggers come from the registry's events
 
 gnotifd never reads the registry's state. It rebuilds its triggers from the events the registry emits:
