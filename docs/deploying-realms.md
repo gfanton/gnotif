@@ -64,4 +64,4 @@ Start gnotifd on a new database, with `-registry gno.land/r/<namespace>/gnotif/v
 
 Deploy a new registry version at `gno.land/r/<namespace>/gnotif/v<N+1>`, in the same namespace and with the [rules for a new registry version](how-it-works.md#rules-for-a-new-registry-version). gnotifd follows it with no change to its flags.
 
-On onyx and mainnet the package stays parked until an approver enables it. `init` runs in the enable transaction, so a `-start-height` at or before the submit is safe.
+On onyx and mainnet the package stays parked until an approver enables it. `init` runs in the enable transaction. When you start a new database at this version, a `-start-height` at or before the height of the deploy transaction is safe.

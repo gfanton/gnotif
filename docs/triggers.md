@@ -31,7 +31,7 @@ A trigger that a realm declares for itself from `init` carries the [verified mar
 
 ## At most 64 triggers per realm
 
-A realm holds at most 64 verified triggers. The 65th `Declare` panics with `too many triggers for target`, which reverts the transaction, so a deploy that declares it fails. `Remove` frees a place.
+A realm holds at most 64 verified triggers in each registry version it imports. The 65th `Declare` panics with `too many triggers for target`, which reverts the transaction, so a deploy that declares it fails. `Remove` frees a place.
 
 ## A trigger's id can change
 

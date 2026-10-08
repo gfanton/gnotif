@@ -73,7 +73,7 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 
 `-indexer` is the GraphQL URL of a [tx-indexer](https://github.com/gnolang/tx-indexer) that reads the chain. onyx's public indexer answers at `https://indexer.onyx.testnets.gno.land/graphql/query`. gnotifd sends it one request per poll, so `-poll` sets the load. While it reads a block too large to read whole, a poll sends one request per transaction in that block.
 
-`-registry` is the path the registry is deployed at. It ends in `/v<N>`, with no leading zero, such as `gno.land/r/<namespace>/gnotif/v0`. gnotifd builds its triggers from that version's events and from every later version under the same prefix, never from an earlier one.
+`-registry` is the path the registry is deployed at. It ends in `/v<N>`, with no leading zero, such as `gno.land/r/<namespace>/gnotif/v0`. gnotifd builds its triggers from that version's events and from every later version under the same prefix, never from an earlier one. Dropping an older version needs a new database at the later version.
 
 `-start-height` matters only while the database is empty: the first start reads the chain from that height, and gnotifd refuses to start without it. Later starts resume where the database stopped and ignore the flag. Use a height at or before the deploy of the configured version. [Deploying the registry](deploying-realms.md#4-deploy-the-registry) notes the indexer's height right before the deploy for this. A height far below the deploy only costs time ([How gnotif works](how-it-works.md#how-gnotifd-reads-the-chain)).
 
@@ -103,7 +103,7 @@ The database is one SQLite file in WAL mode: while gnotifd runs, `gnotif.db` sit
 The subscriptions and opt-ins exist only in the database. To start a new database, name a new file with `-db` and give a `-start-height` at or before the registry's deploy; each browser then turns notifications on again from its dapp's page. Start a new database when:
 
 - the database file is lost;
-- gnotifd moves to a new registry, which numbers its triggers from `0000001` again, so the old opt-ins would follow the wrong triggers;
+- gnotifd's `-registry` changes, to another registry or another version: the old triggers and opt-ins would stay, and an earlier version's removals would stop applying;
 - gnotifd refuses the file with `database was made by an older gnotifd`: an older release made it, before a change to the database's layout.
 
 gnotifd also refuses a file made by a newer release, with `database was made by a newer gnotifd`. Run the release that made it instead, since a new database drops every subscription. A refused file is left untouched.

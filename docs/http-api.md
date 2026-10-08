@@ -22,7 +22,7 @@ The API has no accounts. A subscription is known by its push endpoint, which onl
 
 ## List a realm's triggers
 
-`GET /v1/triggers?target=<realm path>` answers the verified triggers whose target is that realm, in id order. For `target=gno.land/r/dev/pingpong/v0`:
+`GET /v1/triggers?target=<realm path>` answers the verified triggers whose target is that realm, in id order, at most 64. For `target=gno.land/r/dev/pingpong/v0`:
 
 ```json
 [

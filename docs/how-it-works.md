@@ -13,7 +13,7 @@ gnotifd never reads the registry's state. It rebuilds its triggers from the even
 
 gnotifd applies these events only when they come from the registry version given with `-registry` or a later version under the same prefix, such as `…/gnotif/v1` after `…/gnotif/v0`. It never reads an earlier version. An event applies only when its id carries its own version's prefix: `0000001` in v0, `v<N>-…` in version N. It logs any other event as `skip registry event` and skips it. It stores a trigger only when `verified` is `true`. It logs a `TriggerDeclared` it cannot read as an error and skips it. A `TriggerRemoved` deletes the trigger with its opt-ins, but a push the trigger already queued is still sent. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
 
-[Triggers](triggers.md) covers each field and the [limit of 64 per realm](triggers.md#at-most-64-triggers-per-realm).
+[Triggers](triggers.md) covers each field and the [limit of 64 per realm and version](triggers.md#at-most-64-triggers-per-realm).
 
 ## What the verified mark means
 
@@ -75,7 +75,7 @@ Any server built on the registry, gnotifd or another, must:
 
 The registry is immutable, so a change ships as a new version at `…/gnotif/v<N+1>`. gnotifd follows every later version, so a new version must keep these rules:
 
-1. **Path.** Deploy it at `<prefix>/v<N+1>`, in the same namespace.
+1. **Path.** Deploy it at `…/gnotif/v<N+1>`, in the same namespace.
 2. **Not private.** Never set `private = true`. The creator of a private package can redeploy it in place. `init` then runs again with fresh globals, the id counter restarts, and the version reissues its own ids over the stored triggers.
 3. **Ids** take the form `v<N+1>-…`.
 4. **Existing attributes are frozen.** Never remove, rename or change the meaning of a `TriggerDeclared` or `TriggerRemoved` attribute. gnotifd skips a `TriggerDeclared` that lacks one of the ten.
@@ -86,4 +86,4 @@ The registry is immutable, so a change ships as a new version at `…/gnotif/v<N
 9. **No other emitters.** Never call a function or interface value the caller supplies, and never export a method or closure that emits registry events outside `Declare` and `Remove`. Registry code emits as the registry, whoever runs it.
 10. **`verified` keeps its meaning:** the target realm presented its own live `cur` to `Declare`. `target` never contains `#`, so a sub-realm token (`cur.Sub(x)`, reported as `host#x`) cannot verify.
 
-gnotifd trusts every later version under the prefix and takes `verified` at face value. That trust rests on the chain's deploy gate, which lets only a namespace's owner deploy under it. GovDAO controls that gate, and the operators of a hardfork are a trust root too. An address namespace, `gno.land/r/<address>/gnotif/v<N>`, leaves only that risk. A registered name can also change owner.
+gnotifd trusts every later version under the prefix and takes `verified` at face value. That trust rests on the chain's deploy gate, which lets only a namespace's owner deploy under it. GovDAO controls that gate, and the operators of a hardfork are a trust root too. An address namespace, `gno.land/r/<address>/gnotif/v<N>`, removes only the risk of a name changing hands; the GovDAO and hardfork risks remain.
