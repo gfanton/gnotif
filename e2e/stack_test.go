@@ -38,6 +38,7 @@ var examplePackages = []string{"avl/v0", "cford32/v0", "seqid/v0", "markdown/san
 type stack struct {
 	t       *testing.T
 	tools   string
+	root    string
 	keybase string
 	rpc     string // host:port of gnodev's RPC
 	indexer string // tx-indexer GraphQL URL
@@ -49,7 +50,7 @@ func newStack(t *testing.T) *stack {
 	tools, root := os.Getenv("GNOTIF_TOOLS"), os.Getenv("GNOTIF_ROOT")
 	require.NotEmpty(t, tools, "GNOTIF_TOOLS is unset; run make e2e")
 	require.NotEmpty(t, root, "GNOTIF_ROOT is unset; run make e2e")
-	s := &stack{t: t, tools: tools, keybase: t.TempDir(), addrs: map[string]string{}}
+	s := &stack{t: t, tools: tools, root: root, keybase: t.TempDir(), addrs: map[string]string{}}
 
 	s.gnokey(devtestMnemonic+"\n\n\n", "add", "devtest", "-recover", "-insecure-password-stdin", "-home", s.keybase)
 	s.gnokey("\n\n", "add", "player2", "-insecure-password-stdin", "-home", s.keybase)
@@ -123,11 +124,17 @@ func (s *stack) start(name string, env []string, args ...string) {
 
 func (s *stack) gnokey(stdin string, args ...string) string {
 	s.t.Helper()
+	out, err := s.runGnokey(stdin, args...)
+	require.NoError(s.t, err, "gnokey %s:\n%s", strings.Join(args, " "), out)
+	return out
+}
+
+// runGnokey runs gnokey and returns its combined output with the run's error.
+func (s *stack) runGnokey(stdin string, args ...string) (string, error) {
 	cmd := exec.Command(filepath.Join(s.tools, "gnokey"), args...)
 	cmd.Stdin = strings.NewReader(stdin)
 	out, err := cmd.CombinedOutput()
-	require.NoError(s.t, err, "gnokey %s:\n%s", strings.Join(args, " "), out)
-	return string(out)
+	return string(out), err
 }
 
 // call sends a MsgCall to pingpong signed by key and returns gnokey's output.
@@ -140,13 +147,21 @@ func (s *stack) call(key, fn string, args ...string) string {
 // returns gnokey's output.
 func (s *stack) callPackage(key, pkgPath, fn string, args ...string) string {
 	s.t.Helper()
+	out, err := s.tryCallPackage(key, pkgPath, fn, args...)
+	require.NoError(s.t, err, "call %s.%s:\n%s", pkgPath, fn, out)
+	return out
+}
+
+// tryCallPackage is callPackage without failing the test: it returns gnokey's
+// output with the error of a transaction the chain rejected.
+func (s *stack) tryCallPackage(key, pkgPath, fn string, args ...string) (string, error) {
 	a := []string{"maketx", "call", "-pkgpath", pkgPath, "-func", fn}
 	for _, arg := range args {
 		a = append(a, "-args", arg)
 	}
 	a = append(a, "-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
 		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, key)
-	return s.gnokey("\n", a...)
+	return s.runGnokey("\n", a...)
 }
 
 var (
@@ -167,9 +182,10 @@ func committed(t *testing.T, out string) (int64, string) {
 }
 
 // addpkg deploys the package in dir at pkgPath, without its tests, signed
-// by key.
-func (s *stack) addpkg(key, dir, pkgPath string) {
+// by key. replace holds old, new pairs applied to every deployed file.
+func (s *stack) addpkg(key, dir, pkgPath string, replace ...string) {
 	t := s.t
+	replacer := strings.NewReplacer(replace...)
 	t.Helper()
 	pkg := t.TempDir()
 	entries, err := os.ReadDir(dir)
@@ -182,7 +198,7 @@ func (s *stack) addpkg(key, dir, pkgPath string) {
 		}
 		b, err := os.ReadFile(filepath.Join(dir, name))
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(filepath.Join(pkg, name), b, 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(pkg, name), []byte(replacer.Replace(string(b))), 0o644))
 	}
 	s.gnokey("\n", "maketx", "addpkg", "-pkgpath", pkgPath, "-pkgdir", pkg, "-max-deposit", "10000000ugnot",
 		"-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
