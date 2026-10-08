@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/gfanton/gnotif/internal/subscribe"
+	"github.com/gfanton/gnotif/internal/watch"
 )
 
 var requiredArgs = []string{
@@ -92,6 +93,20 @@ func TestParseConfig(t *testing.T) {
 		cfg, err := parseConfig(append([]string{"-push-hosts", "a.example,b.example"}, requiredArgs...), env(""))
 		require.NoError(t, err)
 		assert.Equal(t, []string{"a.example", "b.example"}, cfg.PushHosts)
+	})
+
+	t.Run("invalid registry", func(t *testing.T) {
+		for _, path := range []string{
+			"gno.land/r/dev/gnotif",
+			"gno.land/r/dev/gnotif/v01",
+			"gno.land/p/dev/gnotif/v0",
+		} {
+			t.Run(path, func(t *testing.T) {
+				_, err := parseConfig(append(without("-registry"), "-registry", path), env(""))
+				require.ErrorIs(t, err, watch.ErrInvalidRegistry)
+				assert.ErrorContains(t, err, "-registry")
+			})
+		}
 	})
 }
 

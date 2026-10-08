@@ -26,6 +26,7 @@ import (
 	"github.com/gfanton/gnotif/internal/delivery"
 	"github.com/gfanton/gnotif/internal/server"
 	"github.com/gfanton/gnotif/internal/subscribe"
+	"github.com/gfanton/gnotif/internal/watch"
 )
 
 func main() {
@@ -73,7 +74,7 @@ func parseConfig(args []string, getenv func(string) string) (server.Config, erro
 	var pushHosts string
 	fs.StringVar(&cfg.Listen, "listen", "127.0.0.1:8080", "HTTP listen address")
 	fs.StringVar(&cfg.Indexer, "indexer", "", "tx-indexer GraphQL URL (required)")
-	fs.StringVar(&cfg.Registry, "registry", "", "package path of the gnotif registry realm (required)")
+	fs.StringVar(&cfg.Registry, "registry", "", "package path of the gnotif registry realm, ending in /v<N>; later versions are followed too (required)")
 	fs.Int64Var(&cfg.StartHeight, "start-height", 0, "registry deploy height, required on first start")
 	fs.StringVar(&cfg.DB, "db", "gnotif.db", "SQLite database file")
 	fs.DurationVar(&cfg.Poll, "poll", 5*time.Second, "indexer poll interval")
@@ -110,6 +111,9 @@ func parseConfig(args []string, getenv func(string) string) (server.Config, erro
 		if req.value == "" {
 			return server.Config{}, errors.New(req.name + " is required")
 		}
+	}
+	if _, err := watch.ParseRegistry(cfg.Registry); err != nil {
+		return server.Config{}, fmt.Errorf("-registry: %w", err)
 	}
 	for host := range strings.SplitSeq(pushHosts, ",") {
 		if host = strings.TrimSpace(host); host != "" {
