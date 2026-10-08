@@ -41,7 +41,7 @@ The API has no accounts. A subscription is known by its push endpoint, which onl
 ]
 ```
 
-[Triggers](triggers.md#fields) describes each field.
+[Triggers](triggers.md#fields) describes each field. Ids are opaque strings, such as `0000001` or `v1-0000001`.
 
 A realm without verified triggers gets `[]`.
 

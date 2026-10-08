@@ -11,7 +11,7 @@ func Declare(cur realm, target, event, filter, param, title, body, link string) 
 func Remove(cur realm, id string)
 ```
 
-`Declare` stores a trigger and returns its id. Ids count up from `0000001`. `Remove` deletes a trigger, and only the address that declared it may call it.
+`Declare` stores a trigger and returns its id. Ids count up from `0000001` in v0, and begin with `v<N>-` in version N of the registry. `Remove` deletes a trigger, and only the address that declared it may call it.
 
 A realm declares its triggers in its `init` function, as [Getting started](getting-started.md#2-declare-the-trigger) shows:
 
@@ -27,11 +27,11 @@ The trigger's declarer is the realm's address, so only the realm can remove it, 
 
 A trigger that a realm declares for itself from `init` carries the [verified mark](how-it-works.md#what-the-verified-mark-means).
 
-Anyone can also call `Declare` directly, as a transaction, with any target. The registry stores such a trigger without the mark, and its declarer pays its storage deposit. gnotifd ignores it ([How gnotif works](how-it-works.md#triggers-come-from-the-registrys-events)).
+`Declare` from any other caller panics with `caller is not the target`.
 
 ## At most 64 triggers per realm
 
-A realm holds at most 64 verified triggers. The 65th `Declare` panics with `too many triggers for target`, which reverts the transaction, so a deploy that declares it fails. `Remove` frees a place. Unverified triggers do not count.
+A realm holds at most 64 verified triggers. The 65th `Declare` panics with `too many triggers for target`, which reverts the transaction, so a deploy that declares it fails. `Remove` frees a place.
 
 ## A trigger's id can change
 
@@ -52,7 +52,7 @@ So a page never keeps a trigger id. It asks for the ids with `triggers(target)` 
 | `link` | path template opened on click, on the dapp's own origin | a path of at most 256 bytes, starting with a single `/`; no ASCII control characters or backslash |
 | `id` | the trigger's id | set by the registry |
 | `declarer` | address that called `Declare` | set by the registry |
-| `verified` | `true` when the trigger carries the verified mark | set by the registry |
+| `verified` | always `true` in v0 | set by the registry |
 
 `Declare` panics on the first field that breaks its rule, which reverts the transaction. The rules keep a trigger from imitating the verified mark or sending a dapp's users to another site ([How gnotif works](how-it-works.md#what-the-verified-mark-means)).
 
@@ -85,7 +85,7 @@ gnotif does not check that an address belongs to the browser that opts in with i
 
 ## See the triggers on gnoweb
 
-The registry renders on gnoweb, under its path:
+Each registry version renders on gnoweb, under its own path:
 
 - `/r/<namespace>/gnotif/v0` lists every trigger, newest first, 50 to a page, and `/r/<namespace>/gnotif/v0:page/2` is the second page;
 - `/r/<namespace>/gnotif/v0:trigger/<id>` shows one trigger with its templates;

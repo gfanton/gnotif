@@ -58,7 +58,7 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 | Flag | Default | Meaning |
 |---|---|---|
 | `-indexer` | required | tx-indexer GraphQL URL |
-| `-registry` | required | package path of the gnotif registry realm |
+| `-registry` | required | package path of the gnotif registry realm, ending in `/v<N>` |
 | `-vapid-subject` | required | email address or https URL where push services can reach the operator |
 | `-start-height` | none | height to read from on the first start, at or before the registry's deploy |
 | `-listen` | `127.0.0.1:8080` | HTTP listen address |
@@ -73,9 +73,9 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 
 `-indexer` is the GraphQL URL of a [tx-indexer](https://github.com/gnolang/tx-indexer) that reads the chain. onyx's public indexer answers at `https://indexer.onyx.testnets.gno.land/graphql/query`. gnotifd sends it one request per poll, so `-poll` sets the load. While it reads a block too large to read whole, a poll sends one request per transaction in that block.
 
-`-registry` is the path the registry is deployed at. gnotifd builds its triggers only from that path's events.
+`-registry` is the path the registry is deployed at. It ends in `/v<N>`, with no leading zero, such as `gno.land/r/<namespace>/gnotif/v0`. gnotifd builds its triggers from that version's events and from every later version under the same prefix, never from an earlier one.
 
-`-start-height` matters only while the database is empty: the first start reads the chain from that height, and gnotifd refuses to start without it. Later starts resume where the database stopped and ignore the flag. Use a height at or before the registry's first event. [Deploying the registry](deploying-realms.md#4-deploy-the-registry) notes the indexer's height right before the deploy for this. A height far below the deploy only costs time ([How gnotif works](how-it-works.md#how-gnotifd-reads-the-chain)).
+`-start-height` matters only while the database is empty: the first start reads the chain from that height, and gnotifd refuses to start without it. Later starts resume where the database stopped and ignore the flag. Use a height at or before the deploy of the configured version. [Deploying the registry](deploying-realms.md#4-deploy-the-registry) notes the indexer's height right before the deploy for this. A height far below the deploy only costs time ([How gnotif works](how-it-works.md#how-gnotifd-reads-the-chain)).
 
 While it catches up, gnotifd skips realm events older than `-max-age`, so a restart after downtime sends no burst of stale notifications. It always applies the registry's events. Against a chain that makes blocks only on transactions, such as a local gnodev, raise `-max-age`, to `1h` for instance: the first block after a quiet spell can carry an old time.
 

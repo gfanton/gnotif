@@ -4,7 +4,7 @@ These steps deploy a gnotif registry to onyx (`onyx-1`), for an operator who run
 
 ## Before you start
 
-- **A namespace the deploying key owns.** On onyx a key deploys under its own address, `gno.land/r/<address>`, or under a name it registered. The chain refuses a deploy under anyone else's namespace, and the [verified mark](how-it-works.md#what-the-verified-mark-means) relies on that.
+- **A namespace the deploying key owns.** Deploy the registry under the key's address, `gno.land/r/<address>`. The chain refuses a deploy under anyone else's namespace, and the [verified mark](how-it-works.md#what-the-verified-mark-means) relies on that. A registered name can change hands, and GovDAO controls the deploy gate ([Rules for a new registry version](how-it-works.md#rules-for-a-new-registry-version)).
 - **gnokey and a key that holds test GNOT on onyx**, as in [Getting started](getting-started.md#4-try-it-on-onyx). The deploy command names the key `mykey`: use your key's name. Every deploy is public, with the address that signed it, so use a key made for this rather than a personal one.
 
 ## 1. Write the deploy copies
@@ -59,3 +59,9 @@ onyx checks a new realm before it goes live, which takes a few seconds. Wait unt
 ## 5. Point gnotifd at the registry
 
 Start gnotifd on a new database, with `-registry gno.land/r/<namespace>/gnotif/v0` and `-start-height` set to the height from step 4 ([Running gnotifd](running-gnotifd.md#the-indexer-and-the-start-height)). Once a realm declares a verified trigger, `GET /v1/triggers?target=<realm path>` lists it.
+
+## 6. Deploy a later version
+
+Deploy a new registry version at `gno.land/r/<namespace>/gnotif/v<N+1>`, in the same namespace and with the [rules for a new registry version](how-it-works.md#rules-for-a-new-registry-version). gnotifd follows it with no change to its flags.
+
+On onyx and mainnet the package stays parked until an approver enables it. `init` runs in the enable transaction, so a `-start-height` at or before the submit is safe.

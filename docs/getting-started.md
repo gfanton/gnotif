@@ -51,7 +51,7 @@ func Notify(cur realm, to address, msg string) {
 
 The empty string after `"Message"` is a filter, which this trigger does not use. To notify every browser that opted in, whatever its address, leave the param empty: `""` in place of `"to"`, and opt in with `value: ""`.
 
-`cross(cur)` makes your realm the caller that the registry sees. The caller is the realm the trigger watches, so the registry marks the trigger verified. gnotif.xyz offers verified triggers only.
+`cross(cur)` makes your realm the caller that the registry sees. The registry accepts a trigger only when its caller is the realm the trigger watches.
 
 With this realm, anyone can send a message to any address, and the text is whatever the caller sends.
 
