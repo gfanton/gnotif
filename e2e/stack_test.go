@@ -67,14 +67,10 @@ func newStack(t *testing.T) *stack {
 	}
 	args = append(args, filepath.Join(root, "gno", "r", "gnotif", "v0"))
 	s.start("gnodev", []string{"GNOROOT=" + filepath.Join(tools, "gno-src")}, args...)
-	require.Eventually(t, func() bool {
-		resp, err := http.Get("http://" + s.rpc + "/status")
-		if err != nil {
-			return false
-		}
-		resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
-	}, 2*time.Minute, 250*time.Millisecond, "gnodev RPC never answered")
+	// The RPC answers before gnodev commits its first block, and a
+	// transaction sent then fails its signature check.
+	require.Eventually(t, func() bool { return s.nodeHeight() >= 1 },
+		2*time.Minute, 250*time.Millisecond, "gnodev never committed a block")
 	// The tx-indexer files genesis transactions at height 0, below where
 	// gnotifd reads, so pingpong declares its trigger in a deploy transaction.
 	s.addpkg("devtest", filepath.Join(root, "demo", "gno.land", "r", "pingpong", "v0"), pingpongPath)
@@ -203,6 +199,27 @@ func (s *stack) addpkg(key, dir, pkgPath string, replace ...string) {
 	s.gnokey("\n", "maketx", "addpkg", "-pkgpath", pkgPath, "-pkgdir", pkg, "-max-deposit", "10000000ugnot",
 		"-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
 		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, key)
+}
+
+// nodeHeight returns gnodev's latest committed block height, or 0 while its
+// RPC does not answer.
+func (s *stack) nodeHeight() int64 {
+	resp, err := http.Get("http://" + s.rpc + "/status")
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Result struct {
+			SyncInfo struct {
+				LatestBlockHeight int64 `json:"latest_block_height,string"`
+			} `json:"sync_info"`
+		} `json:"result"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&out) != nil {
+		return 0
+	}
+	return out.Result.SyncInfo.LatestBlockHeight
 }
 
 func (s *stack) latestHeight() int64 {
