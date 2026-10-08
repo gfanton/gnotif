@@ -137,3 +137,11 @@ func TestServerErrorLogUsesSlog(t *testing.T) {
 	assert.Equal(t, 10*time.Second, srv.WriteTimeout)
 	assert.Equal(t, 60*time.Second, srv.IdleTimeout)
 }
+
+func TestInvalidRegistry(t *testing.T) {
+	cfg := config(t, 1)
+	cfg.Registry = "gno.land/r/dev/gnotif"
+	err := Run(context.Background(), cfg)
+	assert.ErrorIs(t, err, watch.ErrInvalidRegistry)
+	assert.NoFileExists(t, cfg.DB)
+}

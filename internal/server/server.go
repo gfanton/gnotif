@@ -46,6 +46,10 @@ type Config struct {
 // Run serves until ctx ends, then shuts the HTTP server down and waits for
 // both loops.
 func Run(ctx context.Context, cfg Config) error {
+	registry, err := watch.ParseRegistry(cfg.Registry)
+	if err != nil {
+		return err
+	}
 	st, err := store.Open(ctx, cfg.DB)
 	if err != nil {
 		return err
@@ -69,7 +73,7 @@ func Run(ctx context.Context, cfg Config) error {
 	watcher := watch.New(watch.Config{
 		Source:      indexer.New(cfg.Indexer, cmp.Or(cfg.IndexerClient, &http.Client{Timeout: 30 * time.Second})),
 		Store:       st,
-		Registry:    cfg.Registry,
+		Registry:    registry,
 		StartHeight: cfg.StartHeight,
 		Poll:        cfg.Poll,
 		MaxAge:      cfg.MaxAge,

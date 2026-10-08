@@ -6,6 +6,7 @@ package watch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -29,8 +30,8 @@ type Source interface {
 type Config struct {
 	Source      Source
 	Store       *store.Store
-	Registry    string // package path of the gnotif registry realm
-	StartHeight int64  // first height to read when the store has no cursor
+	Registry    Registry // the registry version to follow, and every later one
+	StartHeight int64    // first height to read when the store has no cursor
 	Poll        time.Duration
 	MaxAge      time.Duration // older events are recorded but never notified
 	MaxWindow   int64         // most blocks read in one tick
@@ -203,8 +204,8 @@ type counts struct{ queued, stale int }
 func (w *Watcher) process(tx *store.Tx, events []trigger.Event, blockTimes map[int64]time.Time) (counts, error) {
 	var c counts
 	for _, e := range events {
-		if e.PkgPath == w.cfg.Registry {
-			if err := w.applyRegistry(tx, e); err != nil {
+		if version, ok := w.cfg.Registry.Version(e.PkgPath); ok {
+			if err := w.applyRegistry(tx, e, version); err != nil {
 				return c, err
 			}
 			continue
@@ -241,7 +242,18 @@ func (w *Watcher) report(c counts, from, to int64) {
 	}
 }
 
-func (w *Watcher) applyRegistry(tx *store.Tx, e trigger.Event) error {
+// applyRegistry replays an event of registry version into the triggers. A
+// version may only touch ids it issued: ids restart in every version, and
+// PutTrigger replaces a trigger of the same id.
+func (w *Watcher) applyRegistry(tx *store.Tx, e trigger.Event, version int) error {
+	foreign := func(id string) bool {
+		if idVersion(id) == version {
+			return false
+		}
+		w.cfg.Log.Error("skip registry event", "height", e.Height, "tx", e.TxHash,
+			"err", fmt.Sprintf("id %s does not belong to registry version %d", id, version))
+		return true
+	}
 	switch e.Type {
 	case "TriggerDeclared":
 		t, err := trigger.FromDeclared(e.Attrs)
@@ -253,11 +265,17 @@ func (w *Watcher) applyRegistry(tx *store.Tx, e trigger.Event) error {
 			w.cfg.Log.Debug("skip unverified trigger", "id", t.ID, "target", t.Target, "height", e.Height, "tx", e.TxHash)
 			return nil
 		}
+		if foreign(t.ID) {
+			return nil
+		}
 		return tx.PutTrigger(t)
 	case "TriggerRemoved":
 		id, ok := e.Attr("id")
 		if !ok || id == "" {
 			w.cfg.Log.Error("skip registry event", "height", e.Height, "tx", e.TxHash, "err", "TriggerRemoved without id")
+			return nil
+		}
+		if foreign(id) {
 			return nil
 		}
 		return tx.DeleteTrigger(id)

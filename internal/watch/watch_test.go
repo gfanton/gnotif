@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	registry = "gno.land/r/dev/gnotif/v0"
-	game     = "gno.land/r/demo/game"
+	registry   = "gno.land/r/dev/gnotif/v0"
+	registryV1 = "gno.land/r/dev/gnotif/v1"
+	game       = "gno.land/r/demo/game"
 )
 
 var now = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
@@ -217,6 +218,18 @@ type harness struct {
 
 func newHarness(t *testing.T, startHeight int64) *harness {
 	t.Helper()
+	return newHarnessFor(t, startHeight, registry)
+}
+
+func mustRegistry(t *testing.T, path string) Registry {
+	t.Helper()
+	r, err := ParseRegistry(path)
+	require.NoError(t, err)
+	return r
+}
+
+func newHarnessFor(t *testing.T, startHeight int64, registryPath string) *harness {
+	t.Helper()
 	fake := &fakeIndexer{times: map[int64]time.Time{}, windowErrs: map[indexer.Window]string{}, txErrs: map[txAt]string{}, lagging: map[txAt]bool{}}
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
@@ -228,7 +241,7 @@ func newHarness(t *testing.T, startHeight int64) *harness {
 	w := New(Config{
 		Source:      indexer.New(srv.URL, srv.Client()),
 		Store:       st,
-		Registry:    registry,
+		Registry:    mustRegistry(t, registryPath),
 		StartHeight: startHeight,
 		Poll:        10 * time.Millisecond,
 		MaxAge:      10 * time.Minute,
@@ -304,12 +317,20 @@ func (h *harness) triggerIDs(t *testing.T) []string {
 }
 
 func declared(id, target string) fakeEvent {
-	return fakeEvent{pkg: registry, typ: "TriggerDeclared", attrs: []trigger.Pair{
+	return declaredBy(registry, id, target)
+}
+
+func declaredBy(pkg, id, target string) fakeEvent {
+	return fakeEvent{pkg: pkg, typ: "TriggerDeclared", attrs: []trigger.Pair{
 		{Key: "id", Value: id}, {Key: "target", Value: target}, {Key: "event", Value: "TurnPlayed"},
 		{Key: "filter", Value: ""}, {Key: "param", Value: "next"}, {Key: "title", Value: "Your turn"},
 		{Key: "body", Value: "Game {game}, turn {turn}"}, {Key: "link", Value: "/?game={game}"},
 		{Key: "declarer", Value: "g1alice"}, {Key: "verified", Value: "true"},
 	}}
+}
+
+func removedBy(pkg, id string) fakeEvent {
+	return fakeEvent{pkg: pkg, typ: "TriggerRemoved", attrs: []trigger.Pair{{Key: "id", Value: id}}}
 }
 
 // unverified is declared by a caller other than the target realm.
@@ -687,4 +708,64 @@ func TestTransientNeverSkips(t *testing.T) {
 			assert.NotContains(t, h.log.String(), "level=ERROR")
 		})
 	}
+}
+
+func TestLaterVersionDeclares(t *testing.T) {
+	h := newHarness(t, 1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+	h.fake.add(3, declaredBy(registry, "0000001", game), declaredBy(registryV1, "v1-0000001", game))
+	h.tick(t)
+	require.Equal(t, []string{"0000001", "v1-0000001"}, h.triggerIDs(t))
+
+	h.optIn(t, "E0", "0000001", "g1bob")
+	h.optIn(t, "E1", "v1-0000001", "g1bob")
+	h.fake.add(7, turn("1", "g1bob"))
+	h.tick(t)
+	assert.Len(t, h.due(t), 2)
+}
+
+func TestVersionCannotTakeOverID(t *testing.T) {
+	h := newHarness(t, 1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+	h.fake.add(3, declaredBy(registry, "0000001", game))
+	h.tick(t)
+	h.optIn(t, "E", "0000001", "g1bob")
+
+	hijack := declaredBy(registryV1, "0000001", game)
+	i := slices.IndexFunc(hijack.attrs, func(p trigger.Pair) bool { return p.Key == "title" })
+	hijack.attrs[i].Value = "Hijacked"
+	h.fake.add(7, hijack, turn("1", "g1bob"))
+	h.tick(t)
+
+	ts, err := h.store.TargetTriggers(context.Background(), game)
+	require.NoError(t, err)
+	require.Len(t, ts, 1)
+	assert.Equal(t, "Your turn", ts[0].Title)
+	assert.Contains(t, h.log.String(), "skip registry event")
+	assert.Equal(t, []string{"Game 1, turn 1"}, h.bodies(t))
+}
+
+func TestVersionCannotRemoveOtherVersion(t *testing.T) {
+	h := newHarness(t, 1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+	h.fake.add(3, declaredBy(registry, "0000001", game))
+	h.tick(t)
+	h.optIn(t, "E", "0000001", "g1bob")
+
+	h.fake.add(7, removedBy(registryV1, "0000001"), turn("1", "g1bob"))
+	h.tick(t)
+	assert.Equal(t, []string{"0000001"}, h.triggerIDs(t))
+	assert.Len(t, h.due(t), 1)
+}
+
+func TestOlderVersionNotFollowed(t *testing.T) {
+	h := newHarnessFor(t, 1, registryV1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+	h.fake.add(3, declaredBy(registry, "0000001", game), declaredBy(registryV1, "v1-0000001", game))
+	h.tick(t)
+	assert.Equal(t, []string{"v1-0000001"}, h.triggerIDs(t))
 }
