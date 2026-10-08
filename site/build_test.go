@@ -101,6 +101,8 @@ func TestBuildLanding(t *testing.T) {
 	assert.Contains(t, html, "Game 0000042, turn 7")
 	assert.Contains(t, text, "the player's browser")
 	assert.Contains(t, text, "every voter's browser")
+	assert.Contains(t, text, "New vesting grant", "every scene's event comes from someone's transaction")
+	assert.NotContains(t, text, "UnlockReached", "a realm emits nothing when a block height passes")
 
 	assert.Contains(t, text, "there is no notification server to run")
 	assert.Contains(t, text, "chain.Emit(")

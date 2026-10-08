@@ -82,8 +82,8 @@ var scenes = []scene{
 		Title: "Proposal 12 passed", Body: "Treasury budget, Q4", App: "govdao", Who: "every voter's browser"},
 	{Label: "auctions · Outbid", Event: "Outbid", Attrs: "lot=0000309 by=g1p0…7cd was=g1k7…x2q",
 		Title: "You were outbid", Body: "Lot 309, now 1 250 GNOT", App: "auctions", Who: "the bidder's browser"},
-	{Label: "vesting · UnlockReached", Event: "UnlockReached", Attrs: "height=1300000 account=g1k7…x2q",
-		Title: "Block 1 300 000 reached", Body: "Your tokens are unlocked", App: "vesting", Who: "the holder's browser"},
+	{Label: "vesting · Granted", Event: "Granted", Attrs: "account=g1k7…x2q unlock=1300000",
+		Title: "New vesting grant", Body: "10 000 GNOT, unlocking at block 1 300 000", App: "vesting", Who: "the grantee's browser"},
 }
 
 // flowNode is one box of the "How it works" path. Dashed nodes belong to
