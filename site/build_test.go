@@ -2,6 +2,7 @@ package main
 
 import (
 	"html"
+	"image/png"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -145,4 +146,26 @@ func TestBuildDocsSidebarListOutsideMenu(t *testing.T) {
 	require.Greater(t, list, -1, "a page list that no <details> can hide")
 	require.Greater(t, menu, -1)
 	assert.Less(t, list, menu, "the always-visible list comes before the phone menu")
+}
+
+func TestBuildLinkPreview(t *testing.T) {
+	out := buildSite(t)
+	for rel, url := range map[string]string{
+		"index.html":                      "https://gnotif.xyz/",
+		"docs/getting-started/index.html": "https://gnotif.xyz/docs/getting-started/",
+	} {
+		page := readOut(t, out, rel)
+		assert.Contains(t, page, `<meta property="og:url" content="`+url+`">`, rel)
+		assert.Contains(t, page, `<meta property="og:image" content="https://gnotif.xyz/og.png">`, "%s: crawlers need an absolute image URL", rel)
+		assert.Contains(t, page, `<meta name="twitter:card" content="summary_large_image">`, rel)
+		assert.Regexp(t, `<meta property="og:title" content="[^"]+ · gnotif|gnotif · `, page, rel)
+		assert.Contains(t, page, `<meta property="og:description" content="`, rel)
+	}
+
+	f, err := os.Open(filepath.Join(out, "og.png"))
+	require.NoError(t, err)
+	defer f.Close()
+	cfg, err := png.DecodeConfig(f)
+	require.NoError(t, err, "og.png is a PNG: most platforms ignore SVG previews")
+	assert.Equal(t, [2]int{1200, 630}, [2]int{cfg.Width, cfg.Height})
 }
