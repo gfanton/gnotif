@@ -76,25 +76,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Install the gno toolchain the Makefile pins
-        id: gno
-        run: |
-          version="$(sed -n 's/^GNO_REF := //p' Makefile)"
-          if [[ -z "${version}" ]]; then
-            echo "Error: no GNO_REF in Makefile" >&2
-            exit 1
-          fi
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          go install "github.com/gnolang/gno/gnovm/cmd/gno@${version}"
-          echo "GNO=$(go env GOPATH)/bin/gno" >> "${GITHUB_ENV}"
       - name: Cache the realms' on-chain dependencies
-        id: gnohome
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/gno-toolchains/onyx/gnohome
-          key: gnohome-${{ steps.gno.outputs.version }}-${{ hashFiles('gno/**/gnomod.toml', 'demo/**/gnomod.toml') }}
-      - if: steps.gnohome.outputs.cache-hit != 'true'
-        run: make gno-deps
+          path: .cache/gno-*/gnohome
+          key: gnohome-${{ hashFiles('Makefile', 'gno/**/gnomod.toml', 'demo/**/gnomod.toml') }}
       - run: make gno-test gno-lint
 
   e2e:

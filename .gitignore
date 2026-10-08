@@ -1,4 +1,5 @@
 .tools/
+.cache/
 gnotif.db*
 js/types/
 node_modules/

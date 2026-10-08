@@ -1,31 +1,42 @@
 SHELL := /bin/sh
-GNO_STORE ?= $(HOME)/.cache/gno-toolchains/onyx
-GNO ?= $(GNO_STORE)/gno
-GNOROOT_DIR = $(shell go env GOMODCACHE)/github.com/gnolang/gno@$(shell go version -m $(GNO) | awk '$$1 == "mod" {print $$3}')
+GNO_REF := v1.5.0
+CACHE := $(CURDIR)/.cache
+GNO_STORE := $(CACHE)/gno-$(GNO_REF)
+GNO := $(GNO_STORE)/gno
+GNO_DEPS := $(GNO_STORE)/deps.stamp
+GNO_MODS := $(wildcard gno/r/*/*/gnomod.toml demo/gno.land/r/*/*/gnomod.toml)
+GNOROOT_DIR := $(shell go env GOMODCACHE)/github.com/gnolang/gno@$(GNO_REF)
 GNO_ENV = GNOROOT=$(GNOROOT_DIR) GNOHOME=$(GNO_STORE)/gnohome
 ONYX_RPC := https://rpc.onyx.testnets.gno.land:443
 GNO_TEST_FLAGS ?=
 TOOLS := .tools
 GNO_CHECKOUT ?= https://github.com/gnolang/gno
-GNO_REF := v1.5.0
 TX_INDEXER_VERSION := v1.3.0
 NS ?=
 DEMO_JS := demo/gnotif.js demo/sw.js
 
-.PHONY: all test gno-test gno-lint gno-deps go-test js-test tools e2e demo site site-serve deploy-pkgs clean help
+.PHONY: all test gno-test gno-lint gno-deps go-test js-test tools e2e demo site site-serve deploy-pkgs clean fclean help
 
 all: test ## Run every test (default)
 
 test: gno-test go-test js-test ## Run every test
 
-gno-test: ## Run the realm tests
+# Installing a new GNO_REF removes the toolchains of the other releases.
+$(GNO):
+	rm -rf $(filter-out $(GNO_STORE),$(wildcard $(CACHE)/gno-*))
+	GOBIN=$(GNO_STORE) go install github.com/gnolang/gno/gnovm/cmd/gno@$(GNO_REF)
+
+$(GNO_DEPS): $(GNO) $(GNO_MODS)
+	$(GNO_ENV) $(GNO) mod download -remote-overrides gno.land=$(ONYX_RPC)
+	touch $@
+
+gno-test: $(GNO_DEPS) ## Run the realm tests
 	$(GNO_ENV) $(GNO) test $(GNO_TEST_FLAGS) ./gno/... ./demo/...
 
-gno-lint: ## Lint the realms
+gno-lint: $(GNO_DEPS) ## Lint the realms
 	$(GNO_ENV) $(GNO) lint ./gno/... ./demo/...
 
-gno-deps: ## Fetch the realms' on-chain dependencies from onyx, once
-	$(GNO_ENV) $(GNO) mod download -remote-overrides gno.land=$(ONYX_RPC)
+gno-deps: $(GNO_DEPS) ## Install the pinned gno and fetch the realms' on-chain dependencies from onyx
 
 go-test: ## Run go vet and the Go tests
 	go vet ./...
@@ -86,6 +97,9 @@ deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>
 clean: ## Remove built tools, deploy copies, the website build and the demo's copied scripts
 	rm -rf $(TOOLS) site/dist
 	rm -f $(DEMO_JS)
+
+fclean: clean ## Also remove the gno toolchain and the realms' dependencies in .cache
+	rm -rf $(CACHE)
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## / : /'
