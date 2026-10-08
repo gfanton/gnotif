@@ -3,6 +3,7 @@ import { connect, findAdena, sendEcho, shortAddress as short, walletLabel } from
 import { gnokeyCommand } from "./echo-tx.mjs";
 import { chain, echo, gnoweb, gnotif as options } from "./config.js";
 import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
+import { addressArea } from "./address-area.mjs";
 
 const gnotif = new Gnotif({ ...options, serviceWorker: "/sw.js" });
 const el = (id) => document.getElementById(id);
@@ -11,9 +12,12 @@ const STORAGE_KEY = "gnotif-demo";
 const realmURL = gnoweb.replace(/\/$/, "") + echo.replace(/^gno\.land/, "");
 /** @type {import("./adena.mjs").Adena | undefined} */
 let adena;
+/** @type {"pending" | "found" | "absent"} */
+let adenaState = "pending";
+/** The connected Adena address, "" when none. */
+let wallet = "";
 let trigger = null;
 let on = false;
-let pending = Promise.resolve();
 
 /** @returns {{ address: string, optins: { trigger: string, value: string }[] } | null} */
 function stored() {
@@ -74,24 +78,25 @@ async function refresh() {
   el("enable").textContent = saved && !on ? "Turn notifications on again" : "Turn on notifications";
   el("enable").hidden = on;
   el("disable").hidden = !on;
+  renderAddress();
   setPrimary();
 }
 
-// Opt-in changes run one at a time, so the last change is the one the server keeps.
-function sync() {
-  pending = pending.then(async () => {
-    try {
-      await setOptin();
-      say("message", `Notifications now go to ${short(address())}.`);
-    } catch (err) {
-      say("message", errorText(err), true);
-    }
-    await refresh();
-  }).catch((err) => say("message", err.message, true));
+function renderAddress() {
+  const area = addressArea({ on, adena: adenaState, wallet });
+  el("address-row").hidden = area.input === "hidden";
+  el("address").readOnly = area.input === "readonly";
+  el("connect").hidden = !area.connect;
+  el("wallet").hidden = !area.wallet;
+  el("wallet-address").textContent = wallet;
+  el("disconnect").hidden = !area.disconnect;
+  el("get-adena").hidden = !area.getAdena;
+  el("address-hint").hidden = area.locked;
+  el("locked-hint").hidden = !area.locked;
 }
 
 function busy(state) {
-  for (const id of ["disable", "connect", "send"]) {
+  for (const id of ["disable", "connect", "disconnect", "send"]) {
     el(id).disabled = state;
   }
   el("enable").disabled = !canEnable(state, trigger);
@@ -145,24 +150,27 @@ el("disable").addEventListener("click", async () => {
 });
 
 el("connect").addEventListener("click", async () => {
-  const before = el("connect-label").textContent;
+  const before = el("connect").textContent;
   busy(true);
-  el("connect-label").textContent = walletLabel("pending");
+  el("connect").textContent = walletLabel("pending");
   say("message", "Waiting for Adena…");
   try {
-    el("address").value = await connect(adena, chain);
-    el("connect-label").textContent = walletLabel("connected", address());
-    el("connect-dot").hidden = false;
-    say("message", `Adena connected as ${short(address())}.`);
+    wallet = await connect(adena, chain);
+    el("address").value = wallet;
+    say("message", `Adena connected as ${short(wallet)}.`);
     say("mismatch", "");
-    if (on) {
-      sync();
-    }
   } catch (err) {
-    el("connect-label").textContent = before;
     say("message", err.message, true);
   }
+  el("connect").textContent = before;
   busy(false);
+  renderAddress();
+});
+
+el("disconnect").addEventListener("click", () => {
+  wallet = "";
+  say("message", "Adena disconnected. Type an address, or connect again.");
+  renderAddress();
 });
 
 el("send").addEventListener("click", async () => {
@@ -199,13 +207,6 @@ el("copy").addEventListener("click", async () => {
   }
 });
 
-el("address").addEventListener("change", () => {
-  say("mismatch", "");
-  if (on) {
-    sync();
-  }
-});
-
 el("msg").addEventListener("input", renderMessage);
 
 el("chain-name").textContent = chain.name;
@@ -214,12 +215,12 @@ el("realm-link").href = realmURL;
 el("realm-link-foot").href = realmURL;
 el("server").textContent = gnotif.server;
 el("toast-host").textContent = location.host;
-el("connect").hidden = true;
-el("send").hidden = true;
+el("code-realm").textContent = echo;
 void findAdena(globalThis).then((found) => {
   adena = found;
-  el("connect").hidden = adena === undefined;
-  el("send").hidden = adena === undefined;
+  adenaState = found === undefined ? "absent" : "found";
+  el("send-row").hidden = found === undefined;
+  renderAddress();
   setPrimary();
 });
 renderMessage();

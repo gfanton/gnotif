@@ -1,6 +1,6 @@
 # The echo demo
 
-echo sends you your own message as a browser notification: one person, one message, one notification. You turn on notifications for your gno.land address, call the echo realm with a message, and the browser shows it, even with the page closed. The page sends the message with the Adena wallet, or gives you a gnokey command to run. The deployed demo runs at https://demo.gnotif.xyz, on the onyx testnet, with `https://gnotif.xyz/onyx` as its server.
+echo sends you your own message as a browser notification: one person, one message, one notification. You turn on notifications for your gno.land address, call the echo realm with a message, and the browser shows it, even with the page closed. The page sends the message with the Adena wallet, or links to Adena's install page when the browser has none, and always gives you a gnokey command to run. Under each step, "See the code" shows the client calls and the realm functions behind it; `snippets.test.mjs` checks them against `app.mjs` and `echo.gno`. The deployed demo runs at https://demo.gnotif.xyz, on the onyx testnet, with `https://gnotif.xyz/onyx` as its server.
 
 This folder holds the realms and the page:
 
