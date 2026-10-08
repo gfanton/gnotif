@@ -12,8 +12,8 @@ import (
 var ErrInvalidRegistry = errors.New("invalid registry path")
 
 var (
-	versionElem  = regexp.MustCompile(`^v(0|[1-9][0-9]*)$`)
-	registryPath = regexp.MustCompile(`^gno\.land/r/[^/]+(/[^/]+)*$`)
+	versionElem = regexp.MustCompile(`^v(0|[1-9][0-9]*)$`)
+	realmPrefix = regexp.MustCompile(`^gno\.land/r/[^/]+(/[^/]+)*$`)
 )
 
 // Registry names a registry realm version and, through it, every later
@@ -27,11 +27,11 @@ type Registry struct {
 func ParseRegistry(path string) (Registry, error) {
 	i := strings.LastIndex(path, "/")
 	if i < 0 {
-		return Registry{}, fmt.Errorf("%w %q: want gno.land/r/<path>/v<N>", ErrInvalidRegistry, path)
+		i = 0
 	}
 	prefix := path[:i]
-	n, ok := parseVersion(path[i+1:])
-	if !ok || !registryPath.MatchString(prefix) {
+	n, ok := parseVersion(strings.TrimPrefix(path[i:], "/"))
+	if !ok || !realmPrefix.MatchString(prefix) {
 		return Registry{}, fmt.Errorf("%w %q: want gno.land/r/<path>/v<N>", ErrInvalidRegistry, path)
 	}
 	return Registry{prefix: prefix, first: n}, nil

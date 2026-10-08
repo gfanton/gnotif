@@ -31,7 +31,7 @@ type Config struct {
 	Listener      net.Listener // nil: listen on Listen
 	Listen        string
 	Indexer       string // tx-indexer GraphQL URL
-	Registry      string // package path of the gnotif registry realm
+	Registry      string // registry path ending in /v<N>; later versions are followed too
 	StartHeight   int64  // first height to read when the database has no cursor
 	DB            string
 	Poll, MaxAge  time.Duration

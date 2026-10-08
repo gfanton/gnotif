@@ -25,8 +25,8 @@ var ErrSchemaVersion = errors.New("database was made by an older gnotifd")
 // ErrSchemaNewer reports a database made by a newer gnotifd.
 var ErrSchemaNewer = errors.New("database was made by a newer gnotifd")
 
-// MaxPerTarget is the most triggers one realm may have; TargetTriggers
-// returns no more.
+// MaxPerTarget is the most triggers one realm may have in each registry
+// version; TargetTriggers returns no more.
 const MaxPerTarget = 64
 
 // Store is the SQLite database. It is safe for concurrent use.

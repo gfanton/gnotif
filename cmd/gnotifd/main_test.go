@@ -105,6 +105,7 @@ func TestParseConfig(t *testing.T) {
 				_, err := parseConfig(append(without("-registry"), "-registry", path), env(""))
 				require.ErrorIs(t, err, watch.ErrInvalidRegistry)
 				assert.ErrorContains(t, err, "-registry")
+				assert.ErrorContains(t, err, "/v<N>")
 			})
 		}
 	})
