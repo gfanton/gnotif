@@ -14,7 +14,7 @@ The API has no accounts. A subscription is known by its push endpoint, which onl
 
 ## Get the VAPID key
 
-`GET /v1/vapid` answers the key a browser subscribes with, as unpadded base64url:
+`GET /v1/vapid` answers the key a browser subscribes with, as unpadded base64url, such as:
 
 ```json
 {"publicKey": "BO_JMLuc47778WCmQARvoO7_yLkXrl1fhV92AEkiKv-CMF7L4lglQDzbQqsO-TjsoLeXXQiwcQoebx2v_icTqn0"}

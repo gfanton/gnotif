@@ -1,6 +1,8 @@
 # gnotif
 
-gnotif sends browser notifications when something happens on a gno.land chain, even when the page that asked for them is closed. A dapp's realm emits events, and a trigger declared in the gnotif registry realm says which event notifies whom. gnotifd reads the chain through tx-indexer and sends a Web Push for each match. The dapp's page subscribes the browser with the `gnotif` npm package.
+gnotif sends browser notifications when something happens on a gno.land chain, even when the page that asked for them is closed. A dapp's realm emits events, and a trigger declared in the gnotif registry realm says which event notifies whom. gnotifd, the gnotif server, reads the chain through [tx-indexer](https://github.com/gnolang/tx-indexer) and sends a Web Push for each match. The dapp's page subscribes the browser with the `gnotif` npm package.
+
+Public server: [gnotif.xyz](https://gnotif.xyz). Live demo: [demo.gnotif.xyz](https://demo.gnotif.xyz). Version 0, onyx testnet only.
 
 ```
 +-- gno.land chain --------------------------------+
@@ -23,11 +25,11 @@ The page calls gnotifd only to subscribe and to choose its triggers. The notific
 
 ## Add notifications to a dapp
 
-Your realm emits an event and declares a trigger for it from its `init` function. Your page opts the browser in with the `gnotif` npm package, and gnotif.xyz sends the notifications. [Getting started](docs/getting-started.md) walks through each step and tries it on onyx.
+Your realm declares a trigger and your page opts the browser in. [Getting started](docs/getting-started.md) shows both and tries them on onyx.
 
 ## Run gnotifd
 
-gnotif.xyz is a public gnotifd that any dapp can use. To run your own, follow [Running gnotifd](docs/running-gnotifd.md): it covers installing gnotifd, making its VAPID keys and starting it.
+gnotif.xyz is a public gnotifd that any dapp can use. To run your own, follow [Running gnotifd](docs/running-gnotifd.md).
 
 ## Documentation
 
@@ -38,11 +40,11 @@ gnotif.xyz is a public gnotifd that any dapp can use. To run your own, follow [R
 - [HTTP API](docs/http-api.md): the `/v1` endpoints and their errors.
 - [Running gnotifd](docs/running-gnotifd.md): flags, VAPID keys, the push service allowlist, the indexer, backups and the container image.
 - [Deploying the registry](docs/deploying-realms.md): deploy your own registry on onyx.
-- [The demo](demo/README.md): echo, which sends you your own message as a notification, run on a local chain or deployed to onyx. pingpong, a two-player example, sits beside it.
+- [The demo](demo/README.md): echo, live at [demo.gnotif.xyz](https://demo.gnotif.xyz), sends you your own message as a notification. Run it on a local chain or deploy it to onyx. pingpong, a two-player example, sits beside it.
 
 ## Develop
 
-`make test` runs the realm tests, the Go tests and the browser client's tests. It needs Go, Node.js and the gno toolchain of the release onyx runs, v1.5.0, which CI pins as `GNO_VERSION` in [ci.yml](.github/workflows/ci.yml). Install that release into the Makefile's toolchain store, `GNO_STORE`:
+`make test` runs the realm tests, the Go tests and the browser client's tests. It needs Go, Node.js and gno v1.5.0, the release onyx runs, which CI pins as `GNO_VERSION` in [ci.yml](.github/workflows/ci.yml):
 
 ```sh
 GOBIN=$HOME/.cache/gno-toolchains/onyx go install github.com/gnolang/gno/gnovm/cmd/gno@v1.5.0
