@@ -29,7 +29,7 @@ package notify
 import (
 	"chain"
 
-	"gno.land/r/<namespace>/gnotif/v0"
+	"gno.land/r/nym-gfanton001/gnotif/v0"
 )
 
 func init(cur realm) {
@@ -42,7 +42,7 @@ func Notify(cur realm, to address, msg string) {
 }
 ```
 
-`gno.land/r/<namespace>/gnotif/v0` is the registry that gnotif.xyz reads. The `Declare` call says:
+`gno.land/r/nym-gfanton001/gnotif/v0` is the registry that gnotif.xyz reads. The `Declare` call says:
 
 - watch the `Message` events of this realm, whose path is `cur.PkgPath()`;
 - a browser opts in with an address, and hears about the events whose `to` attribute is that address;

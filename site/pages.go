@@ -32,7 +32,6 @@ const (
 	demoURL     = "https://demo.gnotif.xyz"
 	npmURL      = "https://www.npmjs.com/package/gnotif"
 
-	// registryPath is the registry behind serverURL. The placeholder
-	// namespace is replaced once the deploy is known.
-	registryPath = "gno.land/r/<namespace>/gnotif/v0"
+	// registryPath is the registry behind serverURL.
+	registryPath = "gno.land/r/nym-gfanton001/gnotif/v0"
 )

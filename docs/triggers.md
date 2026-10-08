@@ -1,6 +1,6 @@
 # Triggers
 
-A trigger tells gnotif servers which event of a realm to watch, who hears about it, and what the notification says. Triggers live in the gnotif registry realm, `gno.land/r/<namespace>/gnotif/v0`, the one gnotif.xyz reads.
+A trigger tells gnotif servers which event of a realm to watch, who hears about it, and what the notification says. Triggers live in the gnotif registry realm, `gno.land/r/nym-gfanton001/gnotif/v0`, the one gnotif.xyz reads.
 
 ## Declare a trigger
 
@@ -87,6 +87,6 @@ gnotif does not check that an address belongs to the browser that opts in with i
 
 Each registry version renders on gnoweb, under its own path:
 
-- `/r/<namespace>/gnotif/v0` lists every trigger, newest first, 50 to a page, and `/r/<namespace>/gnotif/v0:page/2` is the second page;
-- `/r/<namespace>/gnotif/v0:trigger/<id>` shows one trigger with its templates;
-- `/r/<namespace>/gnotif/v0:target/<realm path>` lists one realm's verified triggers, such as `:target/gno.land/r/<you>/notify`.
+- `/r/nym-gfanton001/gnotif/v0` lists every trigger, newest first, 50 to a page, and `/r/nym-gfanton001/gnotif/v0:page/2` is the second page;
+- `/r/nym-gfanton001/gnotif/v0:trigger/<id>` shows one trigger with its templates;
+- `/r/nym-gfanton001/gnotif/v0:target/<realm path>` lists one realm's verified triggers, such as `:target/gno.land/r/<you>/notify`.
