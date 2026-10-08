@@ -1,10 +1,10 @@
 import { Gnotif, GnotifError } from "./gnotif.js";
 import { connect, findAdena, sendEcho, shortAddress as short, walletLabel } from "./adena.mjs";
 import { gnokeyCommand } from "./echo-tx.mjs";
-import { chain, echo, gnoweb, server } from "./config.js";
+import { chain, echo, gnoweb, gnotif as options } from "./config.js";
 import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
 
-const gnotif = new Gnotif({ server, serviceWorker: "/sw.js" });
+const gnotif = new Gnotif({ ...options, serviceWorker: "/sw.js" });
 const el = (id) => document.getElementById(id);
 // The server cannot read opt-ins back, so the page keeps the last one it set.
 const STORAGE_KEY = "gnotif-demo";
@@ -212,7 +212,7 @@ el("chain-name").textContent = chain.name;
 el("chain-id").textContent = chain.id;
 el("realm-link").href = realmURL;
 el("realm-link-foot").href = realmURL;
-el("server").textContent = server;
+el("server").textContent = gnotif.server;
 el("toast-host").textContent = location.host;
 el("connect").hidden = true;
 el("send").hidden = true;
@@ -231,13 +231,13 @@ if (saved) {
 try {
   [trigger = null] = await gnotif.triggers(echo);
   if (trigger === null) {
-    say("message", `${server} lists no trigger for ${echo} yet. Deploy the echo realm first.`, true);
+    say("message", `${gnotif.server} lists no trigger for ${echo} yet. Deploy the echo realm first.`, true);
   } else {
     el("toast-title").textContent = trigger.title;
     renderMessage();
   }
 } catch (err) {
-  say("message", `Cannot load the echo trigger from ${server}: ${err.message}`, true);
+  say("message", `Cannot load the echo trigger from ${gnotif.server}: ${err.message}`, true);
 }
 el("enable").disabled = !canEnable(false, trigger);
 try {

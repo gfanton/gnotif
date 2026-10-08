@@ -1,6 +1,6 @@
 # Getting started
 
-This guide adds browser notifications to a gno.land dapp in four steps. Your realm emits an event. A trigger in the gnotif registry says who that event notifies. Your page opts the browser in with the `gnotif` npm package. Then you try it on the onyx testnet, where the public server at https://gnotif.xyz sends the notifications.
+This guide adds browser notifications to a gno.land dapp in four steps. Your realm emits an event. A trigger in the gnotif registry says who that event notifies. Your page opts the browser in with the `gnotif` npm package. Then you try it on the onyx testnet, where the public onyx server at https://gnotif.xyz/onyx sends the notifications.
 
 The example is a small realm with one function, `Notify`, that sends a message to an address. For a complete dapp, see the demo at https://demo.gnotif.xyz.
 
@@ -78,7 +78,7 @@ Then, in your page's script:
 ```js
 import { Gnotif } from "gnotif";
 
-const gnotif = new Gnotif({ server: "https://gnotif.xyz" });
+const gnotif = new Gnotif({ network: "onyx" });
 const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
 if (!message) throw new Error("gnotif.xyz has not read this realm's trigger yet");
 
@@ -88,6 +88,7 @@ button.addEventListener("click", async () => {
 });
 ```
 
+- `network: "onyx"` picks the public onyx server. It is the default, and `server` points the client at your own gnotifd instead ([the client's README](../js/README.md)).
 - `gno.land/r/<you>/notify` is your realm's path, where `<you>` is the address you deploy it with.
 - `triggers()` asks gnotif.xyz for your realm's triggers. This realm has one, the trigger from step 2. Ask on every page load, because a trigger's id can change ([Triggers](triggers.md#a-triggers-id-can-change)).
 - `enable()` asks the browser for permission to show notifications, so call it from a click. `button` is a button on your page.

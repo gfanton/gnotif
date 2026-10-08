@@ -1,10 +1,10 @@
 // Where the demo finds gnotif, the echo realm and its chain. These are the
 // local setup of demo/README.md; a deployment sets gnotif.xyz and onyx:
-// server "https://gnotif.xyz", chain { id: "onyx-1", name: "Gno.land onyx testnet",
+// gnotif { network: "onyx" }, chain { id: "onyx-1", name: "Gno.land onyx testnet",
 // rpc: "https://rpc.onyx.testnets.gno.land:443" }, gnoweb "https://onyx.testnets.gno.land".
 
-/** Base URL of the gnotif server. */
-export const server = "http://localhost:8080";
+/** Options for new Gnotif: the local gnotifd. */
+export const gnotif = { server: "http://localhost:8080" };
 
 /** Package path of the echo realm whose trigger the demo leads with. */
 export const echo = "gno.land/r/dev/echo/v0";

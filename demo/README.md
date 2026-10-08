@@ -1,6 +1,6 @@
 # The echo demo
 
-echo sends you your own message as a browser notification: one person, one message, one notification. You turn on notifications for your gno.land address, call the echo realm with a message, and the browser shows it, even with the page closed. The page sends the message with the Adena wallet, or gives you a gnokey command to run. The deployed demo runs at https://demo.gnotif.xyz, on the onyx testnet, with gnotif.xyz as its server.
+echo sends you your own message as a browser notification: one person, one message, one notification. You turn on notifications for your gno.land address, call the echo realm with a message, and the browser shows it, even with the page closed. The page sends the message with the Adena wallet, or gives you a gnokey command to run. The deployed demo runs at https://demo.gnotif.xyz, on the onyx testnet, with https://gnotif.xyz/onyx as its server.
 
 This folder holds the realms and the page:
 
@@ -9,7 +9,7 @@ This folder holds the realms and the page:
 | `gno.land/r/echo/v0/` | the echo realm, which the page calls |
 | `gno.land/r/pingpong/v0/` | pingpong, an example of a two-player dapp |
 | `index.html`, `app.mjs`, `address.mjs`, `adena.mjs`, `echo-tx.mjs`, `optin.mjs` | the page, a static dapp that opts the browser in with the `gnotif` client |
-| `config.js` | the gnotif server, the echo realm, the chain and the gnoweb that the page uses |
+| `config.js` | the gnotif client's options, the echo realm, the chain and the gnoweb that the page uses |
 
 ## The echo realm
 
@@ -143,7 +143,7 @@ Then repeat steps 3 to 6 without the block that makes the VAPID keys, and turn n
 
    onyx enables echo a few seconds after its deploy, and runs its `init` then, so the trigger is declared with no other call.
 3. Check that the registry lists the trigger as verified, on gnoweb at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0:target/gno.land/r/<namespace>/echo/v0`.
-4. Point the page at the deploy in `config.js`, whose comment gives the onyx values: `server` to your gnotifd's URL, `echo` to `gno.land/r/<namespace>/echo/v0`, `chain` to onyx's id, name and RPC, and `gnoweb` to onyx's gnoweb.
+4. Point the page at the deploy in `config.js`, whose comment gives the onyx values: `gnotif` to `{ server: "<your gnotifd's URL>" }`, or `{ network: "onyx" }` for gnotif.xyz, `echo` to `gno.land/r/<namespace>/echo/v0`, `chain` to onyx's id, name and RPC, and `gnoweb` to onyx's gnoweb.
 5. Serve this folder at the root of a site, with `gnotif.js` and `sw.js` copied from `js/src/`, as `make demo` does.
 
 ## pingpong, a two-player example

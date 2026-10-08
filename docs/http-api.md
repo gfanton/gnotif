@@ -1,6 +1,6 @@
 # HTTP API
 
-gnotifd serves its API under `/v1/`. Request and response bodies are JSON. Every `/v1/` answer allows any origin, and `OPTIONS` answers a browser's preflight with 204, so a dapp's page calls the API from its own origin. The API uses no cookies or other credentials. The `gnotif` npm package wraps these calls ([the client's README](../js/README.md)).
+gnotifd serves its API under `/v1/` at its root. A hosted server can put it under a path: the public onyx server answers at `https://gnotif.xyz/onyx/v1/`. Request and response bodies are JSON. Every `/v1/` answer allows any origin, and `OPTIONS` answers a browser's preflight with 204, so a dapp's page calls the API from its own origin. The API uses no cookies or other credentials. The `gnotif` npm package wraps these calls ([the client's README](../js/README.md)).
 
 | Method and path | Body | Answer |
 |---|---|---|

@@ -107,7 +107,8 @@ func TestBuildLanding(t *testing.T) {
 	assert.Contains(t, text, "func init(cur realm)", "the realm declares its trigger at deploy")
 	assert.Contains(t, text, "new Gnotif(")
 	assert.Contains(t, text, `gnotif.triggers("gno.land/r/<you>/notify")`, "the page asks for its own realm's triggers")
-	assert.Contains(t, html, "https://gnotif.xyz")
+	assert.Contains(t, text, `new Gnotif({ network: "onyx" })`, "the snippet names its network")
+	assert.Contains(t, html, "https://gnotif.xyz/onyx")
 	assert.GreaterOrEqual(t, strings.Count(html, `class="chroma"`), 3)
 	for _, anchor := range []string{"#1-emit-an-event", "#2-declare-the-trigger", "#3-add-the-client-to-your-page"} {
 		assert.Contains(t, html, `href="/docs/getting-started/`+anchor+`"`)
@@ -119,7 +120,8 @@ func TestBuildLanding(t *testing.T) {
 	assert.Contains(t, html, "Run your own gnotifd")
 	assert.NotContains(t, html, "Integrate")
 	assert.NotContains(t, html, `class="status"`)
-	assert.NotContains(t, strings.ToLower(text), "onyx", "the landing names no network or endpoint")
+	rest := strings.NewReplacer(`network: "onyx"`, "", serverURL, "").Replace(text)
+	assert.NotContains(t, strings.ToLower(rest), "onyx", "only the snippet's network and the server URL name onyx")
 	assert.NotContains(t, text, "indexer.")
 	assert.NotContains(t, html, "hosted public instance")
 }

@@ -44,7 +44,7 @@ func init(cur realm) {
 		Lang:  "js",
 		Code: `import { Gnotif } from "gnotif";
 
-const gnotif = new Gnotif({ server: "` + serverURL + `" });
+const gnotif = new Gnotif({ network: "onyx" });
 const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
 if (!message) throw new Error("gnotif.xyz has not read this realm's trigger yet");
 

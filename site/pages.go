@@ -28,7 +28,7 @@ const (
 	repoURL     = "https://github.com/gfanton/gnotif"
 	repoBlobURL = repoURL + "/blob/main/"
 	repoEditURL = repoURL + "/edit/main/"
-	serverURL   = "https://gnotif.xyz"
+	serverURL   = "https://gnotif.xyz/onyx"
 	demoURL     = "https://demo.gnotif.xyz"
 	npmURL      = "https://www.npmjs.com/package/gnotif"
 

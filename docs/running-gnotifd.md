@@ -1,6 +1,6 @@
 # Running gnotifd
 
-gnotifd is one binary that keeps its state in one SQLite file. It needs a tx-indexer for the chain, the package path of the gnotif registry, and a VAPID key pair to sign its pushes. It serves only the HTTP API under `/v1/` ([HTTP API](http-api.md)). Dapps serve their own pages.
+gnotifd is one binary that keeps its state in one SQLite file. It needs a tx-indexer for the chain, the package path of the gnotif registry, and a VAPID key pair to sign its pushes. It serves only the HTTP API under `/v1/` at its root ([HTTP API](http-api.md)); to serve it under a path, such as `/onyx/`, strip that path in front of gnotifd. Dapps serve their own pages.
 
 ## Install
 
