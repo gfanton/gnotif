@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "gnoverse": {
+      "source": {
+        "source": "github",
+        "repo": "gnoverse/gno-mcp"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "gnomcp@gnoverse": true
+  }
+}

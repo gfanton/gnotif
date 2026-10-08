@@ -6,3 +6,7 @@ demo/gnotif.js
 demo/sw.js
 vapid.env
 site/dist/
+# Overrides a global .claude ignore so the shared settings stay tracked.
+!/.claude/
+/.claude/*
+!/.claude/settings.json
