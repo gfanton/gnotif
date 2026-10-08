@@ -52,18 +52,44 @@ export function sameKey(a, b) {
   return bytes.length === b.length && bytes.every((v, i) => v === b[i]);
 }
 
+/** The hosted gnotif server of each gno.land network. */
+const servers = new Map([["onyx", "https://gnotif.xyz/onyx"]]);
+
 export class Gnotif {
+  #network;
   #server;
   #serviceWorker;
 
   /**
-   * @param {object} options
-   * @param {string} options.server base URL of the gnotif server
+   * @param {object} [options]
+   * @param {string} [options.network] gno.land network whose hosted server to
+   *   use, "onyx" by default; only a label when server is set
+   * @param {string} [options.server] base URL of another gnotif server, such
+   *   as your own gnotifd
    * @param {string} [options.serviceWorker] URL of the dapp's copy of sw.js
    */
-  constructor({ server, serviceWorker = "/sw.js" }) {
+  constructor({ network, server, serviceWorker = "/sw.js" } = {}) {
+    if (server === undefined) {
+      network ??= "onyx";
+      server = servers.get(network);
+      if (server === undefined) {
+        const known = [...servers.keys()].map((name) => `"${name}"`).join(", ");
+        throw new TypeError(`unknown network "${network}": use ${known}, or pass server`);
+      }
+    }
+    this.#network = network;
     this.#server = server.replace(/\/$/, "");
     this.#serviceWorker = serviceWorker;
+  }
+
+  /** @returns {string | undefined} the network named at construction */
+  get network() {
+    return this.#network;
+  }
+
+  /** @returns {string} base URL of the gnotif server this client calls */
+  get server() {
+    return this.#server;
   }
 
   /**

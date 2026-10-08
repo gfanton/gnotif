@@ -159,3 +159,46 @@ test("triggers rejects a target that is not a non-empty string before any reques
   }
   assert.equal(calls, 0);
 });
+
+test("no options use the onyx server", () => {
+  const g = new Gnotif();
+  assert.equal(g.network, "onyx");
+  assert.equal(g.server, "https://gnotif.xyz/onyx");
+});
+
+test("network onyx resolves to the hosted onyx server", async (t) => {
+  const requests = [];
+  t.after(stubGlobal("fetch", async (url) => {
+    requests.push(url);
+    return { ok: true, status: 200, json: async () => [] };
+  }));
+  await new Gnotif({ network: "onyx" }).triggers("gno.land/r/dev/echo/v0");
+  assert.equal(requests[0], "https://gnotif.xyz/onyx/v1/triggers?target=gno.land%2Fr%2Fdev%2Fecho%2Fv0");
+});
+
+test("an unknown network throws and names the known ones", () => {
+  for (const network of ["testnet", "constructor", "toString", ""]) {
+    assert.throws(() => new Gnotif({ network }), {
+      name: "TypeError",
+      message: `unknown network "${network}": use "onyx", or pass server`,
+    });
+  }
+});
+
+test("server wins over network and keeps its path", () => {
+  const g = new Gnotif({ network: "onyx", server: "https://x.example/onyx/" });
+  assert.equal(g.server, "https://x.example/onyx");
+  assert.equal(g.network, "onyx");
+  assert.equal(new Gnotif({ server: "http://localhost:8080" }).network, undefined);
+});
+
+test("enable registers the service worker with the network's server", async (t) => {
+  let registered;
+  t.after(stubGlobal("navigator", {
+    serviceWorker: { register: async (url) => { registered = url; throw new Error("stop"); } },
+  }));
+  t.after(stubGlobal("PushManager", function PushManager() {}));
+  t.after(stubGlobal("Notification", { requestPermission: async () => "granted" }));
+  await assert.rejects(new Gnotif({ network: "onyx" }).enable(), /stop/);
+  assert.equal(registered, "/sw.js?server=https%3A%2F%2Fgnotif.xyz%2Fonyx");
+});

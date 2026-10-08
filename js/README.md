@@ -26,10 +26,14 @@ assets by module path. Copy it again after each upgrade.
 ```js
 import { Gnotif, GnotifError } from "gnotif";
 
-const gnotif = new Gnotif({ server: "https://gnotif.xyz", serviceWorker: "/sw.js" });
+const gnotif = new Gnotif({ network: "onyx", serviceWorker: "/sw.js" });
 ```
 
-`server` is the base URL of the gnotif server. `serviceWorker` is the URL
+`network` names the gno.land network and its hosted server: `"onyx"`,
+served by https://gnotif.xyz/onyx, is the default and the only one for
+now. `server` points the client at another gnotif server, such as your
+own gnotifd; `network` is then only a label. `gnotif.network` and
+`gnotif.server` read both back. `serviceWorker` is the URL
 of the copy on the dapp's origin and defaults to `/sw.js`. A dapp served
 under a path, such as `/app/`, serves its copy from that path and passes
 `/app/sw.js`.
