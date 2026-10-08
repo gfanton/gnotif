@@ -2,7 +2,7 @@
 // a realm and an event type to watch, and the text of the notification that
 // gnotif servers send when a matching event lands on chain. A later registry
 // version follows the rules in
-// docs/how-it-works.md#rules-for-a-new-registry-version.
+// https://gnotif.xyz/docs/how-it-works/#rules-for-a-new-registry-version.
 package gnotif
 
 import (
