@@ -202,3 +202,16 @@ test("enable registers the service worker with the network's server", async (t) 
   await assert.rejects(new Gnotif({ network: "onyx" }).enable(), /stop/);
   assert.equal(registered, "/sw.js?server=https%3A%2F%2Fgnotif.xyz%2Fonyx");
 });
+
+test("enable registers the service worker with the icon resolved against the page", async (t) => {
+  let registered;
+  t.after(stubGlobal("navigator", {
+    serviceWorker: { register: async (url) => { registered = url; throw new Error("stop"); } },
+  }));
+  t.after(stubGlobal("PushManager", function PushManager() {}));
+  t.after(stubGlobal("Notification", { requestPermission: async () => "granted" }));
+  t.after(stubGlobal("document", { baseURI: "https://dapp.example/app/" }));
+  await assert.rejects(new Gnotif({ network: "onyx", icon: "icon.png" }).enable(), /stop/);
+  assert.equal(registered,
+    "/sw.js?server=https%3A%2F%2Fgnotif.xyz%2Fonyx&icon=https%3A%2F%2Fdapp.example%2Fapp%2Ficon.png");
+});

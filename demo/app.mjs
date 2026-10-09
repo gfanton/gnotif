@@ -5,7 +5,7 @@ import { chain, echo, gnoweb, gnotif as options } from "./config.js";
 import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
 import { addressArea } from "./address-area.mjs";
 
-const gnotif = new Gnotif({ ...options, serviceWorker: "/sw.js" });
+const gnotif = new Gnotif({ ...options, serviceWorker: "/sw.js", icon: "/icon.png" });
 const el = (id) => document.getElementById(id);
 // The server cannot read opt-ins back, so the page keeps the last one it set.
 const STORAGE_KEY = "gnotif-demo";

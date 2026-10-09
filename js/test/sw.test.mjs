@@ -99,6 +99,23 @@ test("push shows the payload with its link as tag", async () => {
   assert.equal(options.data.link, "/?game=7");
 });
 
+test("push shows the icon the worker was registered with, even on the fallback", async () => {
+  const icon = `${ORIGIN}/icon.png`;
+  const search = `?server=${encodeURIComponent("https://gnotif.example")}&icon=${encodeURIComponent(icon)}`;
+  const payload = JSON.stringify({ title: "Your turn", body: "Game 7", link: "/?game=7" });
+  for (const data of [{ text: () => payload }, null]) {
+    const { handlers, calls } = load({ search });
+    await dispatch(handlers.push, { data });
+    assert.equal(calls.show[0][1].icon, icon);
+  }
+});
+
+test("push sets no icon when the worker was registered without one", async () => {
+  const { handlers, calls } = load();
+  await dispatch(handlers.push, { data: null });
+  assert.equal("icon" in calls.show[0][1], false);
+});
+
 test("notificationclick never leaves the worker's origin", async () => {
   const { handlers, calls } = load();
   let closed = false;

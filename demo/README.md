@@ -9,6 +9,7 @@ This folder holds the realms and the page:
 | `gno.land/r/echo/v0/` | the echo realm, which the page calls |
 | `gno.land/r/pingpong/v0/` | pingpong, an example of a two-player dapp |
 | `index.html`, `app.mjs`, `address.mjs`, `adena.mjs`, `echo-tx.mjs`, `optin.mjs` | the page, a static dapp that opts the browser in with the `gnotif` client |
+| `icon.png` | the image each notification shows, the gnotif mark |
 | `config.js` | the gnotif client's options, the echo realm, the chain and the gnoweb that the page uses |
 
 ## The echo realm
@@ -118,7 +119,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
      -gas-wanted 10000000 -gas-fee 20000ugnot -chainid dev -remote http://127.0.0.1:26657 -home .tools/keys me
    ```
 
-   gnokey asks for the passphrase. Within about 15 seconds, the browser shows "Echo" with "Hello, me", even with the demo's tab closed. A click opens the demo.
+   gnokey asks for the passphrase. Within about 15 seconds, the browser shows "Echo" with "Hello, me" and the gnotif mark, even with the demo's tab closed. Safari on macOS shows its own icon instead. A click opens the demo.
 
 gnodev keeps its chain in memory, so a restarted gnodev starts an empty chain. To start again, stop gnodev, tx-indexer and gnotifd, and delete tx-indexer's and gnotifd's databases:
 

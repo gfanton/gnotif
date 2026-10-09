@@ -1,5 +1,6 @@
 // gnotif service worker. A dapp serves a copy of this file from its own
-// origin and registers it as sw.js?server=<gnotif server URL>.
+// origin and registers it as sw.js?server=<gnotif server URL>, plus an
+// optional &icon=<image URL> that every notification shows.
 
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
@@ -47,6 +48,10 @@ sw.addEventListener("push", (event) => {
   const p = parsePayload(event.data ? event.data.text() : "");
   /** @type {NotificationOptions & { renotify: boolean }} */
   const options = { body: p.body, tag: p.link, renotify: true, data: { link: p.link } };
+  const icon = new URL(sw.location.href).searchParams.get("icon");
+  if (icon !== null) {
+    options.icon = icon;
+  }
   event.waitUntil(sw.registration.showNotification(p.title, options));
 });
 

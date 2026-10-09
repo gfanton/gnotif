@@ -26,7 +26,7 @@ assets by module path. Copy it again after each upgrade.
 ```js
 import { Gnotif, GnotifError } from "gnotif";
 
-const gnotif = new Gnotif({ network: "onyx", serviceWorker: "/sw.js" });
+const gnotif = new Gnotif({ network: "onyx", serviceWorker: "/sw.js", icon: "/icon.png" });
 ```
 
 `network` names the gno.land network and its hosted server: `"onyx"`,
@@ -37,6 +37,12 @@ own gnotifd; `network` is then only a label. `gnotif.network` and
 of the copy on the dapp's origin and defaults to `/sw.js`. A dapp served
 under a path, such as `/app/`, serves its copy from that path and passes
 `/app/sw.js`.
+
+`icon` is the URL of an image every notification shows, such as the
+dapp's logo; a relative URL resolves against the page. Use a PNG: a
+browser may not show an SVG in a notification. Safari on macOS ignores
+`icon` and shows its own. A browser subscribed before the dapp set
+`icon` gets it only after `enable()` runs again.
 
 ### `triggers(target)`
 
@@ -113,10 +119,10 @@ with the browser's own error rather than a `GnotifError`.
 
 ## Notifications
 
-`sw.js` shows every push with its title and body. A notification
-replaces an earlier one with the same link. A push without a usable
-payload still shows "New activity", because Safari revokes a
-subscription whose pushes show nothing.
+`sw.js` shows every push with its title and body, and the `icon` the
+dapp passed, if any. A notification replaces an earlier one with the
+same link. A push without a usable payload still shows "New activity",
+because Safari revokes a subscription whose pushes show nothing.
 
 A click opens the notification's link on the dapp's origin. A link that
 lands on another origin opens the service worker's scope instead: the

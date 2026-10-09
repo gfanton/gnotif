@@ -26,7 +26,8 @@ test("the Gno snippet is lines of the echo realm", () => {
 test("the JavaScript snippet makes the calls the page makes", () => {
   const code = snippet("code-js");
   const app = read("./app.mjs");
-  assert.ok(code.includes('new Gnotif({ network: "onyx" })'), "the snippet names its network");
+  assert.ok(code.includes('new Gnotif({ network: "onyx", icon: "/icon.png" })'), "the snippet names its network and icon");
+  assert.ok(app.includes('icon: "/icon.png"'), "app.mjs passes the snippet's icon");
   for (const call of [".triggers(", ".enable()", ".setOptins("]) {
     assert.ok(code.includes(call), `the snippet calls ${call}`);
     assert.ok(app.includes(call), `app.mjs calls ${call}`);

@@ -59,6 +59,7 @@ export class Gnotif {
   #network;
   #server;
   #serviceWorker;
+  #icon;
 
   /**
    * @param {object} [options]
@@ -67,8 +68,10 @@ export class Gnotif {
    * @param {string} [options.server] base URL of another gnotif server, such
    *   as your own gnotifd
    * @param {string} [options.serviceWorker] URL of the dapp's copy of sw.js
+   * @param {string} [options.icon] URL of the image every notification
+   *   shows, such as a PNG of the dapp's logo, relative to the page
    */
-  constructor({ network, server, serviceWorker = "/sw.js" } = {}) {
+  constructor({ network, server, serviceWorker = "/sw.js", icon } = {}) {
     if (server === undefined) {
       network ??= "onyx";
       server = servers.get(network);
@@ -80,6 +83,7 @@ export class Gnotif {
     this.#network = network;
     this.#server = server.replace(/\/$/, "");
     this.#serviceWorker = serviceWorker;
+    this.#icon = icon;
   }
 
   /** @returns {string | undefined} the network named at construction */
@@ -117,7 +121,11 @@ export class Gnotif {
     if (await Notification.requestPermission() !== "granted") {
       throw new GnotifError("denied", "Notifications are not allowed for this site.");
     }
-    await navigator.serviceWorker.register(`${this.#serviceWorker}?server=${encodeURIComponent(this.#server)}`);
+    let url = `${this.#serviceWorker}?server=${encodeURIComponent(this.#server)}`;
+    if (this.#icon !== undefined) {
+      url += `&icon=${encodeURIComponent(new URL(this.#icon, document.baseURI).href)}`;
+    }
+    await navigator.serviceWorker.register(url);
     const reg = await navigator.serviceWorker.ready;
     const { publicKey } = /** @type {{ publicKey: string }} */ (await this.#request("GET", "/v1/vapid"));
     const key = base64UrlToBytes(publicKey);

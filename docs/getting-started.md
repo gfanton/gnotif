@@ -94,7 +94,7 @@ button.addEventListener("click", async () => {
 - `enable()` asks the browser for permission to show notifications, so call it from a click. `button` is a button on your page.
 - `setOptins()` opts this browser in. `address` is the address of the person using the page, such as the one their wallet shows.
 
-[The client's README](../js/README.md) documents each method and its errors.
+[The client's README](../js/README.md) documents each method, its errors and the `icon` option.
 
 ## 4. Try it on onyx
 
