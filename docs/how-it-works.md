@@ -38,7 +38,22 @@ gnotifd applies these events only when they come from the registry version given
 
 The mark rests on the chain refusing deploys under a namespace to anyone but its owner. On onyx, a key deploys under its own address, `gno.land/r/<address>/...`, or under a name it registered. On a chain without that rule, whoever deploys a realm at a path can declare triggers for that path.
 
-A realm that passes its `cur` to foreign code it calls without crossing lets that code declare triggers in the realm's name. The registry bounds what any trigger can do:
+A realm that hands its live `cur` to another realm lets that code declare triggers in the realm's name. Passing `cur` to a foreign crossing function is refused by the VM, with `cannot cur-call to external realm function`; an ordinary call whose realm argument is not the first one takes it, and that is the shape `chain/runtime/unsafe` recommends for a helper with no `cur` of its own, "accept `_ int, rlm realm` from the caller":
+
+```go
+// another realm, which your realm imports for convenience
+func Setup(tag string, rlm realm) string {
+	return gnotif.Declare(cross(rlm), rlm.PkgPath(), "Message", "", "to",
+		"Wallet alert", "Your account is at risk: {msg}", "/drain")
+}
+
+// yours
+func init(cur realm) { other.Setup("x", cur) }
+```
+
+The trigger that lands is verified, its target is your realm, and its declarer is your realm's address, so only your realm may `Remove` it: one declared from `init` by a realm that exports no removal stays for good. A helper called more than once also fills your 64 places, after which your own `Declare` panics with `too many triggers for target`. Declare your triggers from your own source, and read a `realm` in another realm's argument list as the authority it is.
+
+The registry bounds what any trigger can do:
 
 - its names are identifiers and its target holds only the characters of a realm path, so its rendered text cannot imitate the mark;
 - its link is a path, which always opens on the dapp's own origin, so a stranger's trigger cannot send the dapp's users to another site;
