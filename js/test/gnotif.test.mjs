@@ -115,12 +115,75 @@ test("enabled is false when no service worker registration covers the page", asy
   assert.equal(await new Gnotif({ server: SERVER }).enabled(), false);
 });
 
-test("disable and setOptins reject as inactive when no registration covers the page", async (t) => {
+test("disable rejects as inactive when no registration covers the page", async (t) => {
   stubBrowser(t, { permission: "granted", subscription: null, registered: false });
   const g = new Gnotif({ server: SERVER });
-  const inactive = (err) => err instanceof GnotifError && err.code === "inactive";
-  await assert.rejects(g.disable(), inactive);
-  await assert.rejects(g.setOptins([]), inactive);
+  await assert.rejects(g.disable(), (err) => err instanceof GnotifError && err.code === "inactive");
+});
+
+test("setOptins without push keeps the set and sends nothing", async (t) => {
+  stubBrowser(t, { permission: "granted", subscription: null, registered: false });
+  const requests = [];
+  t.after(stubGlobal("fetch", async (url, init) => {
+    requests.push({ url, init });
+    return { ok: true, status: 204, json: async () => null };
+  }));
+  await new Gnotif({ server: SERVER }).setOptins([{ trigger: "0000001", value: "g1bob" }]);
+  assert.equal(requests.length, 0);
+});
+
+// stubEnable fakes everything enable() touches: a granted prompt, a service
+// worker, a push manager without a subscription, and a server answering
+// /v1/vapid. It returns the requests the server received.
+function stubEnable(t) {
+  const sub = { endpoint: "E", options: {}, toJSON: () => ({ endpoint: "E", keys: {} }) };
+  let current = null;
+  const reg = {
+    pushManager: {
+      getSubscription: async () => current,
+      subscribe: async () => {
+        current = sub;
+        return sub;
+      },
+    },
+  };
+  t.after(stubGlobal("navigator", {
+    serviceWorker: { register: async () => reg, ready: Promise.resolve(reg), getRegistration: async () => reg },
+  }));
+  t.after(stubGlobal("PushManager", function PushManager() {}));
+  t.after(stubGlobal("Notification", { permission: "granted", requestPermission: async () => "granted" }));
+  const requests = [];
+  t.after(stubGlobal("fetch", async (url, init = {}) => {
+    requests.push({ url, method: init.method ?? "GET", body: init.body === undefined ? undefined : JSON.parse(init.body) });
+    if (url.endsWith("/v1/vapid")) {
+      return { ok: true, status: 200, json: async () => ({ publicKey: "AQID" }) };
+    }
+    return { ok: true, status: 204, json: async () => null };
+  }));
+  return requests;
+}
+
+test("enable registers the kept opt-ins", async (t) => {
+  const requests = stubEnable(t);
+  const g = new Gnotif({ server: SERVER });
+  const optins = [{ trigger: "0000001", value: "g1bob" }];
+  await g.setOptins(optins);
+  await g.enable();
+  assert.deepEqual(requests.map((r) => `${r.method} ${r.url}`), [
+    `GET ${SERVER}/v1/vapid`,
+    `PUT ${SERVER}/v1/subscription`,
+    `PUT ${SERVER}/v1/subscription/optins`,
+  ]);
+  assert.deepEqual(requests[2].body, { endpoint: "E", optins });
+});
+
+test("enable without a kept set sends no opt-ins", async (t) => {
+  const requests = stubEnable(t);
+  await new Gnotif({ server: SERVER }).enable();
+  assert.deepEqual(requests.map((r) => `${r.method} ${r.url}`), [
+    `GET ${SERVER}/v1/vapid`,
+    `PUT ${SERVER}/v1/subscription`,
+  ]);
 });
 
 test("enabled is false without the Push API", async (t) => {

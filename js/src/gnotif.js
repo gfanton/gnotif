@@ -16,6 +16,13 @@
  * @property {boolean} verified
  */
 
+/**
+ * One trigger a browser asks to hear about, for one param value.
+ * @typedef {object} Optin
+ * @property {string} trigger trigger id
+ * @property {string} value the param value, "" for a trigger without a param
+ */
+
 export class GnotifError extends Error {
   /**
    * @param {"unsupported" | "denied" | "inactive" | "server"} code
@@ -60,6 +67,8 @@ export class Gnotif {
   #server;
   #serviceWorker;
   #icon;
+  /** @type {Optin[] | null} the set every channel uses, null until setOptins */
+  #optins = null;
 
   /**
    * @param {object} [options]
@@ -137,17 +146,24 @@ export class Gnotif {
     sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array(key) });
     const json = sub.toJSON();
     await this.#request("PUT", "/v1/subscription", json);
+    if (this.#optins !== null) {
+      await this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins: this.#optins });
+    }
     return json;
   }
 
   /**
-   * @param {{ trigger: string, value: string }[]} optins replaces this
-   *   browser's opt-ins
+   * Keeps optins as the set every channel uses, and sends it to the server
+   * for push when this browser is subscribed.
+   * @param {Optin[]} optins replaces the previous set
    * @returns {Promise<void>}
    */
   async setOptins(optins) {
-    const sub = await this.#subscription();
-    await this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins });
+    this.#optins = optins;
+    const sub = await this.#find();
+    if (sub) {
+      await this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins });
+    }
   }
 
   /**

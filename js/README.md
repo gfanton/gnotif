@@ -38,6 +38,19 @@ of the copy on the dapp's origin and defaults to `/sw.js`. A dapp served
 under a path, such as `/app/`, serves its copy from that path and passes
 `/app/sw.js`.
 
+A dapp reaches the browser in two ways, each optional: push, which
+shows OS notifications even with the tab closed, and live updates,
+which reach the open page. Both use the one opt-in set from
+`setOptins`, and each sends the server only this:
+
+| Channel | Sent to the server |
+|---|---|
+| push | the push subscription's endpoint and keys, and the opt-ins |
+| live updates | the opt-ins |
+
+An opt-in's value is often the user's address, so turn either channel
+on when the user asks for it.
+
 `icon` is the URL of an image every notification shows, such as the
 dapp's logo; a relative URL resolves against the page. Use a PNG: a
 browser may not show an SVG in a notification. Safari on macOS ignores
@@ -63,9 +76,10 @@ keeping an id. It rejects with a `TypeError`, before any request, when
 ### `enable()`
 
 Asks for notification permission, subscribes the browser, and registers
-it with the server. It resolves the subscription as
-`PushSubscriptionJSON`. Call it from a user gesture such as a click, or
-the browser may refuse or hide the permission prompt.
+it with the server, with the opt-ins `setOptins` kept if it was called.
+It resolves the subscription as `PushSubscriptionJSON`. Call it from a
+user gesture such as a click, or the browser may refuse or hide the
+permission prompt.
 
 It throws a `GnotifError` with code:
 
@@ -79,12 +93,13 @@ It throws a `GnotifError` with code:
 
 ### `setOptins(optins)`
 
-Replaces the browser's opt-ins with `optins`, a list of
-`{ trigger, value }`, where `value` is `""` for a trigger without a
-param. It throws a `GnotifError` with code `inactive` when the browser
-holds no push subscription, and `server` when the server refuses the
-set: status 400 for an opt-in that breaks a rule, 404 when the server
-does not know the subscription. Call `enable()` to register it again.
+Keeps `optins`, a list of `{ trigger, value }` where `value` is `""` for
+a trigger without a param, as the set both channels use, and sends it
+to the server for push when the browser holds a push subscription.
+Without one, it only keeps the set, for a later `enable()`. It throws a
+`GnotifError` with code `server` when the server refuses the set:
+status 400 for an opt-in that breaks a rule, 404 when the server does
+not know the subscription. Call `enable()` to register it again.
 
 The server cannot read opt-ins back, so keep the set you last sent.
 
