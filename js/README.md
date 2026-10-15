@@ -147,8 +147,10 @@ that removes it. A handler that throws is reported with
 | `reconnect` | nothing | it is back, with the set sent again |
 | `error` | a `GnotifError` | a live failure no promise waits on, such as the set refused after a reconnect |
 
-`link` arrives resolved against the page's origin, and as the origin's
-root when it would land on another origin. `attrs` lists the event's
+`link` arrives resolved on the page's origin. A link that would land on
+another origin arrives as the service worker's scope, as for a push: the
+path `sw.js` is served from, `/` for a dapp at the root of its origin.
+`attrs` lists the event's
 attributes as `{ key, value }`, and `height` and `tx` name the
 transaction that emitted it.
 

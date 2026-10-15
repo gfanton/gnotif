@@ -75,7 +75,7 @@ class FakeWebSocket {
 function stubLive(t, random = 0.5) {
   FakeWebSocket.instances = [];
   t.after(stubGlobal("WebSocket", FakeWebSocket));
-  t.after(stubGlobal("location", { origin: "https://dapp.example" }));
+  t.after(stubGlobal("location", { origin: "https://dapp.example", href: "https://dapp.example/app/game" }));
   t.after(stubGlobal("navigator", {}));
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   const rnd = { value: random };
@@ -87,8 +87,8 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 const sockets = () => FakeWebSocket.instances;
 const last = () => FakeWebSocket.instances.at(-1);
 
-async function connected(t, optins = A) {
-  const g = new Gnotif({ server: SERVER });
+async function connected(t, optins = A, options = {}) {
+  const g = new Gnotif({ server: SERVER, ...options });
   await g.setOptins(optins);
   const p = g.connect();
   last().open();
@@ -210,6 +210,17 @@ test("notifications reach handlers with the link resolved on the page origin", a
   assert.equal(type, "notification");
   assert.deepEqual(got[0], fields);
   assert.equal(got[1].link, "https://dapp.example/");
+});
+
+test("a link to another origin gives the service worker's scope", async (t) => {
+  stubLive(t);
+  const g = await connected(t, A, { serviceWorker: "/app/sw.js" });
+  const got = [];
+  g.on("notification", (n) => got.push(n));
+  last().receive(JSON.stringify(notification("//evil.example/x")));
+  last().receive(JSON.stringify(notification("/?game=7")));
+  assert.equal(got[0].link, "https://dapp.example/app/");
+  assert.equal(got[1].link, "https://dapp.example/?game=7");
 });
 
 test("on returns a function that removes the handler", async (t) => {

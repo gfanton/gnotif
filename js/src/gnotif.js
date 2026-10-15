@@ -68,38 +68,38 @@ function isAttr(v) {
   return isRecord(v) && typeof v.key === "string" && typeof v.value === "string";
 }
 
-// sameOriginLink resolves link against origin, and gives the origin's root
-// for a link that lands on another origin, such as "//host" or "/\host".
+// safeLink resolves link against the service worker's scope, and gives the
+// scope for a link that lands on another origin, such as "//host" or "/\host".
 /**
  * @param {string} link
- * @param {string} origin
+ * @param {string} scope
  * @returns {string}
  */
-function sameOriginLink(link, origin) {
+function safeLink(link, scope) {
   try {
-    const url = new URL(link, origin);
-    if (url.origin === origin) {
+    const url = new URL(link, scope);
+    if (url.origin === new URL(scope).origin) {
       return url.href;
     }
   } catch {
-    // an unparsable link opens the root
+    // an unparsable link gives the scope
   }
-  return origin + "/";
+  return scope;
 }
 
 /**
  * @param {Record<string, unknown>} f a decoded notification frame
- * @param {string} origin the page's origin
+ * @param {string} scope the service worker's scope
  * @returns {LiveNotification | null} null when a field is missing or mistyped
  */
-function liveNotification(f, origin) {
+function liveNotification(f, scope) {
   const { trigger, value, title, body, link, height, tx, attrs } = f;
   if (typeof trigger !== "string" || typeof value !== "string" || typeof title !== "string" ||
     typeof body !== "string" || typeof link !== "string" || typeof height !== "number" ||
     typeof tx !== "string" || !Array.isArray(attrs) || !attrs.every(isAttr)) {
     return null;
   }
-  return { trigger, value, title, body, link: sameOriginLink(link, origin), height, tx, attrs };
+  return { trigger, value, title, body, link: safeLink(link, scope), height, tx, attrs };
 }
 
 export class GnotifError extends Error {
@@ -462,7 +462,9 @@ export class Gnotif {
         this.#onReply(typeof frame.error === "string" ? frame.error : "gnotif server refused the opt-ins");
         return;
       case "notification": {
-        const n = liveNotification(frame, location.origin);
+        // register() without a scope option scopes the worker to its URL's directory.
+        const scope = new URL("./", new URL(this.#serviceWorker, location.href)).href;
+        const n = liveNotification(frame, scope);
         if (n) {
           this.#emit("notification", n);
         }
