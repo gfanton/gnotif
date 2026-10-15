@@ -178,6 +178,18 @@ input[readonly]:hover { border-color: var(--color-line); }
 .status.error { color: var(--color-error); }
 .status .mono { font-size: var(--text-xs); }
 
+/* ---- Live arrivals */
+.arrivals { display: flex; flex-direction: column; gap: var(--space-2); }
+.arrivals ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-line); border-left: 2px solid var(--color-indicator); border-radius: var(--radius); }
+.arrivals ol:empty { display: none; }
+.arrivals ol:not(:empty) + .hint { display: none; }
+.arrival { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 0 var(--space-3); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); line-height: 1.35; animation: arrive 1.6s ease-out; }
+.arrival + .arrival { border-top: 1px solid var(--color-line); }
+.arrival time { grid-row: span 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
+.arrival b { font-weight: 600; }
+.arrival span { color: var(--color-text-muted); overflow-wrap: anywhere; }
+@keyframes arrive { from { background: color-mix(in oklch, var(--color-indicator) 22%, transparent); } }
+
 /* ---- The notification, previewed */
 .preview { display: flex; flex-direction: column; gap: var(--space-3); }
 .preview .eyebrow { letter-spacing: 0.06em; }
@@ -222,6 +234,7 @@ input[readonly]:hover { border-color: var(--color-line); }
 /* Reduced motion: nothing moves. Last, so it wins over every animation above. */
 @media (prefers-reduced-motion: reduce) {
   .wordmark .dot::after { animation: none; }
+  .arrival { animation: none; }
 }
 </style>
 </head>
@@ -275,6 +288,11 @@ input[readonly]:hover { border-color: var(--color-line); }
         <p class="hint" id="live-hint">Keeps a connection to the gnotif server open while this page is open, and sends it your address. Messages then show here as they arrive, with no permission prompt.</p>
       </div>
       <p class="state" id="live-state"><i class="indicator" aria-hidden="true"></i><span id="live-state-text">Live updates off</span></p>
+      <div class="arrivals" id="arrivals" role="log" aria-labelledby="arrivals-head" hidden>
+        <p class="eyebrow" id="arrivals-head">Arrived live</p>
+        <ol id="arrivals-list"></ol>
+        <p class="hint">Nothing has arrived yet.</p>
+      </div>
       <p class="status" id="message" role="status" aria-live="polite"></p>
       <details class="reveal">
         <summary>See the code</summary>
@@ -319,7 +337,6 @@ input[readonly]:hover { border-color: var(--color-line); }
       </div>
       <p class="hint">Run it with the key of the address in step 1. The notification goes to whoever sends.</p>
       <p class="status" id="sent" role="status" aria-live="polite"></p>
-      <p class="status" id="live-latest" aria-live="polite"></p>
       <details class="reveal">
         <summary>See the code</summary>
         <div class="code">

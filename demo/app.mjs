@@ -72,6 +72,7 @@ async function startLive() {
   await gnotif.connect();
   live = true;
   setLiveState("Live updates on", true);
+  el("arrivals").hidden = false;
 }
 
 function stopLive() {
@@ -79,6 +80,28 @@ function stopLive() {
   live = false;
   el("live").checked = false;
   setLiveState("Live updates off");
+  el("arrivals").hidden = true;
+}
+
+const ARRIVALS_KEPT = 5;
+
+function addArrival({ title, body }) {
+  const at = new Date();
+  const time = document.createElement("time");
+  time.dateTime = at.toISOString();
+  time.textContent = at.toLocaleTimeString();
+  const head = document.createElement("b");
+  head.textContent = title;
+  const text = document.createElement("span");
+  text.textContent = body;
+  const item = document.createElement("li");
+  item.className = "arrival";
+  item.append(time, head, text);
+  const list = el("arrivals-list");
+  list.prepend(item);
+  while (list.children.length > ARRIVALS_KEPT) {
+    list.lastElementChild.remove();
+  }
 }
 
 // One amber button at a time: the next action in the flow.
@@ -268,7 +291,7 @@ el("address").addEventListener("change", async () => {
   }
 });
 
-gnotif.on("notification", (n) => say("live-latest", `Arrived live: ${n.title}. ${n.body}`));
+gnotif.on("notification", addArrival);
 gnotif.on("disconnect", () => setLiveState("Reconnecting…"));
 gnotif.on("reconnect", () => setLiveState("Live updates on", true));
 gnotif.on("error", (err) => say("message", err.message, true));
