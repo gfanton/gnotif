@@ -7,15 +7,11 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-
-	"github.com/gfanton/gnotif/internal/trigger"
 )
 
 const (
 	maxEndpoint = 1000
-	maxOptins   = 50
 	maxTarget   = 256
-	maxValue    = 4096
 	p256dhSize  = 65
 	authSize    = 16
 )
@@ -56,27 +52,6 @@ func checkKey(name, value string, size int) error {
 	if name == "p256dh" {
 		if _, err := ecdh.P256().NewPublicKey(b); err != nil {
 			return errors.New("p256dh must be a P-256 public key")
-		}
-	}
-	return nil
-}
-
-func checkOptins(optins []optinJSON, triggers map[string]trigger.Trigger) error {
-	for _, o := range optins {
-		t, ok := triggers[o.Trigger]
-		switch {
-		case !ok:
-			return fmt.Errorf("unknown trigger %q", o.Trigger)
-		case t.Param == "" && o.Value != "":
-			return fmt.Errorf("trigger %s takes no value", t.ID)
-		case t.Param != "" && o.Value == "":
-			return fmt.Errorf("trigger %s needs a value for %s", t.ID, t.Param)
-		case len(o.Value) > maxValue:
-			return fmt.Errorf("value longer than %d bytes", maxValue)
-		case o.Value != strings.TrimSpace(o.Value):
-			// A value with surrounding white space never equals an event
-			// attribute.
-			return errors.New("value has leading or trailing white space")
 		}
 	}
 	return nil
