@@ -4,11 +4,10 @@ import { gnokeyCommand } from "./echo-tx.mjs";
 import { chain, echo, gnoweb, gnotif as options } from "./config.js";
 import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
 import { addressArea } from "./address-area.mjs";
+import { load, save } from "./settings.mjs";
 
 const gnotif = new Gnotif({ ...options, serviceWorker: "/sw.js", icon: "/icon.png" });
 const el = (id) => document.getElementById(id);
-// The server cannot read opt-ins back, so the page keeps the last one it set.
-const STORAGE_KEY = "gnotif-demo";
 const realmURL = gnoweb.replace(/\/$/, "") + echo.replace(/^gno\.land/, "");
 /** @type {import("./adena.mjs").Adena | undefined} */
 let adena;
@@ -17,15 +16,17 @@ let adenaState = "pending";
 /** The connected Adena address, "" when none. */
 let wallet = "";
 let trigger = null;
-let on = false;
+let on = false; // push is on
+let live = false; // live updates are on
 
-/** @returns {{ address: string, optins: { trigger: string, value: string }[] } | null} */
 function stored() {
-  return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+  return load(localStorage);
 }
 
-function save(optins) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ address: address(), optins }));
+// remember stores the address as typed, with changes over what is stored.
+function remember(changes) {
+  const s = stored() ?? { address: "", optins: [], live: false, push: false };
+  save(localStorage, { ...s, address: address(), ...changes });
 }
 
 function address() {
@@ -57,7 +58,27 @@ function optin() {
 async function setOptin() {
   const optins = optin();
   await gnotif.setOptins(optins);
-  save(optins);
+  remember({ optins });
+}
+
+function setLiveState(text, connected = false) {
+  el("live-state").classList.toggle("on", connected);
+  el("live-state-text").textContent = text;
+}
+
+async function startLive() {
+  setLiveState("Connecting…");
+  await setOptin();
+  await gnotif.connect();
+  live = true;
+  setLiveState("Live updates on", true);
+}
+
+function stopLive() {
+  gnotif.disconnect();
+  live = false;
+  el("live").checked = false;
+  setLiveState("Live updates off");
 }
 
 // One amber button at a time: the next action in the flow.
@@ -75,7 +96,7 @@ async function refresh() {
   el("state-text").textContent = on && saved
     ? `On for ${saved.address}`
     : on ? "On" : blocked ? "Blocked in the browser's site settings" : "Off";
-  el("enable").textContent = saved && !on ? "Turn notifications on again" : "Turn on notifications";
+  el("enable").textContent = saved?.push && !on ? "Turn notifications on again" : "Turn on notifications";
   el("enable").hidden = on;
   el("disable").hidden = !on;
   renderAddress();
@@ -128,6 +149,7 @@ el("enable").addEventListener("click", async () => {
   try {
     await gnotif.enable();
     await setOptin();
+    remember({ push: true });
     say("message", "Notifications on. Send yourself a message in step 2.");
   } catch (err) {
     say("message", errorText(err), true);
@@ -140,7 +162,7 @@ el("disable").addEventListener("click", async () => {
   busy(true);
   try {
     await gnotif.disable();
-    localStorage.removeItem(STORAGE_KEY);
+    remember({ push: false });
     say("message", "Notifications off.");
   } catch (err) {
     say("message", errorText(err), true);
@@ -209,6 +231,48 @@ el("copy").addEventListener("click", async () => {
 
 el("msg").addEventListener("input", renderMessage);
 
+el("live").addEventListener("change", async () => {
+  if (!el("live").checked) {
+    stopLive();
+    remember({ live: false });
+    say("message", "Live updates off.");
+    return;
+  }
+  try {
+    optin();
+  } catch (err) {
+    el("live").checked = false;
+    say("message", err.message, true);
+    el("address").focus();
+    return;
+  }
+  try {
+    await startLive();
+    remember({ live: true });
+    say("message", "Live updates on. Send yourself a message in step 2.");
+  } catch (err) {
+    stopLive();
+    say("message", errorText(err), true);
+  }
+});
+
+// While live updates are on, a new address replaces the opt-in at once.
+el("address").addEventListener("change", async () => {
+  if (!live) {
+    return;
+  }
+  try {
+    await setOptin();
+  } catch (err) {
+    say("message", errorText(err), true);
+  }
+});
+
+gnotif.on("notification", (n) => say("live-latest", `Arrived live: ${n.title}. ${n.body}`));
+gnotif.on("disconnect", () => setLiveState("Reconnecting…"));
+gnotif.on("reconnect", () => setLiveState("Live updates on", true));
+gnotif.on("error", (err) => say("message", err.message, true));
+
 el("chain-name").textContent = chain.name;
 el("chain-id").textContent = chain.id;
 el("realm-link").href = realmURL;
@@ -243,9 +307,19 @@ try {
 el("enable").disabled = !canEnable(false, trigger);
 try {
   await refresh();
-  if (!on && saved) {
+  if (!on && saved?.push) {
     say("message", "This browser stopped receiving notifications. Turn them on again to resume.");
   }
 } catch (err) {
   say("message", err.message, true);
+}
+// The visitor turned live updates on before: resume them.
+if (saved?.live && trigger !== null) {
+  el("live").checked = true;
+  try {
+    await startLive();
+  } catch (err) {
+    stopLive();
+    say("message", errorText(err), true);
+  }
 }

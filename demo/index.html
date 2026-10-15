@@ -140,6 +140,8 @@ code, pre { font-family: var(--font-display); font-size: 0.92em; }
 
 .field { display: flex; flex-direction: column; gap: var(--space-2); }
 .field label { font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); }
+.field label.check { display: flex; align-items: center; gap: var(--space-2); color: var(--color-text); cursor: pointer; }
+.check input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--color-indicator); }
 .row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .row input { flex: 1 1 16rem; min-width: 0; }
 input[type="text"] { font: inherit; font-size: var(--text-base); line-height: 1.55; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-canvas); color: var(--color-text); }
@@ -268,6 +270,11 @@ input[readonly]:hover { border-color: var(--color-line); }
         <button type="button" class="button" id="disable" hidden>Turn off</button>
       </div>
       <p class="state" id="state"><i class="indicator" aria-hidden="true"></i><span id="state-text">Checking…</span></p>
+      <div class="field">
+        <label class="check" for="live"><input type="checkbox" id="live" aria-describedby="live-hint"> Live updates on this page</label>
+        <p class="hint" id="live-hint">Keeps a connection to the gnotif server open while this page is open, and sends it your address. Messages then show here as they arrive, with no permission prompt.</p>
+      </div>
+      <p class="state" id="live-state"><i class="indicator" aria-hidden="true"></i><span id="live-state-text">Live updates off</span></p>
       <p class="status" id="message" role="status" aria-live="polite"></p>
       <details class="reveal">
         <summary>See the code</summary>
@@ -312,6 +319,7 @@ input[readonly]:hover { border-color: var(--color-line); }
       </div>
       <p class="hint">Run it with the key of the address in step 1. The notification goes to whoever sends.</p>
       <p class="status" id="sent" role="status" aria-live="polite"></p>
+      <p class="status" id="live-latest" aria-live="polite"></p>
       <details class="reveal">
         <summary>See the code</summary>
         <div class="code">
