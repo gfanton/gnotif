@@ -38,6 +38,9 @@ type Config struct {
 	Wake        chan<- struct{}
 	Now         func() time.Time
 	Log         *slog.Logger
+	// Publish receives every match, in chain order, once the transaction
+	// that read it is committed. Nil publishes nowhere.
+	Publish func([]trigger.Match)
 }
 
 // Watcher runs the poll loop. Tick and Run are not safe for concurrent use.
@@ -136,9 +139,10 @@ func (w *Watcher) tick(ctx context.Context) error {
 	}
 
 	var c counts
+	var matches []trigger.Match
 	err = w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
 		var err error
-		if c, err = w.process(tx, batch.Events, batch.BlockTimes); err != nil {
+		if c, matches, err = w.process(tx, batch.Events, batch.BlockTimes); err != nil {
 			return err
 		}
 		return tx.SetCursor(store.Cursor{HeightDone: end, Bound: batch.Latest})
@@ -147,6 +151,7 @@ func (w *Watcher) tick(ctx context.Context) error {
 		return err
 	}
 	w.report(c, cur.HeightDone+1, end)
+	w.publish(matches)
 	return nil
 }
 
@@ -179,9 +184,10 @@ func (w *Watcher) readBlock(ctx context.Context, cur store.Cursor) error {
 		}
 		next := store.Cursor{HeightDone: cur.HeightDone, Bound: cur.Bound, NextTx: ref.Index + 1}
 		var c counts
+		var matches []trigger.Match
 		err = w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
 			var err error
-			if c, err = w.process(tx, events, blockTimes); err != nil {
+			if c, matches, err = w.process(tx, events, blockTimes); err != nil {
 				return err
 			}
 			return tx.SetCursor(next)
@@ -189,6 +195,7 @@ func (w *Watcher) readBlock(ctx context.Context, cur store.Cursor) error {
 		if err != nil {
 			return err
 		}
+		w.publish(matches)
 		total.queued += c.queued
 		total.stale += c.stale
 	}
@@ -201,12 +208,14 @@ type counts struct{ queued, stale int }
 
 // process applies events in the order given, which must be chain order: a
 // trigger declared or removed by one event applies to every event after it.
-func (w *Watcher) process(tx *store.Tx, events []trigger.Event, blockTimes map[int64]time.Time) (counts, error) {
+// It returns every match, subscribed or not, for Publish.
+func (w *Watcher) process(tx *store.Tx, events []trigger.Event, blockTimes map[int64]time.Time) (counts, []trigger.Match, error) {
 	var c counts
+	var matches []trigger.Match
 	for _, e := range events {
 		if version, ok := w.cfg.Registry.Version(e.PkgPath); ok {
 			if err := w.applyRegistry(tx, e, version); err != nil {
-				return c, err
+				return c, nil, err
 			}
 			continue
 		}
@@ -219,13 +228,20 @@ func (w *Watcher) process(tx *store.Tx, events []trigger.Event, blockTimes map[i
 			c.stale++
 			continue
 		}
-		n, err := w.enqueue(tx, e)
+		m, n, err := w.enqueue(tx, e)
 		if err != nil {
-			return c, err
+			return c, nil, err
 		}
+		matches = append(matches, m...)
 		c.queued += n
 	}
-	return c, nil
+	return c, matches, nil
+}
+
+func (w *Watcher) publish(matches []trigger.Match) {
+	if len(matches) > 0 && w.cfg.Publish != nil {
+		w.cfg.Publish(matches)
+	}
 }
 
 // report warns of the stale events read in heights from through to,
@@ -283,11 +299,14 @@ func (w *Watcher) applyRegistry(tx *store.Tx, e trigger.Event, version int) erro
 	return nil
 }
 
-func (w *Watcher) enqueue(tx *store.Tx, e trigger.Event) (int, error) {
+// enqueue queues a push for every subscriber of every trigger e matches, and
+// returns those matches, subscribed or not.
+func (w *Watcher) enqueue(tx *store.Tx, e trigger.Event) ([]trigger.Match, int, error) {
 	triggers, err := tx.Matching(e.PkgPath, e.Type)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
+	var matches []trigger.Match
 	queued := 0
 	for _, t := range triggers {
 		if !t.Matches(e) {
@@ -301,11 +320,12 @@ func (w *Watcher) enqueue(tx *store.Tx, e trigger.Event) (int, error) {
 			}
 			value = v
 		}
+		n := t.Render(e)
+		matches = append(matches, trigger.Match{TriggerID: t.ID, Value: value, Notification: n, Event: e})
 		subs, err := tx.Subscribers(t.ID, value)
 		if err != nil {
-			return queued, err
+			return nil, queued, err
 		}
-		n := t.Render(e)
 		for _, sub := range subs {
 			added, err := tx.Enqueue(store.Push{
 				SubscriptionID: sub,
@@ -316,12 +336,12 @@ func (w *Watcher) enqueue(tx *store.Tx, e trigger.Event) (int, error) {
 				CreatedAt:      w.cfg.Now(),
 			})
 			if err != nil {
-				return queued, err
+				return nil, queued, err
 			}
 			if added {
 				queued++
 			}
 		}
 	}
-	return queued, nil
+	return matches, queued, nil
 }

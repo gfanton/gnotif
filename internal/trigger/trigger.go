@@ -45,6 +45,15 @@ type Trigger struct {
 // Notification is what a browser shows for one matched event.
 type Notification struct{ Title, Body, Link string }
 
+// Match is one event matched by one trigger, for the param value the event
+// carries; Value is empty for a trigger without a param.
+type Match struct {
+	TriggerID    string
+	Value        string
+	Notification Notification
+	Event        Event
+}
+
 // Byte limits of a rendered notification. A longer link is replaced by "/".
 const (
 	MaxTitle = 64

@@ -3,6 +3,7 @@ package watch
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -209,11 +210,13 @@ func replyError(w http.ResponseWriter, msg string) {
 // ---- helpers
 
 type harness struct {
-	fake  *fakeIndexer
-	store *store.Store
-	wake  chan struct{}
-	w     *Watcher
-	log   *bytes.Buffer
+	fake      *fakeIndexer
+	store     *store.Store
+	path      string // the database file
+	wake      chan struct{}
+	w         *Watcher
+	log       *bytes.Buffer
+	published [][]trigger.Match
 }
 
 func newHarness(t *testing.T, startHeight int64) *harness {
@@ -233,12 +236,14 @@ func newHarnessFor(t *testing.T, startHeight int64, registryPath string) *harnes
 	fake := &fakeIndexer{times: map[int64]time.Time{}, windowErrs: map[indexer.Window]string{}, txErrs: map[txAt]string{}, lagging: map[txAt]bool{}}
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
-	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "gnotif.db"))
+	path := filepath.Join(t.TempDir(), "gnotif.db")
+	st, err := store.Open(context.Background(), path)
 	require.NoError(t, err)
 	t.Cleanup(func() { st.Close() })
 	wake := make(chan struct{}, 1)
 	var log bytes.Buffer
-	w := New(Config{
+	h := &harness{fake: fake, store: st, path: path, wake: wake, log: &log}
+	h.w = New(Config{
 		Source:      indexer.New(srv.URL, srv.Client()),
 		Store:       st,
 		Registry:    mustRegistry(t, registryPath),
@@ -249,8 +254,9 @@ func newHarnessFor(t *testing.T, startHeight int64, registryPath string) *harnes
 		Wake:        wake,
 		Now:         func() time.Time { return now },
 		Log:         slog.New(slog.NewTextHandler(&log, nil)),
+		Publish:     func(ms []trigger.Match) { h.published = append(h.published, ms) },
 	})
-	return &harness{fake: fake, store: st, wake: wake, w: w, log: &log}
+	return h
 }
 
 func (h *harness) setCursor(t *testing.T, c store.Cursor) {
@@ -449,6 +455,45 @@ func TestOldEventsSkipped(t *testing.T) {
 	// A chain that makes no empty blocks stamps an event with the previous
 	// block's time, so a skip must be visible to the operator.
 	assert.Contains(t, h.log.String(), `msg="skipped stale events" count=1`)
+	assert.Empty(t, h.published)
+}
+
+func TestPublishesEveryMatchAfterCommit(t *testing.T) {
+	h := newHarness(t, 1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+	h.fake.add(3, declared("0000001", game))
+	h.tick(t)
+	assert.Empty(t, h.published)
+
+	h.fake.add(7, turn("7", "g1bob"), turn("8", "g1alice")) // no push subscriber
+	h.tick(t)
+	require.Len(t, h.published, 1)
+	ms := h.published[0]
+	require.Len(t, ms, 2)
+	assert.Equal(t, "0000001", ms[0].TriggerID)
+	assert.Equal(t, "g1bob", ms[0].Value)
+	assert.Equal(t, trigger.Notification{Title: "Your turn", Body: "Game 7, turn 1", Link: "/?game=7"}, ms[0].Notification)
+	assert.Equal(t, int64(7), ms[0].Event.Height)
+	assert.Equal(t, "g1alice", ms[1].Value)
+}
+
+func TestRolledBackWindowPublishesNothing(t *testing.T) {
+	h := newHarness(t, 1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+	h.fake.add(3, declared("0000001", game))
+	h.tick(t)
+	h.optIn(t, "E", "0000001", "g1bob")
+	db, err := sql.Open("sqlite", "file:"+h.path)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	_, err = db.Exec(`DROP TABLE outbox`) // Enqueue now fails inside the window's transaction
+	require.NoError(t, err)
+
+	h.fake.add(7, turn("7", "g1bob"))
+	require.Error(t, h.w.Tick(context.Background()))
+	assert.Empty(t, h.published)
 }
 
 func TestCatchUpWindowCapped(t *testing.T) {
@@ -655,6 +700,23 @@ func TestSkipsOversizedTransaction(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(h.log.String(), "level=ERROR"))
 	assert.Contains(t, h.log.String(), `level=ERROR msg="skip oversized transaction" height=11 index=1 tx=txb`)
 	assert.Equal(t, store.Cursor{HeightDone: 11, Bound: 11}, h.cursor(t))
+}
+
+func TestOversizedBlockPublishesEachTransaction(t *testing.T) {
+	h := oversizedBlock(t)
+	h.fake.set(func(f *fakeIndexer) { f.txErrs[txAt{height: 11, index: 1}] = maxElements })
+	h.tick(t)
+
+	var bodies [][]string
+	for _, ms := range h.published {
+		var b []string
+		for _, m := range ms {
+			b = append(b, m.Notification.Body)
+		}
+		bodies = append(bodies, b)
+	}
+	// One batch per committed transaction; the skipped one has no events.
+	assert.Equal(t, [][]string{{"Game 7, turn 1"}, {"Game 9, turn 1"}}, bodies)
 }
 
 func TestResumesInsideBlock(t *testing.T) {
