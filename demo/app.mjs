@@ -5,6 +5,7 @@ import { chain, echo, gnoweb, gnotif as options } from "./config.js";
 import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
 import { addressArea } from "./address-area.mjs";
 import { load, save } from "./settings.mjs";
+import { WAIT_MS, answeredSend, waitText } from "./live-log.mjs";
 
 const gnotif = new Gnotif({ ...options, serviceWorker: "/sw.js", icon: "/icon.png" });
 const el = (id) => document.getElementById(id);
@@ -84,24 +85,75 @@ function stopLive() {
 }
 
 const ARRIVALS_KEPT = 5;
+/** Sends waiting for their live arrival, oldest first. */
+const waiting = [];
 
-function addArrival({ title, body }) {
-  const at = new Date();
-  const time = document.createElement("time");
+function stamp(time, at) {
   time.dateTime = at.toISOString();
   time.textContent = at.toLocaleTimeString();
+}
+
+// logRow puts a row on top of the live log, which keeps the newest few.
+function logRow(title, body, at) {
+  const time = document.createElement("time");
+  stamp(time, at);
   const head = document.createElement("b");
   head.textContent = title;
   const text = document.createElement("span");
   text.textContent = body;
   const item = document.createElement("li");
   item.className = "arrival";
-  item.append(time, head, text);
+  item.append(time, head, text, document.createElement("small"));
   const list = el("arrivals-list");
   list.prepend(item);
   while (list.children.length > ARRIVALS_KEPT) {
-    list.lastElementChild.remove();
+    const gone = list.lastElementChild;
+    gone.remove();
+    const i = waiting.findIndex((sent) => sent.row === gone);
+    if (i !== -1) {
+      waiting.splice(i, 1);
+    }
   }
+  return item;
+}
+
+function addSent(body) {
+  const at = new Date();
+  const row = logRow(el("toast-title").textContent, body, at);
+  row.classList.add("pending");
+  const dot = document.createElement("i");
+  dot.className = "indicator";
+  row.querySelector("small").append(dot, "Waiting for it to arrive");
+  const sent = { row, body, at: at.getTime() };
+  waiting.push(sent);
+  setTimeout(() => {
+    if (waiting.includes(sent)) {
+      row.classList.replace("pending", "late");
+      row.querySelector("small").textContent =
+        `Not arrived after ${WAIT_MS / 1000} s. Check that Adena sends from the address in step 1.`;
+    }
+  }, WAIT_MS);
+}
+
+function addArrival({ title, body }) {
+  const at = new Date();
+  const i = answeredSend(waiting, body);
+  if (i === -1) {
+    logRow(title, body, at);
+    return;
+  }
+  const [sent] = waiting.splice(i, 1);
+  sent.row.classList.remove("pending", "late");
+  stamp(sent.row.querySelector("time"), at);
+  sent.row.querySelector("small").textContent = waitText(at.getTime() - sent.at);
+}
+
+function pointToLog() {
+  const link = document.createElement("a");
+  link.href = "#arrivals";
+  link.textContent = "Watch for it under Live updates ↑";
+  el("sent").classList.remove("error");
+  el("sent").replaceChildren("Sent. ", link);
 }
 
 // One amber button at a time: the next action in the flow.
@@ -153,9 +205,13 @@ function noteMismatch(caller) {
     : `Adena sends from ${short(caller)}, but this browser listens for ${short(listening)}. The notification goes to ${short(caller)}.`);
 }
 
+function notificationBody(msg) {
+  return trigger ? trigger.body.replaceAll("{msg}", msg) : msg;
+}
+
 function renderMessage() {
   const msg = message();
-  el("toast-body").textContent = trigger ? trigger.body.replaceAll("{msg}", msg) : msg;
+  el("toast-body").textContent = notificationBody(msg);
   el("command").textContent = gnokeyCommand(chain, echo, msg);
 }
 
@@ -230,11 +286,17 @@ el("send").addEventListener("click", async () => {
   say("mismatch", "");
   say("sent", "Waiting for Adena…");
   try {
-    const { caller, hash } = await sendEcho(adena, chain, echo, message());
+    const msg = message();
+    const { caller, hash } = await sendEcho(adena, chain, echo, msg);
     noteMismatch(caller);
-    say("sent", on
-      ? `Sent. The notification arrives in a few seconds.${hash ? ` Transaction ${hash}.` : ""}`
-      : "Sent, but notifications are off in this browser. Turn them on in step 1 to get the next one.");
+    if (live) {
+      addSent(notificationBody(msg));
+      pointToLog();
+    } else {
+      say("sent", on
+        ? `Sent. The notification arrives in a few seconds.${hash ? ` Transaction ${hash}.` : ""}`
+        : "Sent, but notifications are off in this browser. Turn them on in step 1 to get the next one.");
+    }
   } catch (err) {
     say("sent", err.message, true);
   }
