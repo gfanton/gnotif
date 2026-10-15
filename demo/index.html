@@ -180,20 +180,23 @@ input[readonly]:hover { border-color: var(--color-line); }
 
 /* ---- Live arrivals */
 .arrivals { display: flex; flex-direction: column; gap: var(--space-2); }
-.arrivals ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-line); border-left: 2px solid var(--color-indicator); border-radius: var(--radius); }
+.arrivals ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-line); border-radius: var(--radius); overflow: hidden; display: grid; grid-template-columns: auto 1fr; column-gap: var(--space-3); }
 .arrivals ol:empty { display: none; }
 .arrivals ol:not(:empty) + .hint { display: none; }
-.arrival { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 0 var(--space-3); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); line-height: 1.35; }
-.arrival:not(.pending, .late) { animation: arrive 1.6s ease-out; }
+.arrival { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); line-height: 1.35; }
+.arrival:not(.pending, .late) { box-shadow: inset 2px 0 var(--color-indicator); animation: arrive 1.6s ease-out; }
+.arrival:is(.pending, .late) { outline: 1px dashed var(--color-text-muted); outline-offset: calc(-1 * var(--space-1)); }
+.arrival.late { outline-color: var(--color-error); }
+.arrival:is(.pending, .late) b { color: var(--color-text-muted); font-weight: 500; }
 .arrival + .arrival { border-top: 1px solid var(--color-line); }
 .arrival time { grid-row: span 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
 .arrival b { font-weight: 600; }
 .arrival span { color: var(--color-text-muted); overflow-wrap: anywhere; }
-.arrival small { grid-column: 2; display: flex; align-items: center; gap: var(--space-2); font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
+.arrival small { grid-column: 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
 .arrival small:empty { display: none; }
 .arrival.late small { color: var(--color-error); }
-.pending .indicator { position: relative; flex: none; }
-.pending .indicator::after { content: ""; position: absolute; inset: -0.35em; border-radius: 50%; border: 1px solid var(--color-indicator); opacity: 0; animation: ping 2.4s ease-out infinite; }
+.arrival time .indicator { position: relative; margin-right: var(--space-2); background: var(--color-text-muted); }
+.pending time .indicator::after { content: ""; position: absolute; inset: -0.35em; border-radius: 50%; border: 1px solid var(--color-text-muted); opacity: 0; animation: ping 2.4s ease-out infinite; }
 @keyframes arrive { from { background: color-mix(in oklch, var(--color-indicator) 22%, transparent); } }
 
 /* ---- The notification, previewed */
@@ -240,7 +243,7 @@ input[readonly]:hover { border-color: var(--color-line); }
 /* Reduced motion: nothing moves. Last, so it wins over every animation above. */
 @media (prefers-reduced-motion: reduce) {
   .wordmark .dot::after { animation: none; }
-  .arrival:not(.pending, .late), .pending .indicator::after { animation: none; }
+  .arrival:not(.pending, .late), .pending time .indicator::after { animation: none; }
 }
 </style>
 </head>

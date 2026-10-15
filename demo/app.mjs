@@ -5,7 +5,7 @@ import { chain, echo, gnoweb, gnotif as options } from "./config.js";
 import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
 import { addressArea } from "./address-area.mjs";
 import { load, save } from "./settings.mjs";
-import { WAIT_MS, answeredSend, waitText } from "./live-log.mjs";
+import { WAIT_MS, answeredSend, clockText, waitText } from "./live-log.mjs";
 
 const gnotif = new Gnotif({ ...options, serviceWorker: "/sw.js", icon: "/icon.png" });
 const el = (id) => document.getElementById(id);
@@ -111,6 +111,7 @@ function logRow(title, body, at) {
     gone.remove();
     const i = waiting.findIndex((sent) => sent.row === gone);
     if (i !== -1) {
+      clearInterval(waiting[i].clock);
       waiting.splice(i, 1);
     }
   }
@@ -123,11 +124,16 @@ function addSent(body) {
   row.classList.add("pending");
   const dot = document.createElement("i");
   dot.className = "indicator";
-  row.querySelector("small").append(dot, "Waiting for it to arrive");
-  const sent = { row, body, at: at.getTime() };
+  const clock = document.createTextNode(clockText(0));
+  row.querySelector("time").replaceChildren(dot, clock);
+  row.querySelector("small").textContent = "Waiting for it to arrive";
+  const tick = () => { clock.data = clockText(Date.now() - at.getTime()); };
+  const sent = { row, body, at: at.getTime(), clock: setInterval(tick, 1000) };
   waiting.push(sent);
   setTimeout(() => {
     if (waiting.includes(sent)) {
+      clearInterval(sent.clock);
+      clock.data = clockText(WAIT_MS);
       row.classList.replace("pending", "late");
       row.querySelector("small").textContent =
         `Not arrived after ${WAIT_MS / 1000} s. Check that Adena sends from the address in step 1.`;
@@ -143,6 +149,7 @@ function addArrival({ title, body }) {
     return;
   }
   const [sent] = waiting.splice(i, 1);
+  clearInterval(sent.clock);
   sent.row.classList.remove("pending", "late");
   stamp(sent.row.querySelector("time"), at);
   sent.row.querySelector("small").textContent = waitText(at.getTime() - sent.at);

@@ -15,6 +15,16 @@ export function answeredSend(waiting, body) {
 }
 
 /**
+ * clockText is the waiting clock: minutes and seconds since the send, as 1:05.
+ * @param {number} ms milliseconds since the send
+ * @returns {string}
+ */
+export function clockText(ms) {
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/**
  * waitText says how long an arrival took after its send.
  * @param {number} ms milliseconds from the send to the arrival
  * @returns {string}

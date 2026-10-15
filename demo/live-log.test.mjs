@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { answeredSend, waitText } from "./live-log.mjs";
+import { answeredSend, clockText, waitText } from "./live-log.mjs";
 
 test("an arrival answers the oldest send waiting for its body", () => {
   const waiting = [{ body: "Hello" }, { body: "Bye" }, { body: "Hello" }];
@@ -11,6 +11,14 @@ test("an arrival answers the oldest send waiting for its body", () => {
 test("an arrival no send waits for answers none", () => {
   assert.equal(answeredSend([{ body: "Hello" }], "Hello, me"), -1);
   assert.equal(answeredSend([], "Hello"), -1);
+});
+
+test("the waiting clock reads minutes and whole seconds", () => {
+  assert.equal(clockText(0), "0:00");
+  assert.equal(clockText(4200), "0:04");
+  assert.equal(clockText(59_999), "0:59");
+  assert.equal(clockText(60_000), "1:00");
+  assert.equal(clockText(75_000), "1:15");
 });
 
 test("the wait reads in whole seconds", () => {
