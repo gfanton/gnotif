@@ -16,6 +16,27 @@ export function answeredSend(waiting, body) {
   return onTime !== -1 ? onTime : waiting.findIndex((sent) => sent.body === body);
 }
 
+/** MAX_BODY is gnotifd's limit on a notification body, in UTF-8 bytes. */
+export const MAX_BODY = 255;
+
+/**
+ * deliveredBody is body as gnotifd delivers it: cut to MAX_BODY bytes of
+ * UTF-8, at the start of a character.
+ * @param {string} body
+ * @returns {string}
+ */
+export function deliveredBody(body) {
+  const bytes = new TextEncoder().encode(body);
+  if (bytes.length <= MAX_BODY) {
+    return body;
+  }
+  let cut = MAX_BODY;
+  while (cut > 0 && (bytes[cut] & 0xc0) === 0x80) {
+    cut--;
+  }
+  return new TextDecoder().decode(bytes.subarray(0, cut));
+}
+
 /**
  * clockText is the waiting clock: minutes and seconds since the send, as 1:05.
  * @param {number} ms milliseconds since the send

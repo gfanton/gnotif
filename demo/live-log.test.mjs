@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { answeredSend, blockSummary, clockText, details, waitText } from "./live-log.mjs";
+import { answeredSend, blockSummary, clockText, deliveredBody, details, waitText } from "./live-log.mjs";
 
 test("an arrival answers the oldest send waiting for its body", () => {
   const waiting = [{ body: "Hello" }, { body: "Bye" }, { body: "Hello" }];
@@ -16,6 +16,15 @@ test("an arrival answers a send still on time before a late one with its body", 
 test("an arrival no send waits for answers none", () => {
   assert.equal(answeredSend([{ body: "Hello" }], "Hello, me"), -1);
   assert.equal(answeredSend([], "Hello"), -1);
+});
+
+test("a body over 255 UTF-8 bytes is cut on a character boundary, as gnotifd delivers it", () => {
+  const ascii = "a".repeat(200);
+  assert.equal(deliveredBody(ascii), ascii);
+  assert.equal(deliveredBody("a" + "é".repeat(127)), "a" + "é".repeat(127)); // 255 bytes
+  assert.equal(deliveredBody("é".repeat(128)), "é".repeat(127)); // 256 bytes
+  assert.equal(deliveredBody("界".repeat(86)), "界".repeat(85)); // 258 bytes
+  assert.equal(deliveredBody("🙂".repeat(64)), "🙂".repeat(63)); // 256 bytes
 });
 
 test("the waiting clock reads minutes and whole seconds", () => {
