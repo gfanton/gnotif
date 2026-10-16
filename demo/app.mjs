@@ -98,7 +98,8 @@ function stamp(time, at) {
   time.textContent = at.toLocaleTimeString();
 }
 
-// logRow puts a row on top of the live log, which keeps the newest few.
+// logRow puts a row on top of the log and drops rows past ARRIVALS_KEPT; a
+// dropped waiting row stops waiting.
 function logRow(title, body, at) {
   const time = document.createElement("time");
   stamp(time, at);
@@ -148,7 +149,7 @@ function addSent(body) {
       clock.data = clockText(WAIT_MS);
       row.classList.replace("pending", "late");
       row.querySelector(".note").textContent =
-        `Not arrived after ${WAIT_MS / 1000} s. Check that Adena sends from the address in step 1.`;
+        `It has not arrived after ${WAIT_MS / 1000} s. Check that Adena sends from the address in step 1.`;
     }
   }, WAIT_MS);
 }
@@ -191,7 +192,7 @@ function arrivalDetails(n, wait) {
 function pointToLog() {
   const link = document.createElement("a");
   link.href = "#arrivals";
-  link.textContent = "Watch for it under Live updates ↑";
+  link.textContent = "Watch for it in the Arrived live log ↑";
   el("sent").classList.remove("error");
   el("sent").replaceChildren("Sent. ", link);
 }
@@ -246,7 +247,7 @@ function noteMismatch(caller) {
 }
 
 function notificationBody(msg) {
-  return trigger ? trigger.body.replaceAll("{msg}", msg) : msg;
+  return trigger !== null ? trigger.body.replaceAll("{msg}", msg) : msg;
 }
 
 function renderMessage() {

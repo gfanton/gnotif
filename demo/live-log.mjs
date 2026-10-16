@@ -80,7 +80,8 @@ export function details(n, format) {
 }
 
 /**
- * waitText says how long an arrival took after its send.
+ * waitText words the wait from a send to its arrival in whole seconds, or as
+ * within a second under 1 s.
  * @param {number} ms milliseconds from the send to the arrival
  * @returns {string}
  */
