@@ -1013,6 +1013,22 @@ func TestLaterVersionDeclares(t *testing.T) {
 	assert.Len(t, h.sent, 2)
 }
 
+func TestDeclaredWithApproverApplies(t *testing.T) {
+	h := newHarness(t, 1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+	e := declaredBy(registryV1, "v1-0000001", game)
+	e.attrs = append(e.attrs, trigger.Pair{Key: "approver", Value: "g1alice"})
+	h.fake.add(3, e)
+	h.tick(t)
+	require.Equal(t, []string{"v1-0000001"}, h.triggerIDs(t))
+
+	h.optIn(t, "E1", "v1-0000001", "g1bob")
+	h.fake.add(7, turn("1", "g1bob"))
+	h.tick(t)
+	assert.Len(t, h.sent, 1)
+}
+
 func TestVersionCannotTakeOverID(t *testing.T) {
 	h := newHarness(t, 1)
 	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
