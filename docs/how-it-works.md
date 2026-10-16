@@ -65,6 +65,7 @@ gnotifd polls the indexer every `-poll` interval, 5 seconds by default.
 
 - It reads up to 1,000 blocks at a time, from where it stopped. One request returns every realm event in those blocks, and gnotifd matches the events to its triggers itself.
 - After a failure, it reads the same blocks again with a smaller window.
+- It saves its position with every block that changes or matches a trigger, and otherwise every 10 minutes, so a restart can read again what it read in the last 10 minutes.
 - It never queues the same push twice, so reading a block again sends nothing new.
 - It skips a single transaction too large to read, logs an error, and loses only that transaction's events ([Running gnotifd](running-gnotifd.md#the-indexer-and-the-start-height)).
 

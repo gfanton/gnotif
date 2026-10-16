@@ -217,6 +217,7 @@ type harness struct {
 	w         *Watcher
 	log       *bytes.Buffer
 	published [][]trigger.Match
+	clock     time.Time // the watcher's Now
 }
 
 func newHarness(t *testing.T, startHeight int64) *harness {
@@ -242,7 +243,7 @@ func newHarnessFor(t *testing.T, startHeight int64, registryPath string) *harnes
 	t.Cleanup(func() { st.Close() })
 	wake := make(chan struct{}, 1)
 	var log bytes.Buffer
-	h := &harness{fake: fake, store: st, path: path, wake: wake, log: &log}
+	h := &harness{fake: fake, store: st, path: path, wake: wake, log: &log, clock: now}
 	h.w = New(Config{
 		Source:      indexer.New(srv.URL, srv.Client()),
 		Store:       st,
@@ -252,7 +253,7 @@ func newHarnessFor(t *testing.T, startHeight int64, registryPath string) *harnes
 		MaxAge:      10 * time.Minute,
 		MaxWindow:   1000,
 		Wake:        wake,
-		Now:         func() time.Time { return now },
+		Now:         func() time.Time { return h.clock },
 		Log:         slog.New(slog.NewTextHandler(&log, nil)),
 		Publish:     func(ms []trigger.Match) { h.published = append(h.published, ms) },
 	})
@@ -437,6 +438,91 @@ func TestReplayIsHarmless(t *testing.T) {
 	h.setCursor(t, store.Cursor{HeightDone: 9, Bound: 12})
 	h.tick(t)
 	assert.Len(t, h.due(t), 1)
+}
+
+// Every write is a file the database's replica keeps and a restore reads, so
+// an idle chain must not write one every poll.
+func TestQuietPositionStoredEveryStoreEvery(t *testing.T) {
+	h := newHarness(t, 1)
+	h.w.cfg.StoreEvery = 10 * time.Minute
+	h.setCursor(t, store.Cursor{HeightDone: 9, Bound: 12})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
+	h.fake.add(11, turn("7", "g1bob")) // no trigger matches it
+	h.tick(t)
+	require.Equal(t, store.Cursor{HeightDone: 12, Bound: 12}, h.cursor(t))
+
+	h.fake.set(func(f *fakeIndexer) { f.latest = 20 })
+	h.tick(t)
+	h.tick(t)
+	assert.Equal(t, store.Cursor{HeightDone: 12, Bound: 12}, h.cursor(t))
+	assert.Equal(t, []indexer.Window{{From: 9, To: 12}, {From: 12, To: 20}}, h.fake.recorded())
+
+	h.clock = h.clock.Add(10 * time.Minute)
+	h.tick(t)
+	assert.Equal(t, store.Cursor{HeightDone: 20, Bound: 20}, h.cursor(t))
+}
+
+// A window read again after a restart would publish its matches twice.
+func TestPositionPastChangeStoredAtOnce(t *testing.T) {
+	for name, e := range map[string]fakeEvent{
+		"match":    turn("7", "g1bob"),
+		"registry": declared("0000002", game),
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t, 1)
+			h.w.cfg.StoreEvery = 10 * time.Minute
+			h.putTrigger(t, "0000001", game)
+			h.setCursor(t, store.Cursor{HeightDone: 9, Bound: 12})
+			h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
+			h.tick(t)
+
+			h.fake.add(15, e)
+			h.fake.set(func(f *fakeIndexer) { f.latest = 20 })
+			h.tick(t)
+			h.tick(t)
+			assert.Equal(t, store.Cursor{HeightDone: 20, Bound: 20}, h.cursor(t))
+		})
+	}
+}
+
+func TestRestartRereadsOnlyQuietWindows(t *testing.T) {
+	h := newHarness(t, 1)
+	h.w.cfg.StoreEvery = 10 * time.Minute
+	h.putTrigger(t, "0000001", game)
+	h.optIn(t, "E", "0000001", "g1bob")
+	h.setCursor(t, store.Cursor{HeightDone: 9, Bound: 12})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
+	h.tick(t)
+	h.fake.add(15, turn("7", "g1bob"))
+	h.fake.set(func(f *fakeIndexer) { f.latest = 20 })
+	h.tick(t)
+	h.tick(t)
+	h.fake.set(func(f *fakeIndexer) { f.latest = 25 })
+	h.tick(t)
+	h.tick(t)
+	require.Len(t, h.published, 1)
+
+	h.published = nil
+	restarted := New(h.w.cfg)
+	for range 2 {
+		require.NoError(t, restarted.Tick(context.Background()))
+	}
+	assert.Empty(t, h.published)
+	assert.Len(t, h.due(t), 1)
+	assert.Equal(t, []indexer.Window{{From: 20, To: 25}, {From: 20, To: 25}}, h.fake.recorded()[2:])
+}
+
+func TestOversizedBlockHoldsQuietTransactions(t *testing.T) {
+	h := oversizedBlock(t)
+	h.w.cfg.StoreEvery = 10 * time.Minute
+	h.fake.set(func(f *fakeIndexer) { f.txErrs[txAt{height: 11, index: 2}] = maxElements })
+	h.tick(t)
+	assert.Equal(t, store.Cursor{HeightDone: 10, Bound: 11, NextTx: 2}, h.cursor(t))
+
+	h.tick(t)
+	h.tick(t)
+	assert.Equal(t, []txAt{{11, 0}, {11, 1}, {11, 2}}, h.fake.fetchedTxs())
+	assert.Equal(t, indexer.Window{From: 11, To: 12}, h.fake.recorded()[1])
 }
 
 func TestOldEventsSkipped(t *testing.T) {

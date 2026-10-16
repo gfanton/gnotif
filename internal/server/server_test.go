@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/gfanton/gnotif/internal/delivery"
+	"github.com/gfanton/gnotif/internal/store"
 	"github.com/gfanton/gnotif/internal/stream"
 	"github.com/gfanton/gnotif/internal/subscribe"
 	"github.com/gfanton/gnotif/internal/watch"
@@ -158,6 +160,36 @@ func runServer(t *testing.T, cfg Config) (base string, stop func() error) {
 	}
 	t.Cleanup(func() { stop() })
 	return base, stop
+}
+
+// Every write is a file the database's replica keeps and a restore reads, so
+// gnotifd must not store its cursor on every poll of a quiet chain.
+func TestQuietChainKeepsStoredCursor(t *testing.T) {
+	cfg := config(t, 1)
+	var polls, windows atomic.Int32
+	idx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Variables json.RawMessage }
+		json.NewDecoder(r.Body).Decode(&req)
+		if len(req.Variables) > 0 && string(req.Variables) != "null" {
+			windows.Add(1)
+		}
+		polls.Add(1)
+		io.WriteString(w, `{"data":{"latestBlockHeight":1}}`)
+	}))
+	t.Cleanup(idx.Close)
+	cfg.Indexer = idx.URL
+	_, stop := runServer(t, cfg)
+	require.Eventually(t, func() bool { return polls.Load() >= 5 }, 5*time.Second, 20*time.Millisecond)
+	require.NoError(t, stop())
+	require.Equal(t, int32(1), windows.Load(), "the one window read, and never read again")
+
+	st, err := store.Open(context.Background(), cfg.DB)
+	require.NoError(t, err)
+	defer st.Close()
+	cur, ok, err := st.Cursor(context.Background())
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, store.Cursor{HeightDone: 0, Bound: 1}, cur, "the cursor stored by the first poll")
 }
 
 func TestServesLiveStream(t *testing.T) {

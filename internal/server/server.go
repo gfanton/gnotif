@@ -24,6 +24,7 @@ import (
 
 const (
 	maxWindow       = 1000
+	storeEvery      = 10 * time.Minute
 	pushTTL         = 24 * time.Hour
 	shutdownTimeout = 10 * time.Second
 	publishTimeout  = 5 * time.Second
@@ -108,6 +109,7 @@ func Run(ctx context.Context, cfg Config) error {
 		Poll:        cfg.Poll,
 		MaxAge:      cfg.MaxAge,
 		MaxWindow:   maxWindow,
+		StoreEvery:  storeEvery,
 		Wake:        wake,
 		Now:         now,
 		Log:         cfg.Log,

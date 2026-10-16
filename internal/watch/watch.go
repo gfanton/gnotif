@@ -41,12 +41,20 @@ type Config struct {
 	// Publish receives every match, in chain order, once the transaction
 	// that read it is committed. Nil publishes nowhere.
 	Publish func([]trigger.Match)
+	// StoreEvery is how long the watcher may read on past the stored cursor
+	// through windows that change nothing; zero stores it every tick. A
+	// restart reads those windows again.
+	StoreEvery time.Duration
 }
 
 // Watcher runs the poll loop. Tick and Run are not safe for concurrent use.
 type Watcher struct {
 	cfg    Config
 	window int64
+	// held is the cursor read on past the stored one, nil while the stored
+	// one is current.
+	held     *store.Cursor
+	storedAt time.Time
 }
 
 // New returns a watcher.
@@ -84,7 +92,7 @@ func (w *Watcher) Tick(ctx context.Context) error {
 }
 
 func (w *Watcher) tick(ctx context.Context) error {
-	cur, ok, err := w.cfg.Store.Cursor(ctx)
+	cur, ok, err := w.cursor(ctx)
 	if err != nil {
 		return err
 	}
@@ -94,7 +102,7 @@ func (w *Watcher) tick(ctx context.Context) error {
 		}
 		cur = store.Cursor{HeightDone: w.cfg.StartHeight - 1}
 	}
-	// Every other path below stores a cursor without NextTx, so a block left
+	// Every other path below moves to a cursor without NextTx, so a block left
 	// half read is finished first.
 	if cur.NextTx > 0 {
 		return w.readBlock(ctx, cur)
@@ -111,9 +119,7 @@ func (w *Watcher) tick(ctx context.Context) error {
 		if latest < cur.HeightDone {
 			w.cfg.Log.Warn("indexer behind stored bound", "latest", latest, "height_done", cur.HeightDone)
 		}
-		return w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
-			return tx.SetCursor(store.Cursor{HeightDone: cur.HeightDone, Bound: latest})
-		})
+		return w.advance(ctx, store.Cursor{HeightDone: cur.HeightDone, Bound: latest}, nil)
 	}
 	end := min(cur.Bound, cur.HeightDone+w.window)
 
@@ -133,19 +139,15 @@ func (w *Watcher) tick(ctx context.Context) error {
 	// that height is incomplete: lower the bound and read it later.
 	if batch.Latest < end {
 		w.cfg.Log.Warn("indexer behind stored bound", "latest", batch.Latest, "bound", cur.Bound)
-		return w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
-			return tx.SetCursor(store.Cursor{HeightDone: cur.HeightDone, Bound: batch.Latest})
-		})
+		return w.advance(ctx, store.Cursor{HeightDone: cur.HeightDone, Bound: batch.Latest}, nil)
 	}
 
 	var c counts
 	var matches []trigger.Match
-	err = w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
+	err = w.advance(ctx, store.Cursor{HeightDone: end, Bound: batch.Latest}, func(tx *store.Tx) (bool, error) {
 		var err error
-		if c, matches, err = w.process(tx, batch.Events, batch.BlockTimes); err != nil {
-			return err
-		}
-		return tx.SetCursor(store.Cursor{HeightDone: end, Bound: batch.Latest})
+		c, matches, err = w.process(tx, batch.Events, batch.BlockTimes)
+		return c.lasting(), err
 	})
 	if err != nil {
 		return err
@@ -156,7 +158,7 @@ func (w *Watcher) tick(ctx context.Context) error {
 }
 
 // readBlock reads block HeightDone+1 one transaction at a time from
-// cur.NextTx, storing the next index after each one. A transaction too large
+// cur.NextTx, moving to the next index after each one. A transaction too large
 // to read is skipped and its events are lost; any other error stops the block
 // at that transaction.
 func (w *Watcher) readBlock(ctx context.Context, cur store.Cursor) error {
@@ -185,12 +187,10 @@ func (w *Watcher) readBlock(ctx context.Context, cur store.Cursor) error {
 		next := store.Cursor{HeightDone: cur.HeightDone, Bound: cur.Bound, NextTx: ref.Index + 1}
 		var c counts
 		var matches []trigger.Match
-		err = w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
+		err = w.advance(ctx, next, func(tx *store.Tx) (bool, error) {
 			var err error
-			if c, matches, err = w.process(tx, events, blockTimes); err != nil {
-				return err
-			}
-			return tx.SetCursor(next)
+			c, matches, err = w.process(tx, events, blockTimes)
+			return c.lasting(), err
 		})
 		if err != nil {
 			return err
@@ -199,12 +199,52 @@ func (w *Watcher) readBlock(ctx context.Context, cur store.Cursor) error {
 		total.queued += c.queued
 		total.stale += c.stale
 	}
-	return w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
-		return tx.SetCursor(store.Cursor{HeightDone: h, Bound: cur.Bound})
-	})
+	return w.advance(ctx, store.Cursor{HeightDone: h, Bound: cur.Bound}, nil)
 }
 
-type counts struct{ queued, stale int }
+// cursor returns the held cursor, or else the stored one.
+func (w *Watcher) cursor(ctx context.Context) (store.Cursor, bool, error) {
+	if w.held != nil {
+		return *w.held, true, nil
+	}
+	return w.cfg.Store.Cursor(ctx)
+}
+
+// advance runs apply, when not nil, and moves the cursor to next in one
+// transaction. The cursor is stored at once when apply reports its window as
+// lasting; otherwise it is held until the stored one is StoreEvery old.
+func (w *Watcher) advance(ctx context.Context, next store.Cursor, apply func(*store.Tx) (bool, error)) error {
+	hold := false
+	err := w.cfg.Store.Update(ctx, func(tx *store.Tx) error {
+		lasting := false
+		if apply != nil {
+			var err error
+			if lasting, err = apply(tx); err != nil {
+				return err
+			}
+		}
+		if hold = !lasting && w.cfg.Now().Sub(w.storedAt) < w.cfg.StoreEvery; hold {
+			return nil
+		}
+		return tx.SetCursor(next)
+	})
+	if err != nil {
+		return err
+	}
+	if hold {
+		w.held = &next
+	} else {
+		w.held, w.storedAt = nil, w.cfg.Now()
+	}
+	return nil
+}
+
+type counts struct{ queued, stale, registry, matched int }
+
+// lasting reports whether a window is stored with its cursor at once: its
+// registry events may write the triggers, and read again its matches would
+// be published twice.
+func (c counts) lasting() bool { return c.registry > 0 || c.matched > 0 }
 
 // process applies events in the order given, which must be chain order: a
 // trigger declared or removed by one event applies to every event after it.
@@ -217,6 +257,7 @@ func (w *Watcher) process(tx *store.Tx, events []trigger.Event, blockTimes map[i
 			if err := w.applyRegistry(tx, e, version); err != nil {
 				return c, nil, err
 			}
+			c.registry++
 			continue
 		}
 		blockTime, ok := blockTimes[e.Height]
@@ -234,6 +275,7 @@ func (w *Watcher) process(tx *store.Tx, events []trigger.Event, blockTimes map[i
 			return c, nil, err
 		}
 		matches = append(matches, m...)
+		c.matched += len(m)
 		c.queued += n
 	}
 	return c, matches, nil
