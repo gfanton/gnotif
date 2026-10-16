@@ -141,7 +141,7 @@ For every match whose trigger and value are in its set, the connection receives:
  "attrs": [{"key": "game", "value": "0000001"}, {"key": "next", "value": "g1..."}, {"key": "turn", "value": "3"}]}
 ```
 
-`title`, `body` and `link` are those of the push for the same match. `attrs` lists the event's attributes in order. `height` and `tx` name the transaction that emitted the event, so a page can check it on chain. `time` is the time of its block, in UTC, in RFC 3339 format.
+`title`, `body` and `link` are those of the push for the same match. `attrs` lists the event's attributes in order. `height` and `tx` name the transaction that emitted the event, so a page can check it on chain. `time` is the block's time, in UTC, as RFC 3339.
 
 Frames follow chain order. Each is sent once, after gnotifd has processed its block, and nothing is stored: a connection receives nothing from the time it was closed.
 

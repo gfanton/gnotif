@@ -91,7 +91,7 @@ The HTTP client waits 10 seconds for a push service and follows no redirects. On
 
 ## Two channels
 
-A match reaches the browsers in two ways. Push shows an OS notification, even with the dapp's tab closed, and needs the browser's permission and a service worker. A live connection needs neither: an open page sends its opt-ins over a WebSocket and receives the same title, body and link, with the event's attributes ([HTTP API](http-api.md#live-notifications)). A dapp uses either, or both with the same opt-ins.
+A match reaches the browsers in two ways. Push shows an OS notification, even with the dapp's tab closed, and needs the browser's permission and a service worker. A live connection needs neither: an open page sends its opt-ins over a WebSocket and receives the same title, body and link, with the event's attributes and the block, block time and transaction it came from ([HTTP API](http-api.md#live-notifications)). A dapp uses either, or both with the same opt-ins.
 
 The watch loop hands every match to the live connections once the database transaction that read it is committed. A live connection hears of a match at most once, and never of one whose transaction rolled back.
 

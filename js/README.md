@@ -150,10 +150,10 @@ that removes it. A handler that throws is reported with
 `link` arrives resolved on the page's origin. A link that would land on
 another origin arrives as the service worker's scope, as for a push: the
 path `sw.js` is served from, `/` for a dapp at the root of its origin.
-`attrs` lists the event's
-attributes as `{ key, value }`, `height` and `tx` name the
-transaction that emitted it, and `time` is its block's time, in UTC,
-as RFC 3339.
+`attrs` lists the event's attributes as `{ key, value }`, `height` and
+`tx` name the transaction that emitted the event, and `time` is the
+block's time, in UTC, as RFC 3339. A frame without `time` reaches no
+handler, so this client needs a server that sends it.
 
 A notification is a hint: read the state the page shows from the chain.
 Nothing is replayed after a drop, so read it again on `reconnect`.

@@ -2,6 +2,8 @@
 
 echo sends you your own message as a browser notification: one person, one message, one notification. You turn on notifications for your gno.land address, call the echo realm with a message, and the browser shows it, even with the page closed. The page sends the message with the Adena wallet, or links to Adena's install page when the browser has none, and always gives you a gnokey command to run. Under each step, "See the code" shows the client calls and the realm functions behind it; `snippets.test.mjs` checks them against `app.mjs` and `echo.gno`. The deployed demo runs at https://demo.gnotif.xyz, on the onyx testnet, with `https://gnotif.xyz/onyx` as its server.
 
+With "Live updates on this page" switched on, the page also holds a connection to the server and lists the five newest arrivals, newest first. A message sent with Adena first shows as a waiting row with a clock; its arrival settles the row and says how many seconds it took, and a row still waiting after 60 s turns red. Each arrival names its block and opens on its block time, transaction, trigger, the event's attributes and its link. Turning live updates off empties the list.
+
 This folder holds the realms and the page:
 
 | Path | What it is |
