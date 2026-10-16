@@ -61,11 +61,11 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
      $PWD/gno/r/gnotif/v1
    ```
 
-   gnodev loads the registry, its trigger package and the packages it depends on, gives test GNOT to every key in `.tools/keys`, and serves gnoweb on http://localhost:8888.
+   gnodev loads the registry, its trigger package and every example package of gno, gives test GNOT to every key in `.tools/keys`, and serves gnoweb on http://localhost:8888.
 
    - `-C /tmp` runs gnodev outside the repository. Inside it, gnodev would also load echo into the chain's genesis, and gnotifd cannot read genesis.
    - `-no-watch` keeps gnodev from restarting the chain when a file changes.
-   - `-extra-root` loads the example packages of gno, which hold the registry's dependencies, such as `gno.land/r/sys/names`. Outside the repository, gnodev does not find them otherwise.
+   - `-extra-root` loads every example package of gno, the registry's dependencies among them, such as `gno.land/r/sys/names`. Outside the repository, gnodev does not find them otherwise.
 
 4. Deploy echo with your key. Its `init` declares its trigger in this same transaction:
 
