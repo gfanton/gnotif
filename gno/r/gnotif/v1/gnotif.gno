@@ -90,10 +90,10 @@ func Declare(cur realm, ts ...Trigger) []string {
 }
 
 // Drop removes target's listed active triggers, ids separated by commas, for
-// good. Only target's namespace owner may call it, directly, with their own
-// key. A call that lists an id more than once, or one that is not an active
-// trigger of target, removes nothing. The target stays set: its realm cannot
-// declare again.
+// good. Spaces around an id are ignored. Only target's namespace owner may
+// call it, directly, with their own key. A call that lists an id more than
+// once, or one that is not an active trigger of target, removes nothing. The
+// target stays set: its realm cannot declare again.
 func Drop(cur realm, target, ids string) {
 	mustOwn(cur, target)
 	active, _ := activeOf(target)
@@ -102,7 +102,9 @@ func Drop(cur realm, target, ids string) {
 		live[id] = true
 	}
 	dropped := strings.Split(ids, ",")
-	for _, id := range dropped {
+	for i, id := range dropped {
+		id = strings.TrimSpace(id)
+		dropped[i] = id
 		if !live[id] {
 			panic(id + " is not an active trigger of " + target)
 		}

@@ -78,7 +78,7 @@ gnokey maketx call -pkgpath gno.land/r/nym-gfanton001/gnotif/v1 -func Drop \
   -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 mykey
 ```
 
-The first argument is the realm's path, and the second lists the ids to drop, separated by commas, such as `v1-0000007,v1-0000008`. The realm's [page on gnoweb](#see-the-triggers-on-gnoweb) lists its ids.
+The first argument is the realm's path, and the second lists the ids to drop, separated by commas, such as `v1-0000007,v1-0000008`. Spaces around an id are ignored. The realm's [page on gnoweb](#see-the-triggers-on-gnoweb) lists its ids.
 
 Dropping a trigger deletes its opt-ins on every gnotif server. The realm's triggers stay set, even once all of them are dropped: only a new version of the realm can declare new ones.
 
