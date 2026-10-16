@@ -84,6 +84,40 @@ func Declare(cur realm, ts ...Trigger) []string {
 	return ids
 }
 
+// Drop removes target's listed active triggers, ids separated by commas, for
+// good. Only target's namespace owner may call it, directly, with their own
+// key. A call that lists an id more than once, or one that is not an active
+// trigger of target, removes nothing. The target stays set: its realm cannot
+// declare again.
+func Drop(cur realm, target, ids string) {
+	mustOwn(cur, target)
+	active, _ := activeOf(target)
+	live := make(map[string]bool, len(active))
+	for _, id := range active {
+		live[id] = true
+	}
+	dropped := strings.Split(ids, ",")
+	for _, id := range dropped {
+		if !live[id] {
+			panic(id + " is not an active trigger of " + target)
+		}
+		live[id] = false
+	}
+	// left stays a nil []string when no id is left: its type marks the target
+	// as set, and a zero-length non-nil slice would keep its last array stored.
+	var left []string
+	for _, id := range active {
+		if live[id] {
+			left = append(left, id)
+		}
+	}
+	byTarget.Set(target, left)
+	for _, id := range dropped {
+		triggers.Remove(id)
+		chain.Emit("TriggerRemoved", "id", id)
+	}
+}
+
 // Active lists target's active trigger ids, comma-separated, oldest first.
 func Active(target string) string {
 	ids, _ := activeOf(target)
@@ -120,6 +154,21 @@ func mustOwnerEntered(_ int, me realm, target string) {
 	entry := me.Previous()
 	if !entry.IsUserCall() || entry.Address() != signer {
 		panic("the dapp was not entered directly by its namespace owner; entered from " + entry.PkgPath())
+	}
+}
+
+// mustOwn panics unless target's namespace owner called straight into the
+// registry with its own key.
+func mustOwn(cur realm, target string) {
+	caller := cur.Previous()
+	if !caller.IsUserCall() {
+		panic("only the namespace owner may do this, in a call signed with its own key; got " + caller.PkgPath())
+	}
+	if _, _, _, isSession := runtime.GetSessionInfo(); isSession {
+		panic("sign with the namespace owner's own key, not a session key")
+	}
+	if ns := namespaceOf(target); !names.IsAuthorizedAddressForNamespace(caller.Address(), ns) {
+		panic(caller.Address().String() + " is not authorized for namespace " + ns)
 	}
 }
 
