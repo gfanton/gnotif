@@ -31,6 +31,11 @@ type Result struct {
 type executor interface {
 	exec(ctx context.Context, stmts []Statement) ([]Result, error)
 	close() error
+	// version reports the schema version a database holds. found is false
+	// when it holds none.
+	version(ctx context.Context) (v int, found bool, err error)
+	// setVersion returns the statements that record v as the schema version.
+	setVersion(v int) []Statement
 }
 
 // Exec runs stmts in order as one atomic batch and returns one Result per

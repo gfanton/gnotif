@@ -15,6 +15,18 @@ func (l local) close() error {
 	return l.db.Close()
 }
 
+func (l local) version(ctx context.Context) (int, bool, error) {
+	var v int
+	if err := l.db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&v); err != nil {
+		return 0, false, fmt.Errorf("read schema version: %w", err)
+	}
+	return v, true, nil
+}
+
+func (l local) setVersion(v int) []Statement {
+	return []Statement{{SQL: fmt.Sprintf(`PRAGMA user_version = %d`, v)}}
+}
+
 func (l local) exec(ctx context.Context, stmts []Statement) ([]Result, error) {
 	tx, err := l.db.BeginTx(ctx, nil)
 	if err != nil {

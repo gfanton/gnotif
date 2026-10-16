@@ -1,4 +1,5 @@
-// Package store keeps gnotifd's state in one SQLite file: the chain cursor,
+// Package store keeps gnotifd's state in a SQLite file, or in a remote store
+// that speaks the same SQL over HTTP: the chain cursor,
 // the triggers read from the registry, browser subscriptions with their
 // opt-ins, and the outbox of pushes waiting to be sent.
 package store
@@ -73,47 +74,61 @@ type Delivery struct {
 	CreatedAt      time.Time
 }
 
-// Open opens or creates the database at path and its schema.
-func Open(ctx context.Context, path string) (*Store, error) {
-	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_txlock=immediate"
-	db, err := sql.Open("sqlite", dsn)
+// Open opens or creates the store and its schema. A dsn starting with
+// http:// or https:// is the URL of a remote store; anything else is the path
+// of a SQLite file.
+func Open(ctx context.Context, dsn string) (*Store, error) {
+	s := &Store{}
+	if strings.HasPrefix(dsn, "http://") || strings.HasPrefix(dsn, "https://") {
+		s.ex = newRemote(dsn)
+	} else {
+		db, err := sql.Open("sqlite", "file:"+dsn+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_txlock=immediate")
+		if err != nil {
+			return nil, fmt.Errorf("open %s: %w", dsn, err)
+		}
+		s.db, s.ex = db, local{db: db}
+	}
+	if err := s.migrate(ctx, dsn); err != nil {
+		s.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+// migrate refuses a database made by another schema version and otherwise
+// applies the schema and records its version in one batch. Only the tables a
+// gnotifd creates count: the database may hold others, such as a replication
+// tool's.
+func (s *Store) migrate(ctx context.Context, name string) error {
+	res, err := s.Exec(ctx, []Statement{{
+		SQL: `SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('cursor', 'triggers', 'subscriptions', 'optins', 'outbox', 'gnotifd_schema')`,
+	}})
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", path, err)
+		return fmt.Errorf("count tables: %w", err)
 	}
-	var version, tables int
-	if err := db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("read schema version: %w", err)
+	var tables int64
+	if err := column(res[0].Rows[0], "n", &tables); err != nil {
+		return fmt.Errorf("count tables: %w", err)
 	}
-	// Litestream adds its own tables, possibly before the first Open.
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\_litestream\_%' ESCAPE '\'`).Scan(&tables); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("count tables: %w", err)
+	version, found, err := s.ex.version(ctx)
+	if err != nil {
+		return err
 	}
-	if tables > 0 && version < schemaVersion {
-		db.Close()
-		return nil, fmt.Errorf("%s: %w: start a new database with -start-height", path, ErrSchemaVersion)
+	if tables > 0 && (!found || version < schemaVersion) {
+		return fmt.Errorf("%s: %w: start a new database with -start-height", name, ErrSchemaVersion)
 	}
 	if tables > 0 && version > schemaVersion {
-		db.Close()
-		return nil, fmt.Errorf("%s: %w: run the gnotifd that made it, or start a new database with -start-height", path, ErrSchemaNewer)
+		return fmt.Errorf("%s: %w: run the gnotifd that made it, or start a new database with -start-height", name, ErrSchemaNewer)
 	}
-	// The version goes first so a crash mid-schema leaves a database the
-	// next Open accepts; every statement in schema is idempotent.
-	if _, err := db.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("set schema version: %w", err)
+	stmts := make([]Statement, 0, len(schema)+2)
+	for _, q := range schema {
+		stmts = append(stmts, Statement{SQL: q})
 	}
-	st := &Store{db: db, ex: local{db: db}}
-	stmts := make([]Statement, len(schema))
-	for i, q := range schema {
-		stmts[i] = Statement{SQL: q}
+	stmts = append(stmts, s.ex.setVersion(schemaVersion)...)
+	if _, err := s.Exec(ctx, stmts); err != nil {
+		return fmt.Errorf("create schema: %w", err)
 	}
-	if _, err := st.Exec(ctx, stmts); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("create schema: %w", err)
-	}
-	return st, nil
+	return nil
 }
 
 // Close closes the database.
