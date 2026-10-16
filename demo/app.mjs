@@ -82,6 +82,11 @@ function stopLive() {
   el("live").checked = false;
   setLiveState("Live updates off");
   el("arrivals").hidden = true;
+  for (const sent of waiting) {
+    clearInterval(sent.clock);
+  }
+  waiting.length = 0;
+  el("arrivals-list").replaceChildren();
 }
 
 const ARRIVALS_KEPT = 5;
