@@ -15,7 +15,7 @@ export type DemoConfig = {
 const configs = {
   local: {
     gnotif: { server: "http://localhost:8080" },
-    echo: "gno.land/r/dev/echo/v0",
+    echo: "gno.land/r/dev/echo/v1",
     chain: { id: "dev", name: "gnodev local chain", rpc: "http://127.0.0.1:26657" },
     gnoweb: "http://localhost:8888",
   },
