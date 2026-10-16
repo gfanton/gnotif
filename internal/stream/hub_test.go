@@ -27,7 +27,7 @@ func newTestHub(t *testing.T, max int) (*Hub, string) {
 	h := NewHub(HubConfig{Protocol: testProtocol(), Max: max, Log: slog.New(slog.DiscardHandler)})
 	srv := httptest.NewServer(h)
 	t.Cleanup(func() {
-		h.Close()
+		h.Close(context.Background())
 		srv.Close()
 	})
 	return h, srv.URL
@@ -119,6 +119,58 @@ func TestHubFanOutByKey(t *testing.T) {
 		send(t, c, PingFrame)
 		assert.Equal(t, PongFrame, recv(t, c))
 	}
+}
+
+// newLoggedHub is newTestHub with its log kept.
+func newLoggedHub(t *testing.T, max int) (*Hub, string, *syncBuffer) {
+	t.Helper()
+	var log syncBuffer
+	h := NewHub(HubConfig{Protocol: testProtocol(), Max: max, Log: slog.New(slog.NewTextHandler(&log, nil))})
+	srv := httptest.NewServer(h)
+	t.Cleanup(func() {
+		h.Close(context.Background())
+		srv.Close()
+	})
+	return h, srv.URL, &log
+}
+
+func TestHubBurstArrivesWhole(t *testing.T) {
+	h, url := newTestHub(t, 10)
+	c := subscribed(t, url, "g1bob")
+
+	// One window can match many events for one connection, such as a
+	// catch-up after a restart; a client that reads gets them all.
+	burst := make([]trigger.Match, 200)
+	for i := range burst {
+		burst[i] = testMatch("g1bob")
+		burst[i].Event.Height = int64(i)
+	}
+	h.Publish(burst)
+	for i, m := range burst {
+		require.Equal(t, string(NotificationFrame(m)), recv(t, c), "frame %d", i)
+	}
+}
+
+func TestHubLogsRefusalAtTheCap(t *testing.T) {
+	_, url, log := newLoggedHub(t, 1)
+	dial(t, url)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, resp, err := websocket.Dial(ctx, url, nil)
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Contains(t, log.String(), `msg="live connection refused at the cap" max=1`)
+}
+
+func TestHubLogsNothingWhenLiveIsOff(t *testing.T) {
+	_, url, log := newLoggedHub(t, 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, resp, err := websocket.Dial(ctx, url, nil)
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	assert.Empty(t, log.String())
 }
 
 func TestHubDuplicateOptinGivesOneFrame(t *testing.T) {
@@ -221,7 +273,7 @@ func TestHubBinaryCloses1003(t *testing.T) {
 }
 
 func TestHubSlowClientDropped(t *testing.T) {
-	h, url := newTestHub(t, 1)
+	h, url, log := newLoggedHub(t, 1)
 	subscribed(t, url, "g1bob") // and never reads again
 
 	m := testMatch("g1bob")
@@ -242,6 +294,28 @@ func TestHubSlowClientDropped(t *testing.T) {
 		c.CloseNow()
 		return true
 	}, 20*time.Second, 200*time.Millisecond, "the slow client still holds the only slot")
+	assert.Equal(t, 1, strings.Count(log.String(), `msg="live connection dropped: too slow to read"`), log.String())
+}
+
+func TestHubCloseEndsWithTheDeadline(t *testing.T) {
+	h, url := newTestHub(t, 10)
+	// A peer that completes the upgrade and then never reads cannot answer
+	// the close frame.
+	host := strings.TrimPrefix(url, "http://")
+	conn, err := net.Dial("tcp", host)
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"+
+		"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n", host)
+	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	h.Close(ctx)
+	assert.Less(t, time.Since(start), 2*time.Second)
 }
 
 func TestHubCloseSends1001(t *testing.T) {
@@ -251,7 +325,7 @@ func TestHubCloseSends1001(t *testing.T) {
 	closed := make(chan struct{})
 	go func() {
 		defer close(closed)
-		h.Close()
+		h.Close(context.Background())
 	}()
 	assert.Equal(t, websocket.StatusGoingAway, closeStatus(t, c))
 	select {
@@ -275,7 +349,7 @@ func TestHubOutlivesServerTimeouts(t *testing.T) {
 	srv.Config.WriteTimeout = 200 * time.Millisecond
 	srv.Start()
 	t.Cleanup(func() {
-		h.Close()
+		h.Close(context.Background())
 		srv.Close()
 	})
 

@@ -149,7 +149,7 @@ Frames follow chain order. Each is sent once, after gnotifd has processed its bl
 ### Limits and closing
 
 - A client frame over 8,192 bytes closes the connection with code 1009, and a binary frame with 1003.
-- A connection that does not read its frames fast enough is closed with 1013.
+- A connection more than 256 frames behind is closed with 1013.
 - gnotifd closes every connection with 1001 when it stops.
 
 A server may close a connection at any time. The client reconnects and sends its set again.

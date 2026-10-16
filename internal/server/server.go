@@ -162,10 +162,10 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	<-loopCtx.Done()
-	// Shutdown does not track upgraded connections, so the hub closes them.
-	hub.Close()
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
+	// Shutdown does not track upgraded connections, so the hub closes them.
+	hub.Close(shutdownCtx)
 	var shutdownErr error
 	for _, srv := range servers {
 		shutdownErr = errors.Join(shutdownErr, srv.Shutdown(shutdownCtx))

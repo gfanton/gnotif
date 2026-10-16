@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -15,7 +16,10 @@ import (
 )
 
 const (
-	sendBuffer   = 16
+	// ceiling: a connection more than sendBuffer frames behind is closed, so
+	// one window matching more than that for a page drops it even when it
+	// reads; a queue capped in bytes if catch-up windows grow past it.
+	sendBuffer   = 256
 	writeTimeout = 10 * time.Second
 )
 
@@ -44,6 +48,10 @@ type conn struct {
 	// writer sends it, so no caller waits on the peer's close handshake.
 	stop chan websocket.StatusCode
 	keys []string // guarded by Hub.mu
+	// cancel ends the connection at once, its close handshake included;
+	// guarded by Hub.mu.
+	cancel  context.CancelFunc
+	dropped atomic.Bool // closed for reading too slowly
 }
 
 // NewHub returns a hub holding no connections.
@@ -58,12 +66,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := &conn{send: make(chan []byte, sendBuffer), stop: make(chan websocket.StatusCode, 1)}
-	if !h.reserve(c) {
-		msg := "too many live connections"
-		if h.cfg.Max == 0 {
-			msg = "live notifications are off on this server"
-		}
-		writeError(w, http.StatusServiceUnavailable, msg)
+	if refusal := h.reserve(c); refusal != "" {
+		writeError(w, http.StatusServiceUnavailable, refusal)
 		return
 	}
 	defer h.release(c)
@@ -90,32 +94,58 @@ func (h *Hub) Publish(matches []trigger.Match) {
 		}
 		frame := NotificationFrame(m)
 		for c := range set {
-			queue(c, frame)
+			h.queue(c, frame)
 		}
 	}
 }
 
 // Close closes every connection with 1001, refuses new ones, and returns once
-// every connection has ended.
-func (h *Hub) Close() {
+// every connection has ended. Connections still open when ctx ends are cut
+// without waiting for their peer's close.
+func (h *Hub) Close(ctx context.Context) {
 	h.mu.Lock()
 	h.closed = true
 	for c := range h.conns {
 		stop(c, websocket.StatusGoingAway)
 	}
 	h.mu.Unlock()
-	h.wg.Wait()
+
+	ended := make(chan struct{})
+	go func() {
+		defer close(ended)
+		h.wg.Wait()
+	}()
+	select {
+	case <-ended:
+		return
+	case <-ctx.Done():
+	}
+	h.mu.Lock()
+	for c := range h.conns {
+		if c.cancel != nil {
+			c.cancel()
+		}
+	}
+	h.mu.Unlock()
+	<-ended
 }
 
-func (h *Hub) reserve(c *conn) bool {
+// reserve adds c to the hub, or returns why it cannot.
+func (h *Hub) reserve(c *conn) (refusal string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.closed || len(h.conns) >= h.cfg.Max {
-		return false
+	switch {
+	case h.cfg.Max == 0:
+		return "live notifications are off on this server"
+	case h.closed:
+		return "too many live connections"
+	case len(h.conns) >= h.cfg.Max:
+		h.cfg.Log.Warn("live connection refused at the cap", "max", h.cfg.Max)
+		return "too many live connections"
 	}
 	h.conns[c] = struct{}{}
 	h.wg.Add(1)
-	return true
+	return ""
 }
 
 func (h *Hub) release(c *conn) {
@@ -150,6 +180,9 @@ func (h *Hub) serve(c *conn) {
 	defer c.ws.CloseNow()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	h.mu.Lock()
+	c.cancel = cancel
+	h.mu.Unlock()
 	written := make(chan struct{})
 	go func() {
 		defer close(written)
@@ -176,7 +209,7 @@ func (h *Hub) read(ctx context.Context, c *conn) {
 			h.index(c, r.Keys)
 			h.mu.Unlock()
 		}
-		queue(c, r.Frame)
+		h.queue(c, r.Frame)
 	}
 }
 
@@ -209,11 +242,14 @@ func write(ctx context.Context, c *conn) {
 	}
 }
 
-func queue(c *conn, frame []byte) {
+func (h *Hub) queue(c *conn, frame []byte) {
 	select {
 	case c.send <- frame:
 	default:
-		stop(c, websocket.StatusTryAgainLater)
+		if c.dropped.CompareAndSwap(false, true) {
+			stop(c, websocket.StatusTryAgainLater)
+			h.cfg.Log.Warn("live connection dropped: too slow to read", "behind", sendBuffer)
+		}
 	}
 }
 
