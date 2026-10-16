@@ -113,7 +113,7 @@ gnotifd also refuses a file made by a newer release, with `database was made by 
 
 ## Attach an external hub
 
-gnotifd holds live connections itself once `-stream-max` allows them; at its default of 0 it refuses them all. A deployment can hold them in an external hub instead, such as one that keeps idle connections at no cost, and leave `-stream-max` at 0. gnotifd still builds every frame a client receives, so clients see no difference. Two flags connect the hub:
+gnotifd holds live connections itself once `-stream-max` allows them; at its default of 0 it refuses them all. A deployment can hold them in an external hub instead, such as one that keeps idle connections at no cost, and leave `-stream-max` at 0. gnotifd still builds every frame a client receives, so clients see no difference. Two flags connect the hub, and gnotifd refuses one without the other:
 
 - `-hub-listen <addr>` opens a second listener with one route, `POST /message`. The hub posts each text frame a client sends, at most 8,192 bytes, and receives `{"reply": "<frame>", "keys": ["<key>", "..."]}`. It sends `reply` to the client as is. `keys` is present when the frame replaced the connection's set, and lists that set. Keep this listener off the public network.
 - `-publish <url>` posts each processed window's matches to the hub as `[{"key": "<key>", "frame": "<frame>"}]`, in chain order, and the hub sends each `frame` to the connections whose keys include `key`. With `GNOTIF_PUBLISH_TOKEN` set, each request carries `Authorization: Bearer <token>`. A request that fails or takes over 5 seconds is logged and dropped, and so is a batch that arrives while 64 wait.

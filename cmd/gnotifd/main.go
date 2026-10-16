@@ -110,6 +110,9 @@ func parseConfig(args []string, getenv func(string) string) (server.Config, erro
 			return server.Config{}, errors.New("-publish must be an http or https URL")
 		}
 	}
+	if (cfg.HubListen == "") != (cfg.Publish == "") {
+		return server.Config{}, errors.New("-hub-listen and -publish connect an external hub together: set both or neither")
+	}
 	cfg.PublishToken = getenv("GNOTIF_PUBLISH_TOKEN")
 
 	// webpush-go adds "mailto:" to a subject that is not an https URL; a

@@ -77,6 +77,8 @@ func TestParseConfig(t *testing.T) {
 		"negative stream-max":  {[]string{"-stream-max", "-1"}, "-stream-max must not be negative"},
 		"publish scheme":       {[]string{"-publish", "ftp://hub.example/publish"}, "-publish must be an http or https URL"},
 		"publish without host": {[]string{"-publish", "http:///publish"}, "-publish must be an http or https URL"},
+		"hub listener alone":   {[]string{"-hub-listen", "127.0.0.1:8081"}, "-hub-listen and -publish connect an external hub together: set both or neither"},
+		"publish alone":        {[]string{"-publish", "http://hub.internal/publish"}, "-hub-listen and -publish connect an external hub together: set both or neither"},
 	}
 	for name, tc := range invalid {
 		t.Run(name, func(t *testing.T) {
