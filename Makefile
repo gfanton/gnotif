@@ -4,7 +4,7 @@ CACHE := $(CURDIR)/.cache
 GNO_STORE := $(CACHE)/gno-$(GNO_REF)
 GNO := $(GNO_STORE)/gno
 GNO_DEPS := $(GNO_STORE)/deps.stamp
-GNO_MODS := $(wildcard gno/r/*/*/gnomod.toml demo/gno.land/r/*/*/gnomod.toml)
+GNO_MODS := $(wildcard gno/r/*/*/gnomod.toml gno/p/*/*/*/gnomod.toml demo/gno.land/r/*/*/gnomod.toml)
 GNOROOT_DIR := $(shell go env GOMODCACHE)/github.com/gnolang/gno@$(GNO_REF)
 GNO_ENV = GNOROOT=$(GNOROOT_DIR) GNOHOME=$(GNO_STORE)/gnohome
 ONYX_RPC := https://rpc.onyx.testnets.gno.land:443
