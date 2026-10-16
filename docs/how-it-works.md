@@ -25,8 +25,10 @@ gnotifd never reads the registry's state. It rebuilds its triggers from the even
 
 | Event | Attributes |
 |---|---|
-| `TriggerDeclared` | `id`, `target`, `event`, `filter`, `param`, `title`, `body`, `link`, `declarer`, `verified` (always `true` in v0) |
+| `TriggerDeclared` | `id`, `target`, `event`, `filter`, `param`, `title`, `body`, `link`, `declarer`, `verified`, and from v1 `approver` |
 | `TriggerRemoved` | `id` |
+
+`approver` is the namespace owner who signed the transaction that declared the trigger. gnotifd reads only the other ten.
 
 gnotifd applies these events only when they come from the registry version given with `-registry` or a later version under the same prefix, such as `…/gnotif/v1` after `…/gnotif/v0`. It never reads an earlier version. An event applies only when its id carries its own version's prefix: `0000001` in v0, `v<N>-…` in version N. It logs any other event as `skip registry event` and skips it. It stores a trigger only when `verified` is `true`. It logs a `TriggerDeclared` it cannot read as an error and skips it. A `TriggerRemoved` deletes the trigger with its opt-ins, but a push the trigger already queued is still sent. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
 
@@ -34,24 +36,13 @@ gnotifd applies these events only when they come from the registry version given
 
 ## What the verified mark means
 
-`Declare` panics with `caller is not the target` unless its caller is code whose package path equals the trigger's target. So only a realm can declare its own triggers, normally from its `init`, and every stored trigger carries the verified mark: "declared by the realm at the target path".
+The verified mark says that the target realm's authority stands behind the trigger. The registry takes a trigger only from the realm's gnotif identity, `<target>#gnotif`, in a transaction that the owner of the realm's namespace signed with its own key and sent straight to the realm, such as the realm's deploy ([Triggers](triggers.md#declare-once-at-deploy)). So every trigger it stores carries the mark.
 
-The mark rests on the chain refusing deploys under a namespace to anyone but its owner. On onyx, a key deploys under its own address, `gno.land/r/<address>/...`, or under a name it registered. On a chain without that rule, whoever deploys a realm at a path can declare triggers for that path.
+The mark rests on the namespace ownership that the chain checks on every deploy, so it is as strong as that check: on a chain that does not enforce namespaces, whoever deploys a realm can declare its triggers.
 
-A realm that hands its live `cur` to another realm lets that code declare triggers in the realm's name. Passing `cur` to a foreign crossing function is refused by the VM, with `cannot cur-call to external realm function`; an ordinary call whose realm argument is not the first one takes it, and that is the shape `chain/runtime/unsafe` recommends for a helper with no `cur` of its own, "accept `_ int, rlm realm` from the caller":
+The mark covers whatever code ran in that transaction with the realm's gnotif identity. A trigger declared by code the realm handed `me` to, or by `/p/` code that ran with the realm's `cur`, carries it too ([Keep your gnotif identity to your realm](triggers.md#keep-your-gnotif-identity-to-your-realm)).
 
-```go
-// another realm, which your realm imports for convenience
-func Setup(tag string, rlm realm) string {
-	return gnotif.Declare(cross(rlm), rlm.PkgPath(), "Message", "", "to",
-		"Wallet alert", "Your account is at risk: {msg}", "/drain")
-}
-
-// yours
-func init(cur realm) { other.Setup("x", cur) }
-```
-
-The trigger that lands is verified, its target is your realm, and its declarer is your realm's address, so only your realm may `Remove` it: one declared from `init` by a realm that exports no removal stays for good. A helper called more than once also fills your 64 places, after which your own `Declare` panics with `too many triggers for target`. Declare your triggers from your own source, and read a `realm` in another realm's argument list as the authority it is.
+v0's triggers carry the mark on a weaker check: any realm that a dapp passed its `cur` to could declare triggers in the dapp's name. A server that follows v0 keeps that risk.
 
 The registry bounds what any trigger can do:
 
@@ -129,11 +120,11 @@ The registry is immutable, so a change ships as a new version at `…/gnotif/v<N
 2. **Not private.** Never set `private = true`. The creator of a private package can redeploy it in place. `init` then runs again with fresh globals, the id counter restarts, and the version reissues its own ids over the stored triggers.
 3. **Ids** take the form `v<N+1>-…`.
 4. **Existing attributes are frozen.** Never remove, rename or change the meaning of a `TriggerDeclared` or `TriggerRemoved` attribute. gnotifd skips a `TriggerDeclared` that lacks one of the ten.
-5. **Attribute hygiene.** Never emit the same key twice, since gnotifd reads the first. Stay within the chain's caps for one event: 64 attribute pairs, and at most 4096 bytes for each type, key and value. v0 uses 10 pairs.
+5. **Attribute hygiene.** Never emit the same key twice, since gnotifd reads the first. Stay within the chain's caps for one event: 64 attribute pairs, and at most 4096 bytes for each type, key and value. v1 uses 11 pairs.
 6. **New attributes** must be safe to ignore: presentation only, such as an icon.
 7. **Narrowing changes go in a new event type.** Anything that narrows matching, such as an extra filter or an expiry, goes in a new event type, which older servers skip. A new event type may only add triggers. Removal stays `TriggerRemoved`.
 8. **Emit from the realm package itself.** Call `chain.Emit` directly in the realm. An emit moved into a `/p/` helper carries the helper's path, and servers miss it.
-9. **No other emitters.** Never call a function or interface value the caller supplies, and never export a method or closure that emits registry events outside `Declare` and `Remove`. Registry code emits as the registry, whoever runs it.
-10. **`verified` keeps its meaning:** the target realm presented its own live `cur` to `Declare`. `target` never contains `#`, so a sub-realm token (`cur.Sub(x)`, reported as `host#x`) cannot verify.
+9. **No other emitters.** Emit registry events only from the registry's own exported functions, and never call a function or interface value a caller supplies.
+10. **`verified` means the target realm's authority stands behind the trigger.** In v0 the caller presented the realm's live `cur`. From v1 the realm's gnotif identity, `<target>#gnotif`, declared it in a transaction the target's namespace owner signed and sent straight to the realm. `target` never contains `#`.
 
 gnotifd trusts every later version under the prefix and takes `verified` at face value. That trust rests on the chain's deploy gate, which lets only a namespace's owner deploy under it. GovDAO controls that gate, and the operators of a hardfork are a trust root too. An address namespace, `gno.land/r/<address>/gnotif/v<N>`, removes only the risk of a name changing hands; the GovDAO and hardfork risks remain.
