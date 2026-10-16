@@ -53,7 +53,9 @@ var (
 	_    = as
 )
 
-// The owner's call reaches G1 before the dapp's own Declare: the call reverts.
+// The owner's call reaches G1 before the dapp's own Declare. G1's list holds
+// only a fake, so the dapp's trigger is new to a set target: the dapp's
+// Declare panics and the whole call reverts, the fake included.
 func main(cur realm) {
 	enableNames(cur)
 	testing.SetRealm(testing.NewUserRealm(alice))
