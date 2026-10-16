@@ -32,6 +32,7 @@ const MaxPerTarget = 64
 // Store is the SQLite database. It is safe for concurrent use.
 type Store struct {
 	db *sql.DB
+	ex executor
 }
 
 // Cursor is the chain position of the watch loop. HeightDone is the last
@@ -107,12 +108,12 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, ex: local{db: db}}, nil
 }
 
 // Close closes the database.
 func (s *Store) Close() error {
-	return s.db.Close()
+	return s.ex.close()
 }
 
 // Cursor returns the stored cursor, and false before the first SetCursor.
