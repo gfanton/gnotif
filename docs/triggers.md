@@ -38,7 +38,7 @@ A realm's namespace is the first element of its path after `gno.land/r/`. Its ow
 
 The registry takes a realm's triggers in one `Declare` call, and only when the namespace owner signed the transaction with its own key and sent it straight to the realm. The owner's deploy does both, so the triggers are active once the realm goes live. On a chain that does not enforce namespaces, such as a local gnodev, any key's deploy declares them.
 
-After that call, the realm's triggers are set. A trigger identical in every field to one of the realm's triggers, or to an earlier one in the same list, gets that trigger's id. So a later `Declare` that repeats the realm's triggers changes nothing, and an `init` that runs again does no harm. A later `Declare` with any other trigger panics, a dropped one included.
+After that call, the realm's triggers are set. A trigger identical in every field to one of the realm's triggers, or to an earlier one in the same list, gets that trigger's id. A later `Declare` must repeat all of the realm's triggers: one that does changes nothing, so an `init` that runs again does no harm. A later `Declare` that leaves one of them out panics, and so does one that adds any other trigger, a dropped one included.
 
 `Declare` panics, which reverts the transaction, when:
 
@@ -47,7 +47,7 @@ After that call, the realm's triggers are set. A trigger identical in every fiel
 | `call with this realm's gnotif identity (me := cur.Sub(gnotif.Subpath), then cross(me)); got <path>` | the caller is not a realm's gnotif identity: a realm's plain `cur`, or another `Sub` of it |
 | `declare at least one trigger` | the list is empty |
 | `invalid event`, `invalid filter`, `invalid param`, `invalid title`, `invalid body`, `invalid link` | the first field that breaks its [rule](#fields) |
-| `the triggers of <target> are set: deploy a new version of the realm to change them` | the realm declared its triggers before, and the list holds a new one |
+| `the triggers of <target> are set: deploy a new version of the realm to change them` | the realm declared its triggers before, and the list leaves one of them out or holds a new one |
 | `signed with a session key: sign with the namespace owner's own key` | a session key signed the transaction |
 | `<addr> is not authorized for namespace <ns>` | the signer does not own the realm's namespace |
 | `the dapp was not entered directly by its namespace owner; entered from <path>` | the signer called another realm, which called the dapp |

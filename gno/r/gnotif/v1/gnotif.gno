@@ -34,7 +34,8 @@ var (
 // Declare activates ts for the realm whose gnotif identity calls it and
 // returns their ids in order. Only the realm's first activating call can add
 // triggers, and only when the realm's namespace owner signed the transaction
-// and sent it straight to the realm.
+// and sent it straight to the realm. A later call must list every active
+// trigger.
 func Declare(cur realm, ts ...Trigger) []string {
 	me := cur.Previous()
 	target := targetOf(0, me)
@@ -51,14 +52,18 @@ func Declare(cur realm, ts ...Trigger) []string {
 	}
 	ids := make([]string, len(ts))
 	first := make(map[Trigger]int) // index in ts of each new trigger's first copy
+	named := make(map[string]bool, len(active))
 	for i, t := range ts {
 		if id, ok := idOf[t]; ok {
 			ids[i] = id
+			named[id] = true
 		} else if _, ok := first[t]; !ok {
 			first[t] = i
 		}
 	}
-	if len(first) == 0 {
+	// A list that leaves out an active trigger reaches the panic below, so code
+	// that declared first cannot hide an extra trigger behind the realm's list.
+	if len(first) == 0 && len(named) == len(active) {
 		return ids
 	}
 	if set {
