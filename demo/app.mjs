@@ -127,7 +127,11 @@ function addSent(body) {
   const dot = document.createElement("i");
   dot.className = "indicator";
   const clock = document.createTextNode(clockText(0));
-  row.querySelector("time").replaceChildren(dot, clock);
+  // Hidden from screen readers: the log would read the clock out every second.
+  const ticking = document.createElement("span");
+  ticking.setAttribute("aria-hidden", "true");
+  ticking.append(dot, clock);
+  row.querySelector("time").replaceChildren(ticking);
   row.querySelector(".note").textContent = "Waiting for it to arrive";
   const tick = () => { clock.data = clockText(Date.now() - at.getTime()); };
   const sent = { row, body, at: at.getTime(), clock: setInterval(tick, 1000) };
