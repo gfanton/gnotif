@@ -96,6 +96,21 @@ button.addEventListener("click", async () => {
 
 [The client's README](../js/README.md) documents each method, its errors and the `icon` option.
 
+### Live updates on the page
+
+An open page can also receive each notification as it happens, with no permission prompt and no service worker:
+
+```js
+gnotif.on("notification", (n) => show(n));
+await gnotif.setOptins([{ trigger: message.id, value: address }]);
+await gnotif.connect();
+```
+
+- `on("notification")` receives the notification's title, body and link, with the event's attributes and the block it is in. `show` is your page's own code.
+- `connect()` sends the set to the server, address included, so call it when the person asks for live updates. `disconnect()` closes the connection.
+- After a drop the connection comes back by itself, firing `reconnecting` and then `reconnect`. Nothing sent in between is replayed, so read the page's state from the chain again on `reconnect`.
+- gnotif.xyz serves live updates. A gnotifd of your own serves them once you set `-stream-max` ([Running gnotifd](running-gnotifd.md#flags)).
+
 ## 4. Try it on onyx
 
 This step needs gnokey, the gno.land command-line tool, and a key that holds test GNOT on onyx. If you don't have them yet, [Interacting with Gno.land using gnokey](https://docs.gno.land/users/interact-with-gnokey/) covers installing gnokey, making a key and getting test GNOT from the faucet. The commands below name the key `mykey`: use your key's name.
