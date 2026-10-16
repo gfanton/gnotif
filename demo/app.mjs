@@ -134,6 +134,7 @@ function addSent(body) {
   waiting.push(sent);
   setTimeout(() => {
     if (waiting.includes(sent)) {
+      sent.late = true;
       clearInterval(sent.clock);
       clock.data = clockText(WAIT_MS);
       row.classList.replace("pending", "late");

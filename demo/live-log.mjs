@@ -5,13 +5,15 @@ export const WAIT_MS = 60_000;
 
 /**
  * answeredSend returns the index of the oldest send in waiting whose
- * notification has body, or -1 when none waits for it.
- * @param {{ body: string }[]} waiting oldest first
+ * notification has body, taking one still on time before a late one, or -1
+ * when none waits for it.
+ * @param {{ body: string, late?: boolean }[]} waiting oldest first
  * @param {string} body the arrival's notification body
  * @returns {number}
  */
 export function answeredSend(waiting, body) {
-  return waiting.findIndex((sent) => sent.body === body);
+  const onTime = waiting.findIndex((sent) => sent.body === body && sent.late !== true);
+  return onTime !== -1 ? onTime : waiting.findIndex((sent) => sent.body === body);
 }
 
 /**

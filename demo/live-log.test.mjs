@@ -8,6 +8,11 @@ test("an arrival answers the oldest send waiting for its body", () => {
   assert.equal(answeredSend(waiting, "Bye"), 1);
 });
 
+test("an arrival answers a send still on time before a late one with its body", () => {
+  assert.equal(answeredSend([{ body: "Hello", late: true }, { body: "Hello" }], "Hello"), 1);
+  assert.equal(answeredSend([{ body: "Hello", late: true }, { body: "Bye" }], "Hello"), 0);
+});
+
 test("an arrival no send waits for answers none", () => {
   assert.equal(answeredSend([{ body: "Hello" }], "Hello, me"), -1);
   assert.equal(answeredSend([], "Hello"), -1);
