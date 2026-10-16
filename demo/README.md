@@ -94,11 +94,12 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
    export $(cat .tools/vapid.env)
    go run ./cmd/gnotifd -indexer http://127.0.0.1:8546/graphql/query \
      -registry gno.land/r/dev/gnotif/v0 -start-height 1 -max-age 1h \
-     -vapid-subject <contact> -db .tools/gnotif.db
+     -stream-max 100 -vapid-subject <contact> -db .tools/gnotif.db
    ```
 
    - `<contact>` is where push services can reach you: any email address or https URL of yours.
    - `-max-age 1h` lets gnotifd notify for gnodev's blocks, whose time can be old ([Running gnotifd](../docs/running-gnotifd.md#the-indexer-and-the-start-height)).
+   - `-stream-max 100` turns on the live connections behind the page's "Live updates" switch; gnotifd refuses them by default.
 
    Within a few seconds, gnotifd lists echo's trigger, with `"verified":true`:
 

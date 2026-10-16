@@ -59,7 +59,11 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	c := &conn{send: make(chan []byte, sendBuffer), stop: make(chan websocket.StatusCode, 1)}
 	if !h.reserve(c) {
-		writeError(w, http.StatusServiceUnavailable, "too many live connections")
+		msg := "too many live connections"
+		if h.cfg.Max == 0 {
+			msg = "live notifications are off on this server"
+		}
+		writeError(w, http.StatusServiceUnavailable, msg)
 		return
 	}
 	defer h.release(c)

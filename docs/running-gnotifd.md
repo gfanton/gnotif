@@ -66,7 +66,7 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 | `-poll` | `5s` | indexer poll interval; must be positive |
 | `-max-age` | `10m` | oldest event that still sends a notification; must not be negative |
 | `-push-hosts` | the four hosts in [the allowlist](#the-push-service-allowlist) | comma-separated push service hosts |
-| `-stream-max` | `1000` | most live connections held at once; `0` refuses every one |
+| `-stream-max` | `0` | most live connections held at once; `0` turns live connections off |
 | `-hub-listen` | none | address of the [external-hub](#attach-an-external-hub) listener |
 | `-publish` | none | URL receiving each window's matches for an [external hub](#attach-an-external-hub) |
 
@@ -113,7 +113,7 @@ gnotifd also refuses a file made by a newer release, with `database was made by 
 
 ## Attach an external hub
 
-gnotifd holds live connections itself. A deployment can hold them in an external hub instead, such as one that keeps idle connections at no cost. gnotifd still builds every frame a client receives, so clients see no difference. Two flags connect the hub:
+gnotifd holds live connections itself once `-stream-max` allows them; at its default of 0 it refuses them all. A deployment can hold them in an external hub instead, such as one that keeps idle connections at no cost, and leave `-stream-max` at 0. gnotifd still builds every frame a client receives, so clients see no difference. Two flags connect the hub:
 
 - `-hub-listen <addr>` opens a second listener with one route, `POST /message`. The hub posts each text frame a client sends, at most 8,192 bytes, and receives `{"reply": "<frame>", "keys": ["<key>", "..."]}`. It sends `reply` to the client as is. `keys` is present when the frame replaced the connection's set, and lists that set. Keep this listener off the public network.
 - `-publish <url>` posts each processed window's matches to the hub as `[{"key": "<key>", "frame": "<frame>"}]`, in chain order, and the hub sends each `frame` to the connections whose keys include `key`. With `GNOTIF_PUBLISH_TOKEN` set, each request carries `Authorization: Bearer <token>`. A request that fails or takes over 5 seconds is logged and dropped, and so is a batch that arrives while 64 wait.

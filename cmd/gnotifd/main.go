@@ -83,7 +83,7 @@ func parseConfig(args []string, getenv func(string) string) (server.Config, erro
 	fs.DurationVar(&cfg.MaxAge, "max-age", 10*time.Minute, "oldest event that still sends a notification")
 	fs.StringVar(&cfg.VAPIDSubject, "vapid-subject", "", "contact email or https URL sent to push services (required)")
 	fs.StringVar(&pushHosts, "push-hosts", strings.Join(subscribe.DefaultPushHosts, ","), "comma-separated push service hosts")
-	fs.IntVar(&cfg.StreamMax, "stream-max", 1000, "most live connections held at once; 0 refuses every one")
+	fs.IntVar(&cfg.StreamMax, "stream-max", 0, "most live connections held at once; 0 turns live connections off")
 	fs.StringVar(&cfg.HubListen, "hub-listen", "", "address of the external-hub listener (off when empty)")
 	fs.StringVar(&cfg.Publish, "publish", "", "URL receiving each window's matches for an external hub (off when empty)")
 	if err := fs.Parse(args); err != nil {

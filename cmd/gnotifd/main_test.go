@@ -95,7 +95,7 @@ func TestParseConfig(t *testing.T) {
 	t.Run("live defaults", func(t *testing.T) {
 		cfg, err := parseConfig(requiredArgs, env(""))
 		require.NoError(t, err)
-		assert.Equal(t, 1000, cfg.StreamMax)
+		assert.Equal(t, 0, cfg.StreamMax, "live connections are off unless the operator sets a cap")
 		assert.Empty(t, cfg.HubListen)
 		assert.Empty(t, cfg.Publish)
 		assert.Empty(t, cfg.PublishToken)

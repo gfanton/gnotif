@@ -146,7 +146,7 @@ func TestHubNoUpgradeAnswers426(t *testing.T) {
 }
 
 func TestHubCapAnswers503(t *testing.T) {
-	refused := func(t *testing.T, url string) {
+	refused := func(t *testing.T, url, body string) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -154,18 +154,18 @@ func TestHubCapAnswers503(t *testing.T) {
 		require.Error(t, err)
 		require.NotNil(t, resp)
 		assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
-		body, _ := io.ReadAll(resp.Body)
-		assert.JSONEq(t, `{"error":"too many live connections"}`, string(body))
+		got, _ := io.ReadAll(resp.Body)
+		assert.JSONEq(t, body, string(got))
 	}
 
 	t.Run("max 1", func(t *testing.T) {
 		_, url := newTestHub(t, 1)
 		dial(t, url)
-		refused(t, url)
+		refused(t, url, `{"error":"too many live connections"}`)
 	})
 	t.Run("max 0", func(t *testing.T) {
 		_, url := newTestHub(t, 0)
-		refused(t, url)
+		refused(t, url, `{"error":"live notifications are off on this server"}`)
 	})
 }
 

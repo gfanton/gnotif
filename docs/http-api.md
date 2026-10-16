@@ -116,6 +116,7 @@ The server has no route that reads opt-ins back. A page keeps the set it last se
 |---|---|
 | without a WebSocket upgrade | 426, `{"error": "websocket upgrade required"}` |
 | while the server holds its most connections | 503, `{"error": "too many live connections"}` |
+| on a server with live notifications off | 503, `{"error": "live notifications are off on this server"}` |
 
 ### Client frames
 
