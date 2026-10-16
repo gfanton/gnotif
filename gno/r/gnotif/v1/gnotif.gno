@@ -5,10 +5,141 @@
 // https://gnotif.xyz/docs/how-it-works/#rules-for-a-new-registry-version.
 package gnotif
 
-import "gno.land/p/dev/gnotif/trigger/v0"
+import (
+	"chain"
+	"chain/runtime"
+	"chain/runtime/unsafe"
+	"strings"
+
+	"gno.land/p/dev/gnotif/trigger/v0"
+	"gno.land/p/nt/bptree/v0"
+	"gno.land/p/nt/seqid/v0"
+	"gno.land/r/sys/names"
+)
 
 // Subpath is the subpath of a realm's gnotif identity: me := cur.Sub(gnotif.Subpath).
 const Subpath = "gnotif"
 
 // Trigger is an alias, so a dapp imports only the registry.
 type Trigger = trigger.Trigger
+
+var (
+	triggers bptree.BPTree // id → record.encode()
+	// byTarget maps a target to its active ids, oldest first. The entry
+	// stays once set, even with no ids left, and marks the target as set.
+	byTarget bptree.BPTree
+	lastID   seqid.ID
+)
+
+// Declare activates ts for the realm whose gnotif identity calls it and
+// returns their ids in order. Only the realm's first activating call can add
+// triggers, and only when the realm's namespace owner signed the transaction
+// and sent it straight to the realm.
+func Declare(cur realm, ts ...Trigger) []string {
+	me := cur.Previous()
+	target := targetOf(0, me)
+	if len(ts) == 0 {
+		panic("declare at least one trigger")
+	}
+	for _, t := range ts {
+		validate(t)
+	}
+	active, set := activeOf(target)
+	idOf := make(map[Trigger]string, len(active))
+	for _, id := range active {
+		idOf[decodeRecord(triggers.Get(id)).T] = id
+	}
+	ids := make([]string, len(ts))
+	first := make(map[Trigger]int) // index in ts of each new trigger's first copy
+	for i, t := range ts {
+		if id, ok := idOf[t]; ok {
+			ids[i] = id
+		} else if _, ok := first[t]; !ok {
+			first[t] = i
+		}
+	}
+	if len(first) == 0 {
+		return ids
+	}
+	if set {
+		panic("the triggers of " + target + " are set: deploy a new version of the realm to change them")
+	}
+	mustOwnerEntered(0, me, target)
+	if len(active)+len(first) > maxPerTarget {
+		panic("too many triggers for target")
+	}
+	approver := unsafe.OriginCaller().String()
+	for i, t := range ts {
+		if ids[i] != "" {
+			continue
+		}
+		if j := first[t]; j < i {
+			ids[i] = ids[j]
+			continue
+		}
+		ids[i] = add(target, t, approver)
+		active = append(active, ids[i])
+	}
+	byTarget.Set(target, active)
+	return ids
+}
+
+// Active lists target's active trigger ids, comma-separated, oldest first.
+func Active(target string) string {
+	ids, _ := activeOf(target)
+	return strings.Join(ids, ",")
+}
+
+func activeOf(target string) (ids []string, set bool) {
+	ids, set = byTarget.Get(target).([]string)
+	return ids, set
+}
+
+// targetOf returns the realm whose gnotif identity me is, and panics for any
+// other caller.
+func targetOf(_ int, me realm) string {
+	path := me.PkgPath()
+	host, subpath, _ := chain.SplitPkgSubPath(path)
+	if subpath != Subpath || !validTarget(host) {
+		panic("call with this realm's gnotif identity (me := cur.Sub(gnotif.Subpath), then cross(me)); got " + path)
+	}
+	return host
+}
+
+// mustOwnerEntered panics unless target's namespace owner signed the
+// transaction with its own key and called target's realm directly.
+func mustOwnerEntered(_ int, me realm, target string) {
+	if _, _, _, isSession := runtime.GetSessionInfo(); isSession {
+		panic("signed with a session key: sign with the namespace owner's own key")
+	}
+	signer := unsafe.OriginCaller()
+	if ns := namespaceOf(target); !names.IsAuthorizedAddressForNamespace(signer, ns) {
+		panic(signer.String() + " is not authorized for namespace " + ns)
+	}
+	// The Previous of a gnotif identity is the caller of its host realm.
+	entry := me.Previous()
+	if !entry.IsUserCall() || entry.Address() != signer {
+		panic("the dapp was not entered directly by its namespace owner; entered from " + entry.PkgPath())
+	}
+}
+
+// add stores t under a new id and emits TriggerDeclared. The caller lists the
+// id under target in byTarget.
+func add(target string, t Trigger, approver string) string {
+	id := "v1-" + lastID.Next().String()
+	triggers.Set(id, record{Target: target, T: t}.encode())
+	chain.Emit("TriggerDeclared",
+		"id", id,
+		"target", target,
+		"event", t.Event,
+		"filter", t.Filter,
+		"param", t.Param,
+		"title", t.Title,
+		"body", t.Body,
+		"link", t.Link,
+		"declarer", chain.PackageAddress(target).String(),
+		"verified", "true",
+		"approver", approver,
+	)
+	return id
+}
