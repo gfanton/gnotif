@@ -21,17 +21,35 @@ func (l local) exec(ctx context.Context, stmts []Statement) ([]Result, error) {
 		return nil, fmt.Errorf("begin: %w", err)
 	}
 	defer tx.Rollback()
+	before, err := totalChanges(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
 	results := make([]Result, len(stmts))
 	for i, st := range stmts {
 		results[i], err = runStatement(ctx, tx, st)
 		if err != nil {
 			return nil, fmt.Errorf("statement %d: %w", i, err)
 		}
+		after, err := totalChanges(ctx, tx)
+		if err != nil {
+			return nil, err
+		}
+		results[i].Changes = after - before
+		before = after
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 	return results, nil
+}
+
+func totalChanges(ctx context.Context, tx *sql.Tx) (int64, error) {
+	var n int64
+	if err := tx.QueryRowContext(ctx, `SELECT total_changes()`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("read changes: %w", err)
+	}
+	return n, nil
 }
 
 func runStatement(ctx context.Context, tx *sql.Tx, st Statement) (Result, error) {
@@ -56,7 +74,9 @@ func runStatement(ctx context.Context, tx *sql.Tx, st Statement) (Result, error)
 		}
 		row := make(map[string]any, len(cols))
 		for i, c := range cols {
-			row[c] = normalize(vals[i])
+			if row[c], err = normalize(vals[i]); err != nil {
+				return Result{}, fmt.Errorf("column %s: %w", c, err)
+			}
 		}
 		res.Rows = append(res.Rows, row)
 	}
@@ -66,18 +86,17 @@ func runStatement(ctx context.Context, tx *sql.Tx, st Statement) (Result, error)
 	if err := rows.Close(); err != nil {
 		return Result{}, err
 	}
-	if len(cols) == 0 {
-		if err := tx.QueryRowContext(ctx, `SELECT changes()`).Scan(&res.Changes); err != nil {
-			return Result{}, fmt.Errorf("read changes: %w", err)
-		}
-	}
 	return res, nil
 }
 
 // normalize maps a scanned column to the value types Result documents.
-func normalize(v any) any {
-	if b, ok := v.([]byte); ok {
-		return string(b)
+func normalize(v any) (any, error) {
+	switch v := v.(type) {
+	case nil, int64, float64, string:
+		return v, nil
+	case []byte:
+		return string(v), nil
+	default:
+		return nil, fmt.Errorf("unsupported value type %T", v)
 	}
-	return v
 }

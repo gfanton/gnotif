@@ -55,6 +55,36 @@ func TestExecRefusesOverMaxStatements(t *testing.T) {
 	require.Equal(t, int64(0), results[0].Rows[0]["n"])
 }
 
+func TestExecChangesOnlyCountsRowWrites(t *testing.T) {
+	s := fresh(t)
+	results, err := s.Exec(context.Background(), []Statement{
+		{SQL: `CREATE TABLE x (id INTEGER PRIMARY KEY)`},
+		{SQL: `INSERT INTO x (id) VALUES (1)`},
+		{SQL: `CREATE TABLE y (id INTEGER PRIMARY KEY)`},
+		{SQL: `SELECT id FROM x`},
+		{SQL: `INSERT INTO x (id) VALUES (2) RETURNING id`},
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, results[1].Changes)
+	require.EqualValues(t, 0, results[2].Changes)
+	require.EqualValues(t, 0, results[3].Changes)
+	require.EqualValues(t, 1, results[4].Changes)
+	require.Equal(t, []map[string]any{{"id": int64(2)}}, results[4].Rows)
+}
+
+func TestExecRefusesValuesOutsideTheContract(t *testing.T) {
+	s := fresh(t)
+	ctx := context.Background()
+	_, err := s.Exec(ctx, []Statement{
+		{SQL: `CREATE TABLE t (d DATETIME)`},
+		{SQL: `INSERT INTO t (d) VALUES ('2026-01-01 00:00:00')`},
+	})
+	require.NoError(t, err)
+
+	_, err = s.Exec(ctx, []Statement{{SQL: `SELECT d FROM t`}})
+	require.ErrorContains(t, err, "unsupported value type time.Time")
+}
+
 func TestExecNormalizesValues(t *testing.T) {
 	s := fresh(t)
 	results, err := s.Exec(context.Background(), []Statement{

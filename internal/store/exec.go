@@ -19,8 +19,9 @@ type Statement struct {
 }
 
 // Result is the outcome of one Statement. Rows hold nil, int64, float64 or
-// string values, keyed by column name. Changes counts the rows a statement
-// without result columns inserted, updated or deleted, and is 0 otherwise.
+// string values, keyed by column name. Changes counts the rows the
+// statement inserted, updated or deleted, RETURNING included; it is 0 for a
+// SELECT or a schema change.
 type Result struct {
 	Rows    []map[string]any
 	Changes int64
