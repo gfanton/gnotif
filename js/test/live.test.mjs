@@ -143,12 +143,20 @@ class ThrowingWebSocket extends FakeWebSocket {
   }
 }
 
-test("connect rejects with code server when the socket cannot be created, and can be tried again", async (t) => {
+test("connect rejects with code network when the connection closes before the server answers", async (t) => {
+  stubLive(t);
+  const g = new Gnotif({ server: SERVER });
+  const p = g.connect();
+  last().drop();
+  await assert.rejects(p, (err) => err instanceof GnotifError && err.code === "network");
+});
+
+test("connect rejects with code network when the socket cannot be created, and can be tried again", async (t) => {
   stubLive(t);
   ThrowingWebSocket.on = true;
   t.after(stubGlobal("WebSocket", ThrowingWebSocket));
   const g = new Gnotif({ server: SERVER });
-  await assert.rejects(g.connect(), (err) => err instanceof GnotifError && err.code === "server" && err.message === "refused by the browser");
+  await assert.rejects(g.connect(), (err) => err instanceof GnotifError && err.code === "network" && err.message === "refused by the browser");
 
   ThrowingWebSocket.on = false;
   const p = g.connect();
@@ -262,7 +270,7 @@ test("pings every 30 s and reconnects without a pong within 10 s", async (t) => 
   stubLive(t);
   const g = await connected(t);
   let disconnects = 0;
-  g.on("disconnect", () => disconnects++);
+  g.on("reconnecting", () => disconnects++);
 
   t.mock.timers.tick(30_000);
   assert.equal(last().sent.at(-1), '{"type":"ping"}');
@@ -283,7 +291,7 @@ test("reconnects with jittered backoff and fires reconnect", async (t) => {
   const g = await connected(t);
   let disconnects = 0;
   let reconnects = 0;
-  g.on("disconnect", () => disconnects++);
+  g.on("reconnecting", () => disconnects++);
   g.on("reconnect", () => reconnects++);
 
   last().drop();
@@ -313,18 +321,77 @@ test("reconnects with jittered backoff and fires reconnect", async (t) => {
   assert.equal(sockets().length, 4);
 });
 
-test("a set refused after a reconnect fires error", async (t) => {
+test("a set refused after a reconnect stops live updates and fires error", async (t) => {
   stubLive(t, 0);
   const g = await connected(t);
   const errors = [];
   g.on("error", (err) => errors.push(err));
   last().drop();
   t.mock.timers.tick(500);
-  last().open();
-  last().receive('{"type":"error","error":"unknown trigger \\"0000001\\""}');
+  const ws = last();
+  ws.open();
+  ws.receive('{"type":"error","error":"unknown trigger \\"0000001\\""}');
   assert.equal(errors.length, 1);
   assert.ok(errors[0] instanceof GnotifError);
+  assert.equal(errors[0].code, "server");
   assert.equal(errors[0].message, 'unknown trigger "0000001"');
+  // The new connection holds no opt-ins: it is closed, not kept.
+  assert.equal(ws.closedWith, 1000);
+  await flush();
+  t.mock.timers.tick(60_000);
+  assert.equal(sockets().length, 2);
+
+  const p = g.connect();
+  assert.equal(sockets().length, 3);
+  last().open();
+  last().receive(ACCEPTED);
+  await p;
+});
+
+for (const code of [1009, 1003]) {
+  test(`a close with ${code} stops live updates and fires error`, async (t) => {
+    stubLive(t, 0);
+    const g = await connected(t);
+    const errors = [];
+    g.on("error", (err) => errors.push(err));
+    const pending = g.setOptins(B);
+    last().drop(code);
+    await assert.rejects(pending, (err) => err instanceof GnotifError && err.code === "server");
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].code, "server");
+    t.mock.timers.tick(60_000);
+    assert.equal(sockets().length, 1);
+  });
+}
+
+// SilentCloseWebSocket never reports its own close, as a browser may not
+// for long on a dead network.
+class SilentCloseWebSocket extends FakeWebSocket {
+  close(code) {
+    if (this.readyState === 3) return;
+    this.readyState = 3;
+    this.closedWith = code ?? 1005;
+  }
+}
+
+test("a missing pong reconnects without waiting for the socket's close", async (t) => {
+  stubLive(t, 0);
+  t.after(stubGlobal("WebSocket", SilentCloseWebSocket));
+  const g = await connected(t);
+  let reconnecting = 0;
+  g.on("reconnecting", () => reconnecting++);
+  t.mock.timers.tick(30_000);
+  assert.equal(last().sent.at(-1), '{"type":"ping"}');
+  t.mock.timers.tick(10_000);
+  assert.equal(reconnecting, 1);
+  t.mock.timers.tick(500);
+  assert.equal(sockets().length, 2);
+});
+
+test("on refuses an event it does not know, naming the ones it does", () => {
+  const g = new Gnotif({ server: SERVER });
+  assert.throws(() => g.on("disconnect", () => {}), (err) => err instanceof TypeError &&
+    err.message === 'unknown event "disconnect": use "notification", "reconnecting", "reconnect" or "error"');
 });
 
 test("setOptins while reconnecting sends the latest set once", async (t) => {
@@ -358,7 +425,7 @@ test("disconnect closes and stops reconnecting", async (t) => {
   stubLive(t);
   const g = await connected(t);
   let events = 0;
-  g.on("disconnect", () => events++);
+  g.on("reconnecting", () => events++);
   g.on("reconnect", () => events++);
   const ws = last();
   g.disconnect();

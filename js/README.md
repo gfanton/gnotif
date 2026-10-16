@@ -138,14 +138,15 @@ await gnotif.connect();
 
 Calls `handler` on every event of that name, and returns a function
 that removes it. A handler that throws is reported with
-`console.error`, and the other handlers still run.
+`console.error`, and the other handlers still run. Any other event name
+throws a `TypeError`.
 
 | Event | The handler receives | When |
 |---|---|---|
 | `notification` | `trigger`, `value`, `title`, `body`, `link`, `height`, `tx`, `time` and `attrs` | a live notification arrives |
-| `disconnect` | nothing | the connection dropped and is retrying |
+| `reconnecting` | nothing | the connection dropped and is retrying |
 | `reconnect` | nothing | it is back, with the set sent again |
-| `error` | a `GnotifError` | a live failure no promise waits on, such as the set refused after a reconnect |
+| `error` | a `GnotifError` | live updates stopped by themselves, or a live failure no promise waits on |
 
 `link` arrives resolved on the page's origin. A link that would land on
 another origin arrives as the service worker's scope, as for a push: the
@@ -163,9 +164,15 @@ Nothing is replayed after a drop, so read it again on `reconnect`.
 Opens the live connection with the set `setOptins` kept, and resolves
 once the server accepts it. It sends that set, address included, to the
 server, so call it when the user asks for live updates. It throws a
-`GnotifError` with code `server` when the server refuses the set or the
-connection cannot open, and does not retry then. After a drop, the
-connection comes back by itself.
+`GnotifError` with code `server` when the server refuses the set, and
+with code `network` when the connection cannot open or closes before
+the server answers, as it does on a server with live notifications
+off. It does not retry then.
+
+After a drop, the connection comes back by itself. Live updates stop,
+and `error` fires, when the server refuses the set on a reconnect or
+closes the connection over a frame it refuses, such as a set over
+8,192 bytes. Call `connect()` again once the cause is fixed.
 
 ### `disconnect()`
 
@@ -176,14 +183,16 @@ waiting rejects with code `inactive`.
 
 `GnotifError` has three fields:
 
-- `code`: `"unsupported"`, `"denied"`, `"inactive"` or `"server"`;
+- `code`: `"unsupported"`, `"denied"`, `"inactive"`, `"server"` or
+  `"network"`, the last for a live connection that could not open;
 - `message`: for `server`, the server's error text when it sent one,
   otherwise `gnotif server answered <status>`;
 - `status`: the HTTP status of a `server` error, `undefined` for the
   other codes.
 
-A network failure, or a failure inside the browser's Push API, rejects
-with the browser's own error rather than a `GnotifError`.
+A network failure of the other calls, or a failure inside the browser's
+Push API, rejects with the browser's own error rather than a
+`GnotifError`.
 
 ## Notifications
 

@@ -42,7 +42,7 @@
  * What each event's handler receives.
  * @typedef {object} GnotifEvents
  * @property {LiveNotification} notification a live notification arrived
- * @property {undefined} disconnect the live connection dropped and is retrying
+ * @property {undefined} reconnecting the live connection dropped and is retrying
  * @property {undefined} reconnect it is back; notifications in between were missed
  * @property {GnotifError} error a live failure no promise waits on
  */
@@ -105,7 +105,7 @@ function liveNotification(f, scope) {
 
 export class GnotifError extends Error {
   /**
-   * @param {"unsupported" | "denied" | "inactive" | "server"} code
+   * @param {"unsupported" | "denied" | "inactive" | "server" | "network"} code
    * @param {string} message
    * @param {number} [status] HTTP status of a "server" error
    */
@@ -150,7 +150,7 @@ export class Gnotif {
   /** @type {Optin[] | null} the set every channel uses, null until setOptins */
   #optins = null;
   /** @type {{ [K in keyof GnotifEvents]: Set<(arg: GnotifEvents[K]) => void> }} */
-  #handlers = { notification: new Set(), disconnect: new Set(), reconnect: new Set(), error: new Set() };
+  #handlers = { notification: new Set(), reconnecting: new Set(), reconnect: new Set(), error: new Set() };
 
   // ---- Live connection state
   /** @type {WebSocket | null} */
@@ -287,6 +287,10 @@ export class Gnotif {
    * @returns {() => void} removes the handler
    */
   on(event, handler) {
+    if (!Object.hasOwn(this.#handlers, event)) {
+      const known = Object.keys(this.#handlers).map((name) => `"${name}"`);
+      throw new TypeError(`unknown event "${event}": use ${known.slice(0, -1).join(", ")} or ${known.at(-1)}`);
+    }
     const handlers = this.#handlers[event];
     handlers.add(handler);
     return () => {
@@ -298,7 +302,7 @@ export class Gnotif {
    * Opens the live connection with the kept set, and resolves once the
    * server accepts it. The set, address included, goes to the server:
    * call this when the user asks for live updates. After a drop the
-   * connection comes back by itself, firing disconnect and reconnect.
+   * connection comes back by itself, firing reconnecting and reconnect.
    * @returns {Promise<void>}
    */
   connect() {
@@ -384,6 +388,19 @@ export class Gnotif {
     }
   }
 
+  /**
+   * Ends the live channel with err, and fires error unless a connect() was
+   * waiting, which err rejects instead.
+   * @param {GnotifError} err
+   */
+  #fail(err) {
+    const connecting = this.#connecting !== null;
+    this.#stop(err);
+    if (!connecting) {
+      this.#emit("error", err);
+    }
+  }
+
   #open() {
     /** @type {WebSocket} */
     let ws;
@@ -393,7 +410,7 @@ export class Gnotif {
       // A browser refuses some URLs at once, such as ws: from an https:
       // page: the first connect fails, and a reconnect tries again later.
       if (this.#connecting) {
-        this.#stop(new GnotifError("server", err instanceof Error ? err.message : String(err)));
+        this.#stop(new GnotifError("network", err instanceof Error ? err.message : String(err)));
       } else {
         this.#onClose();
       }
@@ -408,7 +425,13 @@ export class Gnotif {
       this.#ping = setInterval(() => {
         ws.send(PING);
         clearTimeout(this.#pong);
-        this.#pong = setTimeout(() => ws.close(), PONG_TIMEOUT);
+        this.#pong = setTimeout(() => {
+          // On a dead network a browser may report the close only much later.
+          ws.close();
+          if (ws === this.#ws) {
+            this.#onClose();
+          }
+        }, PONG_TIMEOUT);
       }, PING_INTERVAL);
     });
     ws.addEventListener("message", (e) => {
@@ -416,9 +439,9 @@ export class Gnotif {
         this.#onFrame(e.data);
       }
     });
-    ws.addEventListener("close", () => {
+    ws.addEventListener("close", (e) => {
       if (ws === this.#ws) {
-        this.#onClose();
+        this.#onClose(e.code);
       }
     });
   }
@@ -497,12 +520,12 @@ export class Gnotif {
       }
     } else {
       const e = new GnotifError("server", err);
-      if (this.#connecting) {
-        // The first set was refused: there is nothing to keep open.
-        this.#stop(e);
+      if (this.#connecting || this.#reconnecting) {
+        // The set this connection opened with was refused, so it holds no
+        // opt-ins: there is nothing to keep open.
+        this.#fail(e);
         return;
       }
-      this.#reconnecting = false;
       for (const w of settled) {
         w.reject(e);
       }
@@ -515,18 +538,25 @@ export class Gnotif {
     }
   }
 
-  #onClose() {
+  /** @param {number} [code] the close code, when the socket reported one */
+  #onClose(code) {
     this.#ws = null;
     this.#inFlight = false;
     clearInterval(this.#ping);
     clearTimeout(this.#pong);
+    if (code === 1009 || code === 1003) {
+      // The server refused a frame this client sent, and would refuse it
+      // again on every reconnect.
+      this.#fail(new GnotifError("server", `The server closed the live connection with code ${code}.`));
+      return;
+    }
     if (this.#connecting) {
-      this.#stop(new GnotifError("server", "The live connection closed before the server accepted the opt-ins."));
+      this.#stop(new GnotifError("network", "The live connection closed before the server answered."));
       return;
     }
     if (!this.#reconnecting) {
       this.#reconnecting = true;
-      this.#emit("disconnect", undefined);
+      this.#emit("reconnecting", undefined);
     }
     const delay = Math.min(BACKOFF_MAX, BACKOFF_MIN * 2 ** this.#attempt) * (0.5 + Math.random() / 2);
     this.#attempt++;

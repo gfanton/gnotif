@@ -395,7 +395,7 @@ el("address").addEventListener("change", async () => {
 });
 
 gnotif.on("notification", addArrival);
-gnotif.on("disconnect", () => setLiveState("Reconnecting…"));
+gnotif.on("reconnecting", () => setLiveState("Reconnecting…"));
 gnotif.on("reconnect", () => setLiveState("Live updates on", true));
 gnotif.on("error", (err) => say("message", err.message, true));
 
