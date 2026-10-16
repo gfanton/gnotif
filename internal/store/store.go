@@ -104,11 +104,16 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("set schema version: %w", err)
 	}
-	if _, err := db.ExecContext(ctx, schema); err != nil {
+	st := &Store{db: db, ex: local{db: db}}
+	stmts := make([]Statement, len(schema))
+	for i, q := range schema {
+		stmts[i] = Statement{SQL: q}
+	}
+	if _, err := st.Exec(ctx, stmts); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
-	return &Store{db: db, ex: local{db: db}}, nil
+	return st, nil
 }
 
 // Close closes the database.
@@ -118,14 +123,24 @@ func (s *Store) Close() error {
 
 // Cursor returns the stored cursor, and false before the first SetCursor.
 func (s *Store) Cursor(ctx context.Context) (Cursor, bool, error) {
-	var c Cursor
-	err := s.db.QueryRowContext(ctx, `SELECT height_done, bound, next_tx FROM cursor WHERE id = 1`).Scan(&c.HeightDone, &c.Bound, &c.NextTx)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Cursor{}, false, nil
-	}
+	res, err := s.Exec(ctx, []Statement{{SQL: `SELECT height_done, bound, next_tx FROM cursor WHERE id = 1`}})
 	if err != nil {
 		return Cursor{}, false, fmt.Errorf("read cursor: %w", err)
 	}
+	if len(res[0].Rows) == 0 {
+		return Cursor{}, false, nil
+	}
+	var c Cursor
+	var nextTx int64
+	for _, f := range []struct {
+		name string
+		dst  *int64
+	}{{"height_done", &c.HeightDone}, {"bound", &c.Bound}, {"next_tx", &nextTx}} {
+		if err := column(res[0].Rows[0], f.name, f.dst); err != nil {
+			return Cursor{}, false, fmt.Errorf("read cursor: %w", err)
+		}
+	}
+	c.NextTx = int(nextTx)
 	return c, true, nil
 }
 
@@ -188,10 +203,10 @@ func (s *Store) TriggersByID(ctx context.Context, ids []string) (map[string]trig
 // PutSubscription stores sub, or replaces the keys of the subscription with
 // the same endpoint and keeps its opt-ins.
 func (s *Store) PutSubscription(ctx context.Context, sub Subscription) error {
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.Exec(ctx, []Statement{{`
 		INSERT INTO subscriptions (endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?)
 		ON CONFLICT (endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth`,
-		sub.Endpoint, sub.P256dh, sub.Auth, time.Now().UTC().UnixMilli())
+		[]any{sub.Endpoint, sub.P256dh, sub.Auth, time.Now().UTC().UnixMilli()}}})
 	if err != nil {
 		return fmt.Errorf("put subscription: %w", err)
 	}
@@ -203,14 +218,14 @@ func (s *Store) PutSubscription(ctx context.Context, sub Subscription) error {
 // acts as PutSubscription when oldEndpoint is not stored or sub's endpoint
 // already is.
 func (s *Store) MoveSubscription(ctx context.Context, oldEndpoint string, sub Subscription) error {
-	res, err := s.db.ExecContext(ctx, `
+	res, err := s.Exec(ctx, []Statement{{`
 		UPDATE subscriptions SET endpoint = ?, p256dh = ?, auth = ?
 		WHERE endpoint = ? AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE endpoint = ?)`,
-		sub.Endpoint, sub.P256dh, sub.Auth, oldEndpoint, sub.Endpoint)
+		[]any{sub.Endpoint, sub.P256dh, sub.Auth, oldEndpoint, sub.Endpoint}}})
 	if err != nil {
 		return fmt.Errorf("move subscription: %w", err)
 	}
-	if n, err := res.RowsAffected(); err == nil && n == 1 {
+	if res[0].Changes == 1 {
 		return nil
 	}
 	return s.PutSubscription(ctx, sub)
@@ -218,34 +233,33 @@ func (s *Store) MoveSubscription(ctx context.Context, oldEndpoint string, sub Su
 
 // ReplaceOptins replaces every opt-in of the subscription at endpoint.
 func (s *Store) ReplaceOptins(ctx context.Context, endpoint string, optins []Optin) error {
-	return s.inTx(ctx, func(tx *sql.Tx) error {
-		var id int64
-		err := tx.QueryRow(`SELECT id FROM subscriptions WHERE endpoint = ?`, endpoint).Scan(&id)
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrUnknownSubscription
-		}
-		if err != nil {
-			return fmt.Errorf("find subscription: %w", err)
-		}
-		if _, err := tx.Exec(`DELETE FROM optins WHERE subscription_id = ?`, id); err != nil {
-			return fmt.Errorf("clear opt-ins: %w", err)
-		}
-		for _, o := range optins {
-			if _, err := tx.Exec(`INSERT OR IGNORE INTO optins (subscription_id, trigger_id, value) VALUES (?, ?, ?)`, id, o.TriggerID, o.Value); err != nil {
-				return fmt.Errorf("add opt-in: %w", err)
-			}
-		}
-		return nil
-	})
+	const subscriptionID = `(SELECT id FROM subscriptions WHERE endpoint = ?)`
+	stmts := make([]Statement, 0, len(optins)+2)
+	stmts = append(stmts,
+		Statement{`SELECT id FROM subscriptions WHERE endpoint = ?`, []any{endpoint}},
+		Statement{`DELETE FROM optins WHERE subscription_id = ` + subscriptionID, []any{endpoint}})
+	for _, o := range optins {
+		stmts = append(stmts, Statement{
+			`INSERT OR IGNORE INTO optins (subscription_id, trigger_id, value) VALUES (` + subscriptionID + `, ?, ?)`,
+			[]any{endpoint, o.TriggerID, o.Value}})
+	}
+	res, err := s.Exec(ctx, stmts)
+	if err != nil {
+		return fmt.Errorf("replace opt-ins: %w", err)
+	}
+	if len(res[0].Rows) == 0 {
+		return ErrUnknownSubscription
+	}
+	return nil
 }
 
 // DeleteSubscription removes the subscription at endpoint.
 func (s *Store) DeleteSubscription(ctx context.Context, endpoint string) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM subscriptions WHERE endpoint = ?`, endpoint)
+	res, err := s.Exec(ctx, []Statement{{`DELETE FROM subscriptions WHERE endpoint = ?`, []any{endpoint}}})
 	if err != nil {
 		return fmt.Errorf("delete subscription: %w", err)
 	}
-	if n, err := res.RowsAffected(); err == nil && n == 0 {
+	if res[0].Changes == 0 {
 		return ErrUnknownSubscription
 	}
 	return nil
@@ -254,43 +268,83 @@ func (s *Store) DeleteSubscription(ctx context.Context, endpoint string) error {
 // RemoveSubscription removes a subscription by id, with its opt-ins and
 // queued pushes.
 func (s *Store) RemoveSubscription(ctx context.Context, id int64) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM subscriptions WHERE id = ?`, id); err != nil {
+	if _, err := s.Exec(ctx, []Statement{{`DELETE FROM subscriptions WHERE id = ?`, []any{id}}}); err != nil {
 		return fmt.Errorf("remove subscription: %w", err)
 	}
 	return nil
 }
 
+const selectDue = `
+	SELECT o.id, o.subscription_id, s.endpoint, s.p256dh, s.auth,
+	       o.title, o.body, o.link, o.attempts, o.created_at
+	FROM outbox o JOIN subscriptions s ON s.id = o.subscription_id
+	WHERE o.next_attempt_at <= ?
+	ORDER BY o.next_attempt_at, o.id
+	LIMIT ?`
+
 // Due returns at most limit queued pushes whose next attempt is at or
-// before now, oldest first.
+// before now, earliest due first.
 func (s *Store) Due(ctx context.Context, now time.Time, limit int) ([]Delivery, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT o.id, o.subscription_id, s.endpoint, s.p256dh, s.auth,
-		       o.title, o.body, o.link, o.attempts, o.created_at
-		FROM outbox o JOIN subscriptions s ON s.id = o.subscription_id
-		WHERE o.next_attempt_at <= ?
-		ORDER BY o.id
-		LIMIT ?`, now.UTC().UnixMilli(), limit)
+	res, err := s.Exec(ctx, []Statement{{selectDue, []any{now.UTC().UnixMilli(), limit}}})
 	if err != nil {
 		return nil, fmt.Errorf("read due pushes: %w", err)
 	}
-	defer rows.Close()
 	var out []Delivery
-	for rows.Next() {
-		var d Delivery
-		var created int64
-		if err := rows.Scan(&d.ID, &d.SubscriptionID, &d.Subscription.Endpoint, &d.Subscription.P256dh, &d.Subscription.Auth,
-			&d.Notification.Title, &d.Notification.Body, &d.Notification.Link, &d.Attempts, &created); err != nil {
+	for _, r := range res[0].Rows {
+		d, err := scanDelivery(r)
+		if err != nil {
 			return nil, fmt.Errorf("scan due push: %w", err)
 		}
-		d.CreatedAt = time.UnixMilli(created).UTC()
 		out = append(out, d)
 	}
-	return out, rows.Err()
+	return out, nil
+}
+
+func scanDelivery(r map[string]any) (Delivery, error) {
+	var d Delivery
+	var attempts, created int64
+	var err error
+	for _, c := range []struct {
+		name string
+		dst  any
+	}{
+		{"id", &d.ID}, {"subscription_id", &d.SubscriptionID},
+		{"endpoint", &d.Subscription.Endpoint}, {"p256dh", &d.Subscription.P256dh}, {"auth", &d.Subscription.Auth},
+		{"title", &d.Notification.Title}, {"body", &d.Notification.Body}, {"link", &d.Notification.Link},
+		{"attempts", &attempts}, {"created_at", &created},
+	} {
+		if err = column(r, c.name, c.dst); err != nil {
+			return Delivery{}, err
+		}
+	}
+	d.Attempts = int(attempts)
+	d.CreatedAt = time.UnixMilli(created).UTC()
+	return d, nil
+}
+
+// column stores row[name] in dst, a *int64 or a *string, and fails when the
+// value has the other type.
+func column(row map[string]any, name string, dst any) error {
+	switch dst := dst.(type) {
+	case *int64:
+		v, ok := row[name].(int64)
+		if !ok {
+			return fmt.Errorf("column %s: %T is not an integer", name, row[name])
+		}
+		*dst = v
+	case *string:
+		v, ok := row[name].(string)
+		if !ok {
+			return fmt.Errorf("column %s: %T is not text", name, row[name])
+		}
+		*dst = v
+	}
+	return nil
 }
 
 // DeleteDelivery removes a queued push.
 func (s *Store) DeleteDelivery(ctx context.Context, id int64) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM outbox WHERE id = ?`, id); err != nil {
+	if _, err := s.Exec(ctx, []Statement{{`DELETE FROM outbox WHERE id = ?`, []any{id}}}); err != nil {
 		return fmt.Errorf("delete push: %w", err)
 	}
 	return nil
@@ -298,7 +352,7 @@ func (s *Store) DeleteDelivery(ctx context.Context, id int64) error {
 
 // Reschedule counts a failed attempt and sets the next one at at.
 func (s *Store) Reschedule(ctx context.Context, id int64, at time.Time) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE outbox SET attempts = attempts + 1, next_attempt_at = ? WHERE id = ?`, at.UTC().UnixMilli(), id)
+	_, err := s.Exec(ctx, []Statement{{`UPDATE outbox SET attempts = attempts + 1, next_attempt_at = ? WHERE id = ?`, []any{at.UTC().UnixMilli(), id}}})
 	if err != nil {
 		return fmt.Errorf("reschedule push: %w", err)
 	}

@@ -233,7 +233,8 @@ func TestDueAndReschedule(t *testing.T) {
 	later, err := s.Due(ctx, now.Add(time.Minute), 10)
 	require.NoError(t, err)
 	require.Len(t, later, 3)
-	assert.Equal(t, 1, later[0].Attempts)
+	assert.Equal(t, first, later[2].ID)
+	assert.Equal(t, 1, later[2].Attempts)
 
 	require.NoError(t, s.DeleteDelivery(ctx, first))
 	due, err = s.Due(ctx, now.Add(time.Minute), 10)
@@ -442,6 +443,34 @@ func TestMatchingUsesIndex(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 	assert.Contains(t, plan, "triggers_by_target")
+}
+
+func TestDueUsesIndex(t *testing.T) {
+	s := fresh(t)
+	rows, err := s.db.Query(`EXPLAIN QUERY PLAN `+selectDue, 0, 10)
+	require.NoError(t, err)
+	defer rows.Close()
+	var plan string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		require.NoError(t, rows.Scan(&id, &parent, &unused, &detail))
+		plan += detail + "\n"
+	}
+	require.NoError(t, rows.Err())
+	assert.Contains(t, plan, "outbox_due")
+	assert.NotContains(t, plan, "SCAN o")
+}
+
+func TestReplaceOptinsUnknownWritesNothing(t *testing.T) {
+	ctx := context.Background()
+	s := fresh(t)
+	putTrigger(t, s, "t1", "")
+	err := s.ReplaceOptins(ctx, "https://push/unknown", []Optin{{TriggerID: "t1"}})
+	require.ErrorIs(t, err, ErrUnknownSubscription)
+	var n int
+	require.NoError(t, s.db.QueryRow(`SELECT count(*) FROM optins`).Scan(&n))
+	assert.Zero(t, n)
 }
 
 func TestCursorNextTx(t *testing.T) {
