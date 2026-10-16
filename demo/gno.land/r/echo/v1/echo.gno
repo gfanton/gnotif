@@ -5,12 +5,13 @@ package echo
 import (
 	"chain"
 
-	"gno.land/r/dev/gnotif/v0"
+	"gno.land/r/dev/gnotif/v1"
 )
 
-// The registry sees this realm as the caller, so the trigger is verified.
+// This realm's gnotif identity declares its trigger; the deploy activates it.
 func init(cur realm) {
-	gnotif.Declare(cross(cur), cur.PkgPath(), "Echo", "", "to", "Echo", "{msg}", "/")
+	me := cur.Sub(gnotif.Subpath)
+	gnotif.Declare(cross(me), gnotif.Trigger{Event: "Echo", Param: "to", Title: "Echo", Body: "{msg}", Link: "/"})
 }
 
 // Echo sends msg to the browsers that opted in with the caller's address.

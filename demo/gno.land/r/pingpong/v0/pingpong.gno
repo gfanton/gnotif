@@ -11,7 +11,7 @@ import (
 	"gno.land/p/nt/avl/v0"
 	"gno.land/p/nt/seqid/v0"
 
-	"gno.land/r/dev/gnotif/v0"
+	"gno.land/r/dev/gnotif/v1"
 )
 
 // Game is a match between First and Second. First plays turn 1. It is
@@ -29,9 +29,10 @@ var (
 	lastGame seqid.ID
 )
 
-// The registry sees this realm as the caller, so the trigger is verified.
+// This realm's gnotif identity declares its trigger; the deploy activates it.
 func init(cur realm) {
-	gnotif.Declare(cross(cur), cur.PkgPath(), "TurnPlayed", "", "next", "Your turn", "Game {game}, turn {turn}", "/?game={game}")
+	me := cur.Sub(gnotif.Subpath)
+	gnotif.Declare(cross(me), gnotif.Trigger{Event: "TurnPlayed", Param: "next", Title: "Your turn", Body: "Game {game}, turn {turn}", Link: "/?game={game}"})
 }
 
 func load(id string) *Game {

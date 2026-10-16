@@ -4,7 +4,7 @@ import { type Adena, AdenaError, connect, findAdena, sendEcho, shortAddress, wal
 import { callMessage, gas } from "./echo-tx.ts";
 
 const chain = { id: "onyx-1", name: "Gno.land onyx testnet", rpc: "https://rpc.onyx.testnets.gno.land:443" };
-const pkgPath = "gno.land/r/dev/echo/v0";
+const pkgPath = "gno.land/r/dev/echo/v1";
 const address = "g1zrjyzatudmadgqu39d5wfamhdvf0adwlxkz25d";
 
 const ok = (type: string, data: unknown) => ({ code: 0, status: "success", type, message: type, data });

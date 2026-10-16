@@ -7,13 +7,13 @@ import (
 
 	"gno.land/p/nt/uassert/v0"
 
-	"gno.land/r/dev/gnotif/v0"
+	"gno.land/r/dev/gnotif/v1"
 )
 
 func TestInitDeclaresTrigger(t *testing.T) {
-	out := gnotif.Render("target/gno.land/r/dev/echo/v0")
+	out := gnotif.Render("target/gno.land/r/dev/echo/v1")
 	uassert.Equal(t, 1, strings.Count(out, "\n- ["), out)
-	by := chain.PackageAddress("gno.land/r/dev/echo/v0").String()
+	by := chain.PackageAddress("gno.land/r/dev/echo/v1").String()
 	uassert.True(t, strings.Contains(out, " · Echo · param to · ✓ verified · by "+by+"\n"), out)
 }
 
