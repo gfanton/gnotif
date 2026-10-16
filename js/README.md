@@ -142,7 +142,7 @@ that removes it. A handler that throws is reported with
 
 | Event | The handler receives | When |
 |---|---|---|
-| `notification` | `trigger`, `value`, `title`, `body`, `link`, `height`, `tx` and `attrs` | a live notification arrives |
+| `notification` | `trigger`, `value`, `title`, `body`, `link`, `height`, `tx`, `time` and `attrs` | a live notification arrives |
 | `disconnect` | nothing | the connection dropped and is retrying |
 | `reconnect` | nothing | it is back, with the set sent again |
 | `error` | a `GnotifError` | a live failure no promise waits on, such as the set refused after a reconnect |
@@ -151,8 +151,9 @@ that removes it. A handler that throws is reported with
 another origin arrives as the service worker's scope, as for a push: the
 path `sw.js` is served from, `/` for a dapp at the root of its origin.
 `attrs` lists the event's
-attributes as `{ key, value }`, and `height` and `tx` name the
-transaction that emitted it.
+attributes as `{ key, value }`, `height` and `tx` name the
+transaction that emitted it, and `time` is its block's time, in UTC,
+as RFC 3339.
 
 A notification is a hint: read the state the page shows from the chain.
 Nothing is replayed after a drop, so read it again on `reconnect`.

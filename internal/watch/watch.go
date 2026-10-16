@@ -228,6 +228,7 @@ func (w *Watcher) process(tx *store.Tx, events []trigger.Event, blockTimes map[i
 			c.stale++
 			continue
 		}
+		e.Time = blockTime
 		m, n, err := w.enqueue(tx, e)
 		if err != nil {
 			return c, nil, err

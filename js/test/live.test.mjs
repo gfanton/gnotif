@@ -100,7 +100,7 @@ async function connected(t, optins = A, options = {}) {
 
 function notification(link) {
   return { type: "notification", trigger: "0000001", value: "g1bob", title: "Your turn", body: "Game 7, turn 1",
-    link, height: 7, tx: "tx1", attrs: [{ key: "game", value: "7" }] };
+    link, height: 7, tx: "tx1", time: "2026-10-16T21:46:08.5Z", attrs: [{ key: "game", value: "7" }] };
 }
 
 test("connect opens the stream and resolves once the set is accepted", async (t) => {
@@ -210,6 +210,17 @@ test("notifications reach handlers with the link resolved on the page origin", a
   assert.equal(type, "notification");
   assert.deepEqual(got[0], fields);
   assert.equal(got[1].link, "https://dapp.example/");
+});
+
+test("a notification without its block time reaches no handler", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  const got = [];
+  g.on("notification", (n) => got.push(n));
+  const { time, ...untimed } = notification("/");
+  last().receive(JSON.stringify(untimed));
+  last().receive(JSON.stringify({ ...untimed, time: Date.parse(time) }));
+  assert.deepEqual(got, []);
 });
 
 test("a link to another origin gives the service worker's scope", async (t) => {

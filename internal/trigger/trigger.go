@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -17,6 +18,7 @@ type Pair struct{ Key, Value string }
 type Event struct {
 	TxHash  string
 	Height  int64
+	Time    time.Time // the block's time, in UTC
 	TxIndex int
 	Index   int // position in the transaction's events array, counting every kind
 	PkgPath string

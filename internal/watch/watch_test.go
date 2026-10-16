@@ -719,6 +719,34 @@ func TestOversizedBlockPublishesEachTransaction(t *testing.T) {
 	assert.Equal(t, [][]string{{"Game 7, turn 1"}, {"Game 9, turn 1"}}, bodies)
 }
 
+func TestMatchCarriesBlockTime(t *testing.T) {
+	at := now.Add(-90*time.Second + 500*time.Millisecond)
+	cases := map[string]func(t *testing.T) *harness{
+		"window": func(t *testing.T) *harness {
+			h := newHarness(t, 1)
+			h.putTrigger(t, "0000001", game)
+			h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 11})
+			h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
+			h.fake.add(11, turn("7", "g1bob"))
+			return h
+		},
+		"one transaction at a time": oversizedBlock,
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			h := setup(t)
+			h.fake.set(func(f *fakeIndexer) { f.times[11] = at })
+			h.tick(t)
+			require.NotEmpty(t, h.published)
+			for _, ms := range h.published {
+				for _, m := range ms {
+					assert.True(t, at.Equal(m.Event.Time), "block time %v, got %v", at, m.Event.Time)
+				}
+			}
+		})
+	}
+}
+
 func TestResumesInsideBlock(t *testing.T) {
 	h := newHarness(t, 1)
 	h.putTrigger(t, "0000001", game)

@@ -34,6 +34,7 @@
  * @property {string} link absolute URL on the page's origin
  * @property {number} height block height of the event
  * @property {string} tx hash of the transaction that emitted the event
+ * @property {string} time the block's time, in UTC, as RFC 3339
  * @property {{ key: string, value: string }[]} attrs the event's attributes, in order
  */
 
@@ -93,13 +94,13 @@ function safeLink(link, scope) {
  * @returns {LiveNotification | null} null when a field is missing or mistyped
  */
 function liveNotification(f, scope) {
-  const { trigger, value, title, body, link, height, tx, attrs } = f;
+  const { trigger, value, title, body, link, height, tx, time, attrs } = f;
   if (typeof trigger !== "string" || typeof value !== "string" || typeof title !== "string" ||
     typeof body !== "string" || typeof link !== "string" || typeof height !== "number" ||
-    typeof tx !== "string" || !Array.isArray(attrs) || !attrs.every(isAttr)) {
+    typeof tx !== "string" || typeof time !== "string" || !Array.isArray(attrs) || !attrs.every(isAttr)) {
     return null;
   }
-  return { trigger, value, title, body, link: safeLink(link, scope), height, tx, attrs };
+  return { trigger, value, title, body, link: safeLink(link, scope), height, tx, time, attrs };
 }
 
 export class GnotifError extends Error {

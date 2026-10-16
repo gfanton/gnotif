@@ -11,6 +11,7 @@ import (
 	"errors"
 	"log/slog"
 	"slices"
+	"time"
 
 	"github.com/gfanton/gnotif/internal/optin"
 	"github.com/gfanton/gnotif/internal/trigger"
@@ -49,6 +50,7 @@ type notificationJSON struct {
 	Link    string     `json:"link"`
 	Height  int64      `json:"height"`
 	Tx      string     `json:"tx"`
+	Time    string     `json:"time"`
 	Attrs   []attrJSON `json:"attrs"`
 }
 
@@ -68,6 +70,7 @@ func NotificationFrame(m trigger.Match) []byte {
 		Link:    m.Notification.Link,
 		Height:  m.Event.Height,
 		Tx:      m.Event.TxHash,
+		Time:    m.Event.Time.UTC().Format(time.RFC3339Nano),
 		Attrs:   attrs,
 	})
 	return b
