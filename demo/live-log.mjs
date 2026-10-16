@@ -25,6 +25,38 @@ export function clockText(ms) {
 }
 
 /**
+ * blockSummary is an arrival's line in the log: its block, and how long it
+ * took after its send when one waited for it.
+ * @param {number} height
+ * @param {number | undefined} wait milliseconds from the send to the arrival
+ * @returns {string}
+ */
+export function blockSummary(height, wait) {
+  return wait === undefined ? `Block ${height}` : `Block ${height} · ${waitText(wait)}`;
+}
+
+/**
+ * details lists what an arrival carries besides its block, as label and value
+ * pairs: the block's time as format writes it, the transaction, the trigger
+ * with its opted-in value, the event's attributes and the link. A time that
+ * does not parse is left out.
+ * @param {import("./gnotif.js").LiveNotification} n
+ * @param {(at: Date) => string} format
+ * @returns {[string, string][]}
+ */
+export function details(n, format) {
+  const at = new Date(n.time);
+  /** @type {[string, string][]} */
+  const rows = Number.isNaN(at.getTime()) ? [] : [["Block time", format(at)]];
+  rows.push(["Transaction", n.tx], ["Trigger", n.value === "" ? n.trigger : `${n.trigger} for ${n.value}`]);
+  for (const { key, value } of n.attrs) {
+    rows.push([key, value]);
+  }
+  rows.push(["Link", n.link]);
+  return rows;
+}
+
+/**
  * waitText says how long an arrival took after its send.
  * @param {number} ms milliseconds from the send to the arrival
  * @returns {string}

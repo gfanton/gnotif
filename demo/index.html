@@ -180,7 +180,7 @@ input[readonly]:hover { border-color: var(--color-line); }
 
 /* ---- Live arrivals */
 .arrivals { display: flex; flex-direction: column; gap: var(--space-2); }
-.arrivals ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-line); border-radius: var(--radius); overflow: hidden; display: grid; grid-template-columns: auto 1fr; column-gap: var(--space-3); }
+.arrivals ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-line); border-radius: var(--radius); overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-3); }
 .arrivals ol:empty { display: none; }
 .arrivals ol:not(:empty) + .hint { display: none; }
 .arrival { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); line-height: 1.35; }
@@ -192,8 +192,12 @@ input[readonly]:hover { border-color: var(--color-line); }
 .arrival time { grid-row: span 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
 .arrival b { font-weight: 600; }
 .arrival span { color: var(--color-text-muted); overflow-wrap: anywhere; }
-.arrival small { grid-column: 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
+.arrival :is(small, .meta) { grid-column: 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
 .arrival small:empty { display: none; }
+.arrival .meta summary { width: fit-content; cursor: pointer; }
+.arrival .meta summary:hover { color: var(--color-text); }
+.arrival .meta dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 var(--space-1); }
+.arrival .meta dd { margin: 0; color: var(--color-text); overflow-wrap: anywhere; }
 .arrival.late small { color: var(--color-error); }
 .arrival time .indicator { position: relative; margin-right: var(--space-2); background: var(--color-text-muted); }
 .pending time .indicator::after { content: ""; position: absolute; inset: -0.35em; border-radius: 50%; border: 1px solid var(--color-text-muted); opacity: 0; animation: ping 2.4s ease-out infinite; }

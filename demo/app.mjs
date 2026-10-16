@@ -5,7 +5,7 @@ import { chain, echo, gnoweb, gnotif as options } from "./config.js";
 import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
 import { addressArea } from "./address-area.mjs";
 import { load, save } from "./settings.mjs";
-import { WAIT_MS, answeredSend, clockText, waitText } from "./live-log.mjs";
+import { WAIT_MS, answeredSend, blockSummary, clockText, details } from "./live-log.mjs";
 
 const gnotif = new Gnotif({ ...options, serviceWorker: "/sw.js", icon: "/icon.png" });
 const el = (id) => document.getElementById(id);
@@ -101,9 +101,11 @@ function logRow(title, body, at) {
   head.textContent = title;
   const text = document.createElement("span");
   text.textContent = body;
+  const note = document.createElement("small");
+  note.className = "note";
   const item = document.createElement("li");
   item.className = "arrival";
-  item.append(time, head, text, document.createElement("small"));
+  item.append(time, head, text, note);
   const list = el("arrivals-list");
   list.prepend(item);
   while (list.children.length > ARRIVALS_KEPT) {
@@ -126,7 +128,7 @@ function addSent(body) {
   dot.className = "indicator";
   const clock = document.createTextNode(clockText(0));
   row.querySelector("time").replaceChildren(dot, clock);
-  row.querySelector("small").textContent = "Waiting for it to arrive";
+  row.querySelector(".note").textContent = "Waiting for it to arrive";
   const tick = () => { clock.data = clockText(Date.now() - at.getTime()); };
   const sent = { row, body, at: at.getTime(), clock: setInterval(tick, 1000) };
   waiting.push(sent);
@@ -135,24 +137,45 @@ function addSent(body) {
       clearInterval(sent.clock);
       clock.data = clockText(WAIT_MS);
       row.classList.replace("pending", "late");
-      row.querySelector("small").textContent =
+      row.querySelector(".note").textContent =
         `Not arrived after ${WAIT_MS / 1000} s. Check that Adena sends from the address in step 1.`;
     }
   }, WAIT_MS);
 }
 
-function addArrival({ title, body }) {
+function addArrival(n) {
   const at = new Date();
-  const i = answeredSend(waiting, body);
+  const i = answeredSend(waiting, n.body);
+  let row;
+  let wait;
   if (i === -1) {
-    logRow(title, body, at);
-    return;
+    row = logRow(n.title, n.body, at);
+  } else {
+    const [sent] = waiting.splice(i, 1);
+    clearInterval(sent.clock);
+    row = sent.row;
+    row.classList.remove("pending", "late");
+    stamp(row.querySelector("time"), at);
+    wait = at.getTime() - sent.at;
   }
-  const [sent] = waiting.splice(i, 1);
-  clearInterval(sent.clock);
-  sent.row.classList.remove("pending", "late");
-  stamp(sent.row.querySelector("time"), at);
-  sent.row.querySelector("small").textContent = waitText(at.getTime() - sent.at);
+  row.querySelector(".note").replaceWith(arrivalDetails(n, wait));
+}
+
+function arrivalDetails(n, wait) {
+  const summary = document.createElement("summary");
+  summary.textContent = blockSummary(n.height, wait);
+  const list = document.createElement("dl");
+  for (const [label, value] of details(n, (d) => d.toLocaleString())) {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    list.append(dt, dd);
+  }
+  const box = document.createElement("details");
+  box.className = "meta";
+  box.append(summary, list);
+  return box;
 }
 
 function pointToLog() {
