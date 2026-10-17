@@ -3,6 +3,7 @@
 gnotif.db*
 js/types/
 node_modules/
+.direnv/
 demo/gnotif.js
 demo/sw.js
 vapid.env

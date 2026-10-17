@@ -22,13 +22,5 @@
   "files": [
     "src",
     "types"
-  ],
-  "scripts": {
-    "test": "node --test 'test/*.test.mjs'",
-    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
-    "types": "tsc --emitDeclarationOnly --outDir types"
-  },
-  "devDependencies": {
-    "typescript": "^5.9.0"
-  }
+  ]
 }

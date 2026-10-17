@@ -14,6 +14,7 @@ GNO_CHECKOUT ?= https://github.com/gnolang/gno
 TX_INDEXER_VERSION := v1.3.0
 NS ?=
 DEMO_JS := demo/gnotif.js demo/sw.js
+PNPM_STAMP := node_modules/.modules.yaml
 
 .PHONY: all test gno-test gno-lint gno-deps go-test js-test tools e2e conformance demo site site-serve deploy-pkgs clean fclean help
 
@@ -42,8 +43,12 @@ go-test: ## Run go vet and the Go tests
 	go vet ./...
 	go test ./...
 
-js-test: ## Run the browser script tests
-	node --test 'js/test/*.test.mjs' 'demo/*.test.mjs'
+$(PNPM_STAMP): pnpm-lock.yaml pnpm-workspace.yaml package.json js/package.json demo/package.json
+	pnpm install --frozen-lockfile
+	touch $@
+
+js-test: $(PNPM_STAMP) ## Run the browser script tests
+	pnpm test
 
 # Marks .tools as a separate workspace, so the root one skips the gno checkout.
 $(TOOLS)/gnowork.toml:
@@ -102,8 +107,8 @@ clean: ## Remove built tools, deploy copies, the website build and the demo's co
 	rm -rf $(TOOLS) site/dist
 	rm -f $(DEMO_JS)
 
-fclean: clean ## Also remove the gno toolchain and the realms' dependencies in .cache
-	rm -rf $(CACHE)
+fclean: clean ## Also remove the gno toolchain, the realms' dependencies in .cache and the installed JavaScript packages
+	rm -rf $(CACHE) node_modules js/node_modules demo/node_modules
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## / : /'

@@ -1,0 +1,17 @@
+{
+  "name": "gnotif-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.9.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "tsc --noEmit -p js/tsconfig.json && tsc --noEmit -p js/tsconfig.sw.json",
+    "build": "tsc -p js/tsconfig.json --rootDir js/src --emitDeclarationOnly --outDir js/types",
+    "test": "node --test 'js/test/*.test.mjs' 'demo/*.test.mjs'"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}
