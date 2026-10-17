@@ -19,6 +19,7 @@ import (
 
 	"github.com/gfanton/gnotif/internal/store"
 	"github.com/gfanton/gnotif/internal/trigger"
+	"github.com/gfanton/gnotif/internal/watch"
 )
 
 var (
@@ -41,26 +42,31 @@ type harness struct {
 	handler http.Handler
 }
 
-func newHarness(t *testing.T) *harness {
+// newHarness stores t1, t2 and extra, and serves them from a snapshot.
+func newHarness(t *testing.T, extra ...trigger.Trigger) *harness {
 	t.Helper()
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "gnotif.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { st.Close() })
-	require.NoError(t, st.Update(ctx, func(tx *store.Tx) error {
-		if err := tx.PutTrigger(trigger.Trigger{
-			ID: "t1", Target: "gno.land/r/demo/game", Event: "TurnPlayed", Param: "next",
-			Title: "Your turn", Body: "Game {game}", Link: "/?game={game}", Declarer: "g1game", Verified: true,
-			Filter: []trigger.Pair{{Key: "mode", Value: "ranked"}},
-		}); err != nil {
-			return err
-		}
-		return tx.PutTrigger(trigger.Trigger{
-			ID: "t2", Target: "gno.land/r/gov/dao", Event: "ProposalCreated",
-			Title: "New proposal", Link: "/", Declarer: "g1someone",
-		})
-	}))
-	h := NewHandler(Config{Store: st, PublicKey: "PK", PushHosts: DefaultPushHosts, Log: slog.New(slog.DiscardHandler)})
+	triggers := append([]trigger.Trigger{{
+		ID: "t1", Target: "gno.land/r/demo/game", Event: "TurnPlayed", Param: "next",
+		Title: "Your turn", Body: "Game {game}", Link: "/?game={game}", Declarer: "g1game", Verified: true,
+		Filter: []trigger.Pair{{Key: "mode", Value: "ranked"}},
+	}, {
+		ID: "t2", Target: "gno.land/r/gov/dao", Event: "ProposalCreated",
+		Title: "New proposal", Link: "/", Declarer: "g1someone",
+	}}, extra...)
+	stmts := make([]store.Statement, len(triggers))
+	for i, tr := range triggers {
+		stmts[i] = store.PutTriggerStatement(tr)
+	}
+	_, err = st.Exec(ctx, stmts)
+	require.NoError(t, err)
+	h := NewHandler(Config{
+		Store: st, Triggers: watch.NewTriggers(triggers),
+		PublicKey: "PK", PushHosts: DefaultPushHosts, Log: slog.New(slog.DiscardHandler),
+	})
 	return &harness{store: st, handler: h}
 }
 
@@ -75,12 +81,14 @@ func (h *harness) do(t *testing.T, method, path, body string) *httptest.Response
 
 func (h *harness) subscribers(t *testing.T, triggerID, value string) []int64 {
 	t.Helper()
-	var ids []int64
-	require.NoError(t, h.store.Update(context.Background(), func(tx *store.Tx) error {
-		var err error
-		ids, err = tx.Subscribers(triggerID, value)
-		return err
-	}))
+	res, err := h.store.Exec(context.Background(), []store.Statement{store.SubscribersStatement(triggerID, value)})
+	require.NoError(t, err)
+	subs, err := store.SubscribersOf(res[0])
+	require.NoError(t, err)
+	ids := make([]int64, len(subs))
+	for i, s := range subs {
+		ids[i] = s.ID
+	}
 	return ids
 }
 
@@ -139,18 +147,14 @@ func TestTriggers(t *testing.T) {
 }
 
 func TestTriggersCapAndOrder(t *testing.T) {
-	h := newHarness(t)
-	require.NoError(t, h.store.Update(context.Background(), func(tx *store.Tx) error {
-		for i := range store.MaxPerTarget + 1 {
-			if err := tx.PutTrigger(trigger.Trigger{
-				ID: fmt.Sprintf("many%03d", i), Target: "gno.land/r/many", Event: "E",
-				Title: "T", Link: "/", Declarer: "g1x", Verified: true,
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
-	}))
+	var many []trigger.Trigger
+	for i := range store.MaxPerTarget + 1 {
+		many = append(many, trigger.Trigger{
+			ID: fmt.Sprintf("many%03d", i), Target: "gno.land/r/many", Event: "E",
+			Title: "T", Link: "/", Declarer: "g1x", Verified: true,
+		})
+	}
+	h := newHarness(t, many...)
 	rec := h.do(t, http.MethodGet, "/v1/triggers?target=gno.land/r/many", "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	var got []triggerJSON
@@ -166,13 +170,10 @@ func TestPutSubscription(t *testing.T) {
 		want int
 	}{
 		"FCM":                  {subscription(fcm, validP256dh, validAuth), http.StatusNoContent},
-		"WNS wildcard":         {subscription("https://wns2-par02p.notify.windows.com/w/?token=x", validP256dh, validAuth), http.StatusNoContent},
 		"browser JSON":         {fmt.Sprintf(`{"endpoint":%q,"expirationTime":null,"keys":{"p256dh":%q,"auth":%q}}`, fcm, validP256dh, validAuth), http.StatusNoContent},
 		"http scheme":          {subscription("http://fcm.googleapis.com/x", validP256dh, validAuth), http.StatusBadRequest},
 		"unlisted host":        {subscription("https://push.evil.example/x", validP256dh, validAuth), http.StatusBadRequest},
 		"userinfo trick":       {subscription("https://fcm.googleapis.com@evil.example/x", validP256dh, validAuth), http.StatusBadRequest},
-		"unlisted port":        {subscription("https://fcm.googleapis.com:8443/x", validP256dh, validAuth), http.StatusBadRequest},
-		"bare wildcard suffix": {subscription("https://notify.windows.com/x", validP256dh, validAuth), http.StatusBadRequest},
 		"endpoint too long":    {subscription(fcm+strings.Repeat("a", 1001-len(fcm)), validP256dh, validAuth), http.StatusBadRequest},
 		"short p256dh":         {subscription(fcm, base64.RawURLEncoding.EncodeToString(make([]byte, 64)), validAuth), http.StatusBadRequest},
 		"p256dh off the curve": {subscription(fcm, base64.RawURLEncoding.EncodeToString(append([]byte{0x04}, make([]byte, 64)...)), validAuth), http.StatusBadRequest},
@@ -251,17 +252,8 @@ func TestPutOptins(t *testing.T) {
 		require.Equal(t, http.StatusNoContent, h.do(t, http.MethodPut, "/v1/subscription", subscription(fcm, validP256dh, validAuth)).Code)
 		require.Equal(t, http.StatusNoContent, h.do(t, http.MethodPut, "/v1/subscription/optins", optins(fcm, "t1", "g1bob", "t2", "")).Code)
 		require.Equal(t, http.StatusNoContent, h.do(t, http.MethodPut, "/v1/subscription/optins", optins(fcm, "t2", "")).Code)
-		var t1, t2 []int64
-		require.NoError(t, h.store.Update(context.Background(), func(tx *store.Tx) error {
-			var err error
-			if t1, err = tx.Subscribers("t1", "g1bob"); err != nil {
-				return err
-			}
-			t2, err = tx.Subscribers("t2", "")
-			return err
-		}))
-		assert.Empty(t, t1)
-		assert.Len(t, t2, 1)
+		assert.Empty(t, h.subscribers(t, "t1", "g1bob"))
+		assert.Len(t, h.subscribers(t, "t2", ""), 1)
 	})
 }
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { answeredSend, blockSummary, clockText, deliveredBody, details, waitText } from "./live-log.mjs";
+import { answeredSend, blockSummary, clockText, deliveredBody, details, logShown, waitText } from "./live-log.mjs";
 
 test("an arrival answers the oldest send waiting for its body", () => {
   const waiting = [{ body: "Hello" }, { body: "Bye" }, { body: "Hello" }];
@@ -41,7 +41,7 @@ test("the summary names the block, with the wait when a send waited for it", () 
 });
 
 const echoed = {
-  trigger: "0000001", value: "g1bob", title: "Echo", body: "Hello", link: "https://dapp.example/",
+  id: "0123456789abcdef0123456789abcdef", source: "live", trigger: "0000001", value: "g1bob", title: "Echo", body: "Hello", link: "https://dapp.example/",
   height: 181221, tx: "aGFzaDE=", time: "2026-10-16T21:46:08.5Z",
   attrs: [{ key: "to", value: "g1bob" }, { key: "msg", value: "Hello" }],
 };
@@ -51,6 +51,7 @@ test("the details give the block time, the transaction, the trigger, the event's
   assert.deepEqual(details(echoed, iso), [
     ["Block time", "2026-10-16T21:46:08.500Z"],
     ["Transaction", "aGFzaDE="],
+    ["Delivered by", "live connection"],
     ["Trigger", "0000001 for g1bob"],
     ["to", "g1bob"],
     ["msg", "Hello"],
@@ -61,9 +62,23 @@ test("the details give the block time, the transaction, the trigger, the event's
 test("the details leave out a block time that does not parse and a trigger's empty value", () => {
   assert.deepEqual(details({ ...echoed, value: "", time: "yesterday", attrs: [] }, iso), [
     ["Transaction", "aGFzaDE="],
+    ["Delivered by", "live connection"],
     ["Trigger", "0000001"],
     ["Link", "https://dapp.example/"],
   ]);
+});
+
+test("the details say a push delivered the notification", () => {
+  assert.deepEqual(details({ ...echoed, source: "push" }, iso).filter(([label]) => label === "Delivered by"), [
+    ["Delivered by", "push"],
+  ]);
+});
+
+test("the log shows while live updates are on, and with them off once a push lists a row", () => {
+  assert.equal(logShown(true, 0), true);
+  assert.equal(logShown(true, 2), true);
+  assert.equal(logShown(false, 1), true);
+  assert.equal(logShown(false, 0), false);
 });
 
 test("the wait reads in whole seconds", () => {

@@ -2,10 +2,10 @@ import { Gnotif, GnotifError } from "./gnotif.js";
 import { connect, findAdena, sendEcho, shortAddress as short, walletLabel } from "./adena.mjs";
 import { gnokeyCommand } from "./echo-tx.mjs";
 import { chain, echo, gnoweb, gnotif as options } from "./config.js";
-import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
+import { canEnable, listenerMismatch, optinsAtLoad, optinsFor } from "./optin.mjs";
 import { addressArea } from "./address-area.mjs";
 import { load, save } from "./settings.mjs";
-import { WAIT_MS, answeredSend, blockSummary, clockText, deliveredBody, details } from "./live-log.mjs";
+import { WAIT_MS, answeredSend, blockSummary, clockText, deliveredBody, details, logShown } from "./live-log.mjs";
 
 const gnotif = new Gnotif({ ...options, serviceWorker: "/sw.js", icon: "/icon.png" });
 const el = (id) => document.getElementById(id);
@@ -18,13 +18,14 @@ let adenaState = "pending";
 let wallet = "";
 let trigger = null;
 let on = false; // push is on
-let live = false; // live updates are on
+let live = false;
 
 function stored() {
   return load(localStorage);
 }
 
-// remember stores the address as typed, with changes over what is stored.
+// remember saves the typed address and changes, and keeps the rest of the
+// stored record.
 function remember(changes) {
   const s = stored() ?? { address: "", optins: [], live: false, push: false };
   save(localStorage, { ...s, address: address(), ...changes });
@@ -67,13 +68,17 @@ function setLiveState(text, connected = false) {
   el("live-state-text").textContent = text;
 }
 
+function renderLog() {
+  el("arrivals").hidden = !logShown(live, el("arrivals-list").children.length);
+}
+
 async function startLive() {
   setLiveState("Connecting…");
   await setOptin();
   await gnotif.connect();
   live = true;
   setLiveState("Live updates on", true);
-  el("arrivals").hidden = false;
+  renderLog();
 }
 
 function stopLive() {
@@ -81,12 +86,12 @@ function stopLive() {
   live = false;
   el("live").checked = false;
   setLiveState("Live updates off");
-  el("arrivals").hidden = true;
   for (const sent of waiting) {
     clearInterval(sent.clock);
   }
   waiting.length = 0;
   el("arrivals-list").replaceChildren();
+  renderLog();
 }
 
 const ARRIVALS_KEPT = 5;
@@ -170,6 +175,7 @@ function addArrival(n) {
     wait = at.getTime() - sent.at;
   }
   row.querySelector(".note").replaceWith(arrivalDetails(n, wait));
+  renderLog();
 }
 
 function arrivalDetails(n, wait) {
@@ -192,7 +198,7 @@ function arrivalDetails(n, wait) {
 function pointToLog() {
   const link = document.createElement("a");
   link.href = "#arrivals";
-  link.textContent = "Watch for it in the Arrived live log ↑";
+  link.textContent = "Watch for it above ↑";
   el("sent").classList.remove("error");
   el("sent").replaceChildren("Sent. ", link);
 }
@@ -435,6 +441,9 @@ try {
   await refresh();
   if (!on && saved?.push) {
     say("message", "This browser stopped receiving notifications. Turn them on again to resume.");
+  }
+  if (optinsAtLoad(on, saved?.live === true, trigger)) {
+    await setOptin();
   }
 } catch (err) {
   say("message", err.message, true);

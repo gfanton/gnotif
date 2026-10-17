@@ -20,6 +20,52 @@ function parsePayload(text) {
   return { title: "New activity", body: "", link: "./" };
 }
 
+/**
+ * @param {string} text push payload
+ * @returns {{ id: string } | null} the decoded payload when it carries an id
+ */
+function relayable(text) {
+  try {
+    const p = JSON.parse(text);
+    if (typeof p === "object" && p !== null && typeof p.id === "string") {
+      return p;
+    }
+  } catch {
+    // a payload that is not JSON has no id to relay
+  }
+  return null;
+}
+
+/**
+ * @param {WindowClient} client
+ * @returns {boolean}
+ */
+function inScope(client) {
+  return client.url.startsWith(sw.registration.scope);
+}
+
+// relayToWindows posts a full payload to each window in scope.
+/**
+ * @param {string} text push payload
+ * @returns {Promise<void>}
+ */
+async function relayToWindows(text) {
+  const notification = relayable(text);
+  if (notification === null) {
+    return;
+  }
+  const windows = await sw.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of windows) {
+    if (inScope(client)) {
+      try {
+        client.postMessage({ type: "gnotif.notification", notification });
+      } catch {
+        // a window that has gone away refuses the message
+      }
+    }
+  }
+}
+
 // safeLink resolves link against the worker's scope and refuses anything
 // that lands on another origin, such as "//host" or "/\host": those open
 // the scope instead.
@@ -45,14 +91,16 @@ function safeLink(link, scope) {
 // with the same link replace each other; renotify makes the replacement
 // alert again instead of updating silently.
 sw.addEventListener("push", (event) => {
-  const p = parsePayload(event.data ? event.data.text() : "");
+  const text = event.data ? event.data.text() : "";
+  const p = parsePayload(text);
   /** @type {NotificationOptions & { renotify: boolean }} */
   const options = { body: p.body, tag: p.link, renotify: true, data: { link: p.link } };
   const icon = new URL(sw.location.href).searchParams.get("icon");
   if (icon !== null) {
     options.icon = icon;
   }
-  event.waitUntil(sw.registration.showNotification(p.title, options));
+  // The relay is best-effort: its failure must not fail the push.
+  event.waitUntil(Promise.all([sw.registration.showNotification(p.title, options), relayToWindows(text).catch(() => {})]));
 });
 
 sw.addEventListener("notificationclick", (event) => {
@@ -61,7 +109,7 @@ sw.addEventListener("notificationclick", (event) => {
   event.waitUntil((async () => {
     const windows = await sw.clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const client of windows) {
-      if (client.url.startsWith(sw.registration.scope)) {
+      if (inScope(client)) {
         // Focus first: a browser may refuse a focus that comes after the
         // navigation finishes.
         await client.focus();

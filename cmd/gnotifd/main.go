@@ -78,7 +78,7 @@ func parseConfig(args []string, getenv func(string) string) (server.Config, erro
 	fs.StringVar(&cfg.Indexer, "indexer", "", "tx-indexer GraphQL URL (required)")
 	fs.StringVar(&cfg.Registry, "registry", "", "package path of the gnotif registry realm, ending in /v<N>; later versions are followed too (required)")
 	fs.Int64Var(&cfg.StartHeight, "start-height", 0, "registry deploy height, required on first start")
-	fs.StringVar(&cfg.DB, "db", "gnotif.db", "SQLite database file")
+	fs.StringVar(&cfg.DB, "db", "gnotif.db", "SQLite database file, or the http(s) URL of a remote store")
 	fs.DurationVar(&cfg.Poll, "poll", 5*time.Second, "indexer poll interval")
 	fs.DurationVar(&cfg.MaxAge, "max-age", 10*time.Minute, "oldest event that still sends a notification")
 	fs.StringVar(&cfg.VAPIDSubject, "vapid-subject", "", "contact email or https URL sent to push services (required)")

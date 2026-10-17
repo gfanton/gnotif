@@ -22,11 +22,15 @@
  * @typedef {object} Optin
  * @property {string} trigger trigger id
  * @property {string} value the param value, "" for a trigger without a param
+ * @property {boolean} [push] false keeps the item off push: the page hears
+ *   it live only. Push stays on when absent.
  */
 
 /**
- * A notification as the live connection delivers it.
- * @typedef {object} LiveNotification
+ * A notification as either channel delivers it.
+ * @typedef {object} GnotifNotification
+ * @property {string} id identifies the match; both channels carry the same one
+ * @property {"live" | "push"} source the channel that delivered it first
  * @property {string} trigger trigger id
  * @property {string} value the opted-in param value, "" for none
  * @property {string} title
@@ -41,7 +45,7 @@
 /**
  * What each event's handler receives.
  * @typedef {object} GnotifEvents
- * @property {LiveNotification} notification a live notification arrived
+ * @property {GnotifNotification} notification a notification arrived, live or by push
  * @property {undefined} reconnecting the live connection dropped and is retrying
  * @property {undefined} reconnect it is back; notifications in between were missed
  * @property {GnotifError} error a live failure no promise waits on
@@ -52,6 +56,7 @@ const PING_INTERVAL = 30_000;
 const PONG_TIMEOUT = 10_000;
 const BACKOFF_MIN = 1_000;
 const BACKOFF_MAX = 30_000;
+const DELIVERED_MAX = 256;
 
 /**
  * @param {unknown} v
@@ -89,18 +94,19 @@ function safeLink(link, scope) {
 }
 
 /**
- * @param {Record<string, unknown>} f a decoded notification frame
+ * @param {Record<string, unknown>} f a decoded notification frame or relayed push
  * @param {string} scope the service worker's scope
- * @returns {LiveNotification | null} null when a field is missing or mistyped
+ * @param {"live" | "push"} source
+ * @returns {GnotifNotification | null} null when a field is missing or mistyped
  */
-function liveNotification(f, scope) {
-  const { trigger, value, title, body, link, height, tx, time, attrs } = f;
-  if (typeof trigger !== "string" || typeof value !== "string" || typeof title !== "string" ||
+function browserNotification(f, scope, source) {
+  const { id, trigger, value, title, body, link, height, tx, time, attrs } = f;
+  if (typeof id !== "string" || typeof trigger !== "string" || typeof value !== "string" || typeof title !== "string" ||
     typeof body !== "string" || typeof link !== "string" || typeof height !== "number" ||
     typeof tx !== "string" || typeof time !== "string" || !Array.isArray(attrs) || !attrs.every(isAttr)) {
     return null;
   }
-  return { trigger, value, title, body, link: safeLink(link, scope), height, tx, time, attrs };
+  return { id, source, trigger, value, title, body, link: safeLink(link, scope), height, tx, time, attrs };
 }
 
 export class GnotifError extends Error {
@@ -151,6 +157,8 @@ export class Gnotif {
   #optins = null;
   /** @type {{ [K in keyof GnotifEvents]: Set<(arg: GnotifEvents[K]) => void> }} */
   #handlers = { notification: new Set(), reconnecting: new Set(), reconnect: new Set(), error: new Set() };
+  /** @type {Set<string>} the last DELIVERED_MAX delivered ids, oldest first */
+  #delivered = new Set();
 
   // ---- Live connection state
   /** @type {WebSocket | null} */
@@ -196,6 +204,7 @@ export class Gnotif {
     this.#server = server.replace(/\/$/, "");
     this.#serviceWorker = serviceWorker;
     this.#icon = icon;
+    globalThis.navigator?.serviceWorker?.addEventListener?.("message", (e) => this.#onRelay(e.data));
   }
 
   /** @returns {string | undefined} the network named at construction */
@@ -242,7 +251,7 @@ export class Gnotif {
     const { publicKey } = /** @type {{ publicKey: string }} */ (await this.#request("GET", "/v1/vapid"));
     const key = base64UrlToBytes(publicKey);
     let sub = await reg.pushManager.getSubscription();
-    if (sub && !sameKey(sub.options.applicationServerKey, key)) {
+    if (sub !== null && !sameKey(sub.options.applicationServerKey, key)) {
       await sub.unsubscribe();
       sub = null;
     }
@@ -250,7 +259,7 @@ export class Gnotif {
     const json = sub.toJSON();
     await this.#request("PUT", "/v1/subscription", json);
     if (this.#optins !== null) {
-      await this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins: this.#optins });
+      await this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins: this.#items(true) });
     }
     return json;
   }
@@ -258,7 +267,8 @@ export class Gnotif {
   /**
    * Keeps optins as the set every channel uses, and sends it to the live
    * connection when one is open, and to the server for push when this
-   * browser is subscribed. Resolves once each has accepted it.
+   * browser is subscribed, less the items with push: false. Resolves once
+   * each has accepted its part.
    * @param {Optin[]} optins replaces the previous set
    * @returns {Promise<void>}
    */
@@ -267,14 +277,14 @@ export class Gnotif {
     const gen = ++this.#gen;
     /** @type {Promise<unknown>[]} */
     const pending = [];
-    if (this.#wanted) {
+    if (this.#wanted && this.#ws?.readyState === WebSocket.OPEN) {
       pending.push(new Promise((resolve, reject) => {
         this.#waiters.push({ gen, resolve: () => resolve(undefined), reject });
       }));
       this.#send();
     }
     pending.push(this.#find().then((sub) =>
-      sub ? this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins }) : null));
+      sub !== null ? this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins: this.#items(true) }) : null));
     await Promise.all(pending);
   }
 
@@ -306,7 +316,7 @@ export class Gnotif {
    * @returns {Promise<void>}
    */
   connect() {
-    if (this.#connecting) {
+    if (this.#connecting !== null) {
       return this.#connecting.promise;
     }
     if (this.#wanted) {
@@ -409,7 +419,7 @@ export class Gnotif {
     } catch (err) {
       // A browser refuses some URLs at once, such as ws: from an https:
       // page: the first connect fails, and a reconnect tries again later.
-      if (this.#connecting) {
+      if (this.#connecting !== null) {
         this.#stop(new GnotifError("network", err instanceof Error ? err.message : String(err)));
       } else {
         this.#onClose();
@@ -460,7 +470,18 @@ export class Gnotif {
     this.#inFlight = true;
     this.#dirty = false;
     this.#sentGen = this.#gen;
-    ws.send(JSON.stringify({ type: "optins", optins: this.#optins ?? [] }));
+    ws.send(JSON.stringify({ type: "optins", optins: this.#items(false) }));
+  }
+
+  // #items returns the kept set as the server takes it, without the push key.
+  /**
+   * @param {boolean} pushOnly leave out the items with push: false
+   * @returns {{ trigger: string, value: string }[]}
+   */
+  #items(pushOnly) {
+    return (this.#optins ?? [])
+      .filter((o) => !pushOnly || o.push !== false)
+      .map(({ trigger, value }) => ({ trigger, value }));
   }
 
   /** @param {string} text */
@@ -486,11 +507,9 @@ export class Gnotif {
         this.#onReply(typeof frame.error === "string" ? frame.error : "gnotif server refused the opt-ins");
         return;
       case "notification": {
-        // register() without a scope option scopes the worker to its URL's directory.
-        const scope = new URL("./", new URL(this.#serviceWorker, location.href)).href;
-        const n = liveNotification(frame, scope);
-        if (n) {
-          this.#emit("notification", n);
+        const n = browserNotification(frame, this.#scope(), "live");
+        if (n !== null) {
+          this.#deliver(n);
         }
         return;
       }
@@ -499,6 +518,39 @@ export class Gnotif {
         // does not know.
         return;
     }
+  }
+
+  // register() without a scope option scopes the worker to its URL's directory.
+  /** @returns {string} the service worker's scope */
+  #scope() {
+    return new URL("./", new URL(this.#serviceWorker, location.href)).href;
+  }
+
+  /** @param {unknown} data a message the service worker posted to this page */
+  #onRelay(data) {
+    if (!isRecord(data) || data.type !== "gnotif.notification" || !isRecord(data.notification)) {
+      return;
+    }
+    const n = browserNotification(data.notification, this.#scope(), "push");
+    if (n !== null && this.#optins?.some((o) => o.trigger === n.trigger && o.value === n.value)) {
+      this.#deliver(n);
+    }
+  }
+
+  // #deliver emits n unless its id was among the last DELIVERED_MAX delivered.
+  /** @param {GnotifNotification} n */
+  #deliver(n) {
+    if (this.#delivered.has(n.id)) {
+      return;
+    }
+    this.#delivered.add(n.id);
+    if (this.#delivered.size > DELIVERED_MAX) {
+      for (const oldest of this.#delivered) {
+        this.#delivered.delete(oldest);
+        break;
+      }
+    }
+    this.#emit("notification", n);
   }
 
   /** @param {string | null} err the server's refusal, null when it accepted */
@@ -520,7 +572,7 @@ export class Gnotif {
       }
     } else {
       const e = new GnotifError("server", err);
-      if (this.#connecting || this.#reconnecting) {
+      if (this.#connecting !== null || this.#reconnecting) {
         // The set this connection opened with was refused, so it holds no
         // opt-ins: there is nothing to keep open.
         this.#fail(e);
@@ -550,7 +602,7 @@ export class Gnotif {
       this.#fail(new GnotifError("server", `The server closed the live connection with code ${code}.`));
       return;
     }
-    if (this.#connecting) {
+    if (this.#connecting !== null) {
       this.#stop(new GnotifError("network", "The live connection closed before the server answered."));
       return;
     }

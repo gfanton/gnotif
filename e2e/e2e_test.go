@@ -243,11 +243,12 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 		require.NoError(t, err)
 		frames = append(frames, string(frame))
 		var n struct {
-			Type, Trigger, Value string
-			Attrs                []struct{ Key, Value string }
+			Type, ID, Trigger, Value string
+			Attrs                    []struct{ Key, Value string }
 		}
 		require.NoError(t, json.Unmarshal(frame, &n))
 		assert.Equal(t, "notification", n.Type)
+		assert.Regexp(t, "^[0-9a-f]{32}$", n.ID)
 		assert.Equal(t, triggerID, n.Trigger)
 		assert.Equal(t, s.addrs["player2"], n.Value)
 		assert.Contains(t, n.Attrs, struct{ Key, Value string }{"game", "0000001"})

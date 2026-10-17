@@ -1,9 +1,11 @@
 package trigger
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
@@ -160,4 +162,36 @@ func TestRender(t *testing.T) {
 			tc.check(t, tc.trigger.Render(Event{Attrs: tc.attrs}))
 		})
 	}
+}
+
+func TestMatchID(t *testing.T) {
+	m := Match{TriggerID: "0000001", Value: "g1bob", Event: Event{TxHash: "tx1", Index: 7}}
+	assert.Equal(t, "9e78b15baa134b158fd875890fe8691f", m.ID())
+	for name, other := range map[string]Match{
+		"tx":      {TriggerID: "0000001", Value: "g1bob", Event: Event{TxHash: "tx2", Index: 7}},
+		"index":   {TriggerID: "0000001", Value: "g1bob", Event: Event{TxHash: "tx1", Index: 8}},
+		"trigger": {TriggerID: "0000002", Value: "g1bob", Event: Event{TxHash: "tx1", Index: 7}},
+		"value":   {TriggerID: "0000001", Value: "g1alice", Event: Event{TxHash: "tx1", Index: 7}},
+	} {
+		assert.NotEqual(t, m.ID(), other.ID(), name)
+	}
+}
+
+func TestForBrowser(t *testing.T) {
+	m := Match{
+		TriggerID: "0000001", Value: "g1bob",
+		Notification: Notification{Title: "Your turn", Body: "Game 7, turn 1", Link: "/?game=7"},
+		Event: Event{TxHash: "tx1", Height: 7, Index: 7, Attrs: []Pair{{Key: "game", Value: "7"}},
+			Time: time.Date(2026, 10, 16, 23, 46, 8, 500_000_000, time.FixedZone("CEST", 2*60*60))},
+	}
+	b, err := json.Marshal(m.ForBrowser())
+	require.NoError(t, err)
+	assert.Equal(t, `{"id":"9e78b15baa134b158fd875890fe8691f","trigger":"0000001","value":"g1bob","title":"Your turn","body":"Game 7, turn 1","link":"/?game=7","height":7,"tx":"tx1","time":"2026-10-16T21:46:08.5Z","attrs":[{"key":"game","value":"7"}]}`, string(b))
+}
+
+func TestForBrowserEncodesNoAttributesAsEmptyList(t *testing.T) {
+	m := Match{TriggerID: "0000001", Value: "g1bob", Event: Event{TxHash: "tx1", Height: 7}}
+	b, err := json.Marshal(m.ForBrowser())
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"attrs":[]`)
 }

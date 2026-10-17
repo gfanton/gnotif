@@ -3,6 +3,7 @@
 package subscribe
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -23,9 +24,16 @@ var DefaultPushHosts = []string{
 
 const maxBody = 8192
 
+// Triggers reads the declared triggers.
+type Triggers interface {
+	TargetTriggers(ctx context.Context, target string) ([]trigger.Trigger, error)
+	TriggersByID(ctx context.Context, ids []string) (map[string]trigger.Trigger, error)
+}
+
 // Config holds the handler's dependencies.
 type Config struct {
 	Store     *store.Store
+	Triggers  Triggers
 	PublicKey string // VAPID public key browsers subscribe with
 	PushHosts []string
 	Stream    http.Handler // serves GET /v1/stream; nil serves no live connections
@@ -103,7 +111,7 @@ func (h *handler) triggers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid target")
 		return
 	}
-	ts, err := h.cfg.Store.TargetTriggers(r.Context(), target)
+	ts, err := h.cfg.Triggers.TargetTriggers(r.Context(), target)
 	if err != nil {
 		h.internal(w, err)
 		return
@@ -153,7 +161,7 @@ func (h *handler) putOptins(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	err := optin.Check(r.Context(), req.Optins, h.cfg.Store.TriggersByID)
+	err := optin.Check(r.Context(), req.Optins, h.cfg.Triggers.TriggersByID)
 	if rule, ok := errors.AsType[optin.Error](err); ok {
 		writeError(w, http.StatusBadRequest, rule.Error())
 		return

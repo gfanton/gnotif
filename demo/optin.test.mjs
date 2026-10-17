@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
+import { canEnable, listenerMismatch, optinsAtLoad, optinsFor } from "./optin.mjs";
 
 const trigger = {
   id: "7",
@@ -34,6 +34,16 @@ test("canEnable needs an idle page and a loaded trigger", () => {
   assert.equal(canEnable(false, trigger), true);
   assert.equal(canEnable(true, trigger), false, "busy");
   assert.equal(canEnable(false, null), false, "no trigger");
+});
+
+test("optinsAtLoad sets the opt-ins as the page loads once push is on and the trigger has loaded", () => {
+  assert.equal(optinsAtLoad(true, false, trigger), true);
+  assert.equal(optinsAtLoad(false, false, trigger), false, "push off");
+  assert.equal(optinsAtLoad(true, false, null), false, "no trigger");
+});
+
+test("optinsAtLoad leaves the opt-ins to live updates that resume at load", () => {
+  assert.equal(optinsAtLoad(true, true, trigger), false);
 });
 
 test("listenerMismatch names the opted-in address when the sender is another", () => {

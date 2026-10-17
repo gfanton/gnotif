@@ -60,10 +60,10 @@ export function blockSummary(height, wait) {
 
 /**
  * details lists what an arrival carries besides its block, as label and value
- * pairs: the block's time as format writes it, the transaction, the trigger
- * with its opted-in value, the event's attributes and the link. A time that
- * does not parse is left out.
- * @param {import("./gnotif.js").LiveNotification} n
+ * pairs: the block's time as format writes it, the transaction, the channel
+ * that delivered it, the trigger with its opted-in value, the event's
+ * attributes and the link. A time that does not parse is left out.
+ * @param {import("./gnotif.js").GnotifNotification} n
  * @param {(at: Date) => string} format
  * @returns {[string, string][]}
  */
@@ -71,12 +71,24 @@ export function details(n, format) {
   const at = new Date(n.time);
   /** @type {[string, string][]} */
   const rows = Number.isNaN(at.getTime()) ? [] : [["Block time", format(at)]];
-  rows.push(["Transaction", n.tx], ["Trigger", n.value === "" ? n.trigger : `${n.trigger} for ${n.value}`]);
+  rows.push(["Transaction", n.tx], ["Delivered by", n.source === "live" ? "live connection" : "push"],
+    ["Trigger", n.value === "" ? n.trigger : `${n.trigger} for ${n.value}`]);
   for (const { key, value } of n.attrs) {
     rows.push([key, value]);
   }
   rows.push(["Link", n.link]);
   return rows;
+}
+
+/**
+ * logShown reports whether the arrivals log shows: while live updates are on,
+ * and while it lists a row, which a push brings with live updates off.
+ * @param {boolean} live whether live updates are on
+ * @param {number} rows the rows the log lists
+ * @returns {boolean}
+ */
+export function logShown(live, rows) {
+  return live || rows > 0;
 }
 
 /**

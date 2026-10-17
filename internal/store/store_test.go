@@ -3,8 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
-	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -12,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/gfanton/gnotif/internal/store/storetest"
 	"github.com/gfanton/gnotif/internal/trigger"
 )
 
@@ -30,15 +29,46 @@ func fresh(t *testing.T) *Store {
 	return open(t, filepath.Join(t.TempDir(), "gnotif.db"))
 }
 
-func putTrigger(t *testing.T, s *Store, id, param string) {
+// backends names the stores a method must behave the same on: the SQLite
+// file and the remote protocol served over a SQLite file.
+var backends = []struct {
+	name string
+	open func(t *testing.T) *Store
+}{
+	{"local", fresh},
+	{"remote", func(t *testing.T) *Store { return open(t, storetest.NewServer(t).URL) }},
+}
+
+// eachBackend runs fn once per backend. fresh opens a new, empty store of the
+// backend under test.
+func eachBackend(t *testing.T, fn func(t *testing.T, fresh func(*testing.T) *Store)) {
 	t.Helper()
-	require.NoError(t, s.Update(context.Background(), func(tx *Tx) error {
-		return tx.PutTrigger(trigger.Trigger{
-			ID: id, Target: "gno.land/r/demo/game", Event: "TurnPlayed", Param: param,
-			Title: "Your turn", Body: "Game {game}", Link: "/", Declarer: "g1alice",
-			Filter: []trigger.Pair{{Key: "mode", Value: "ranked"}},
-		})
-	}))
+	for _, b := range backends {
+		t.Run(b.name, func(t *testing.T) { fn(t, b.open) })
+	}
+}
+
+func exec(t *testing.T, s *Store, stmts ...Statement) []Result {
+	t.Helper()
+	res, err := s.Exec(context.Background(), stmts)
+	require.NoError(t, err)
+	return res
+}
+
+// seedTrigger, optedIn and seedCursor seed and read rows through Exec so a
+// test of a method on either backend does not depend on another method.
+func seedTrigger(t *testing.T, s *Store, id, param string) {
+	t.Helper()
+	exec(t, s, Statement{`
+		INSERT INTO triggers (id, target, event, filter, param, title, body, link, declarer, verified)
+		VALUES (?, 'gno.land/r/demo/game', 'TurnPlayed', 'mode=ranked', ?, 'Your turn', 'Game {game}', '/', 'g1alice', 0)`,
+		[]any{id, param}})
+}
+
+func seedCursor(t *testing.T, s *Store, c Cursor) {
+	t.Helper()
+	exec(t, s, Statement{`INSERT INTO cursor (id, height_done, bound, next_tx) VALUES (1, ?, ?, ?)`,
+		[]any{c.HeightDone, c.Bound, c.NextTx}})
 }
 
 func subscribe(t *testing.T, s *Store, endpoint, keys string, optins ...Optin) {
@@ -50,26 +80,29 @@ func subscribe(t *testing.T, s *Store, endpoint, keys string, optins ...Optin) {
 	}
 }
 
-func subscribers(t *testing.T, s *Store, triggerID, value string) []int64 {
+func optedIn(t *testing.T, s *Store, triggerID, value string) []int64 {
 	t.Helper()
+	res := exec(t, s, Statement{
+		`SELECT subscription_id FROM optins WHERE trigger_id = ? AND value = ? ORDER BY subscription_id`,
+		[]any{triggerID, value}})
 	var ids []int64
-	require.NoError(t, s.Update(context.Background(), func(tx *Tx) error {
-		var err error
-		ids, err = tx.Subscribers(triggerID, value)
-		return err
-	}))
+	for _, row := range res[0].Rows {
+		var id int64
+		require.NoError(t, column(row, "subscription_id", &id))
+		ids = append(ids, id)
+	}
 	return ids
 }
 
-func enqueue(t *testing.T, s *Store, p Push) bool {
+func seedPush(t *testing.T, s *Store, p Push) {
 	t.Helper()
-	var added bool
-	require.NoError(t, s.Update(context.Background(), func(tx *Tx) error {
-		var err error
-		added, err = tx.Enqueue(p)
-		return err
-	}))
-	return added
+	created := p.CreatedAt.UTC().UnixMilli()
+	exec(t, s, Statement{`
+		INSERT INTO outbox
+			(subscription_id, trigger_id, tx_hash, event_index, title, body, link, next_attempt_at, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		[]any{p.SubscriptionID, p.TriggerID, p.TxHash, p.EventIndex,
+			p.Notification.Title, p.Notification.Body, p.Notification.Link, created, created}})
 }
 
 func push(subID int64, hash string) Push {
@@ -81,378 +114,267 @@ func push(subID int64, hash string) Push {
 }
 
 func TestCursorRoundTrip(t *testing.T) {
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		ctx := context.Background()
+		s := fresh(t)
+
+		_, ok, err := s.Cursor(ctx)
+		require.NoError(t, err)
+		assert.False(t, ok)
+
+		seedCursor(t, s, Cursor{HeightDone: 10, Bound: 20})
+		c, ok, err := s.Cursor(ctx)
+		require.NoError(t, err)
+		assert.True(t, ok)
+		assert.Equal(t, Cursor{HeightDone: 10, Bound: 20}, c)
+	})
+}
+
+func TestCursorStatementSurvivesReopen(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "gnotif.db")
 	s, err := Open(ctx, path)
 	require.NoError(t, err)
-
-	_, ok, err := s.Cursor(ctx)
-	require.NoError(t, err)
-	assert.False(t, ok)
-
-	require.NoError(t, s.Update(ctx, func(tx *Tx) error { return tx.SetCursor(Cursor{HeightDone: 10, Bound: 20}) }))
-	c, ok, err := s.Cursor(ctx)
-	require.NoError(t, err)
-	assert.True(t, ok)
-	assert.Equal(t, Cursor{HeightDone: 10, Bound: 20}, c)
+	exec(t, s, CursorStatement(Cursor{HeightDone: 10, Bound: 20}))
 	require.NoError(t, s.Close())
 
 	reopened := open(t, path)
-	c, ok, err = reopened.Cursor(ctx)
+	c, ok, err := reopened.Cursor(ctx)
 	require.NoError(t, err)
 	assert.True(t, ok)
 	assert.Equal(t, Cursor{HeightDone: 10, Bound: 20}, c)
 }
 
-func TestUpdateRollsBack(t *testing.T) {
-	ctx := context.Background()
-	s := fresh(t)
-	boom := errors.New("boom")
-	err := s.Update(ctx, func(tx *Tx) error {
-		require.NoError(t, tx.PutTrigger(trigger.Trigger{ID: "t1", Target: "gno.land/r/demo/game", Event: "E", Title: "T", Link: "/", Declarer: "g1"}))
-		return boom
+func TestPutTriggerStatementAgainKeepsOptins(t *testing.T) {
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		s := fresh(t)
+		tr := trigger.Trigger{
+			ID: "t1", Target: "gno.land/r/demo/game", Event: "TurnPlayed", Param: "next",
+			Title: "Your turn", Body: "Game {game}", Link: "/", Declarer: "g1alice",
+		}
+		exec(t, s, PutTriggerStatement(tr))
+		subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
+
+		tr.Title = "Your move"
+		exec(t, s, PutTriggerStatement(tr))
+		assert.Len(t, optedIn(t, s, "t1", "g1bob"), 1)
+		got, err := s.Triggers(context.Background())
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		assert.Equal(t, "Your move", got[0].Title)
 	})
-	assert.ErrorIs(t, err, boom)
-	triggers, err := s.TargetTriggers(ctx, "gno.land/r/demo/game")
-	require.NoError(t, err)
-	assert.Empty(t, triggers)
 }
 
-func TestTriggersRoundTrip(t *testing.T) {
-	ctx := context.Background()
-	s := fresh(t)
-	putTrigger(t, s, "t1", "next")
-	got, err := s.TargetTriggers(ctx, "gno.land/r/demo/game")
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	assert.Equal(t, []trigger.Pair{{Key: "mode", Value: "ranked"}}, got[0].Filter)
-	assert.Equal(t, "next", got[0].Param)
-}
+func TestDeleteTriggerStatementCascadesOptins(t *testing.T) {
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		s := fresh(t)
+		seedTrigger(t, s, "t1", "next")
+		subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
+		require.NotEmpty(t, optedIn(t, s, "t1", "g1bob"))
 
-func TestEnqueueIdempotent(t *testing.T) {
-	ctx := context.Background()
-	s := fresh(t)
-	putTrigger(t, s, "t1", "next")
-	subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-	sub := subscribers(t, s, "t1", "g1bob")[0]
-
-	assert.True(t, enqueue(t, s, push(sub, "h1")))
-	assert.False(t, enqueue(t, s, push(sub, "h1")))
-	due, err := s.Due(ctx, now, 10)
-	require.NoError(t, err)
-	assert.Len(t, due, 1)
-}
-
-func TestPutTriggerAgainKeepsOptins(t *testing.T) {
-	s := fresh(t)
-	putTrigger(t, s, "t1", "next")
-	subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-	putTrigger(t, s, "t1", "next")
-	assert.Len(t, subscribers(t, s, "t1", "g1bob"), 1)
-}
-
-func TestDeleteTriggerCascades(t *testing.T) {
-	s := fresh(t)
-	putTrigger(t, s, "t1", "next")
-	subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-	require.NotEmpty(t, subscribers(t, s, "t1", "g1bob"))
-
-	require.NoError(t, s.Update(context.Background(), func(tx *Tx) error { return tx.DeleteTrigger("t1") }))
-	assert.Empty(t, subscribers(t, s, "t1", "g1bob"))
+		exec(t, s, DeleteTriggerStatement("t1"))
+		assert.Empty(t, optedIn(t, s, "t1", "g1bob"))
+	})
 }
 
 func TestPutSubscriptionKeepsOptins(t *testing.T) {
-	ctx := context.Background()
-	s := fresh(t)
-	putTrigger(t, s, "t1", "next")
-	subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-	subscribe(t, s, "E", "K2")
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		ctx := context.Background()
+		s := fresh(t)
+		seedTrigger(t, s, "t1", "next")
+		subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
+		subscribe(t, s, "E", "K2")
 
-	ids := subscribers(t, s, "t1", "g1bob")
-	require.Len(t, ids, 1)
-	enqueue(t, s, push(ids[0], "h1"))
-	due, err := s.Due(ctx, now, 10)
-	require.NoError(t, err)
-	require.Len(t, due, 1)
-	assert.Equal(t, Subscription{Endpoint: "E", P256dh: "K2-p", Auth: "K2-a"}, due[0].Subscription)
+		ids := optedIn(t, s, "t1", "g1bob")
+		require.Len(t, ids, 1)
+		seedPush(t, s, push(ids[0], "h1"))
+		due, err := s.Due(ctx, now, DueKey{}, 10)
+		require.NoError(t, err)
+		require.Len(t, due, 1)
+		assert.Equal(t, Subscription{Endpoint: "E", P256dh: "K2-p", Auth: "K2-a"}, due[0].Subscription)
+	})
 }
 
 func TestReplaceOptins(t *testing.T) {
-	ctx := context.Background()
-	s := fresh(t)
-	putTrigger(t, s, "t1", "next")
-	putTrigger(t, s, "t2", "")
-	subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-	require.NoError(t, s.ReplaceOptins(ctx, "E", []Optin{{TriggerID: "t2", Value: ""}}))
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		ctx := context.Background()
+		s := fresh(t)
+		seedTrigger(t, s, "t1", "next")
+		seedTrigger(t, s, "t2", "")
+		subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
+		require.NoError(t, s.ReplaceOptins(ctx, "E", []Optin{{TriggerID: "t2", Value: ""}}))
 
-	assert.Empty(t, subscribers(t, s, "t1", "g1bob"))
-	assert.Len(t, subscribers(t, s, "t2", ""), 1)
-	assert.ErrorIs(t, s.ReplaceOptins(ctx, "unknown", nil), ErrUnknownSubscription)
-	assert.ErrorIs(t, s.DeleteSubscription(ctx, "unknown"), ErrUnknownSubscription)
-}
-
-func TestSubscribers(t *testing.T) {
-	s := fresh(t)
-	putTrigger(t, s, "t1", "next")
-	putTrigger(t, s, "t2", "")
-	subscribe(t, s, "A", "KA", Optin{TriggerID: "t1", Value: "g1a"}, Optin{TriggerID: "t2", Value: ""})
-	subscribe(t, s, "B", "KB", Optin{TriggerID: "t1", Value: "g1b"}, Optin{TriggerID: "t2", Value: ""})
-
-	onlyA := subscribers(t, s, "t1", "g1a")
-	require.Len(t, onlyA, 1)
-	assert.NotContains(t, subscribers(t, s, "t1", "g1b"), onlyA[0])
-	assert.Len(t, subscribers(t, s, "t2", ""), 2)
+		assert.Empty(t, optedIn(t, s, "t1", "g1bob"))
+		assert.Len(t, optedIn(t, s, "t2", ""), 1)
+		assert.ErrorIs(t, s.ReplaceOptins(ctx, "unknown", nil), ErrUnknownSubscription)
+		assert.ErrorIs(t, s.DeleteSubscription(ctx, "unknown"), ErrUnknownSubscription)
+	})
 }
 
 func TestDueAndReschedule(t *testing.T) {
-	ctx := context.Background()
-	s := fresh(t)
-	putTrigger(t, s, "t1", "next")
-	subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-	sub := subscribers(t, s, "t1", "g1bob")[0]
-	for _, h := range []string{"h1", "h2", "h3"} {
-		enqueue(t, s, push(sub, h))
-	}
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		ctx := context.Background()
+		s := fresh(t)
+		seedTrigger(t, s, "t1", "next")
+		subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
+		sub := optedIn(t, s, "t1", "g1bob")[0]
+		for _, h := range []string{"h1", "h2", "h3"} {
+			seedPush(t, s, push(sub, h))
+		}
 
-	due, err := s.Due(ctx, now, 2)
-	require.NoError(t, err)
-	require.Len(t, due, 2)
-	assert.Less(t, due[0].ID, due[1].ID)
-	assert.Equal(t, sub, due[0].SubscriptionID)
-	assert.Equal(t, "Your turn", due[0].Notification.Title)
-	assert.True(t, now.Equal(due[0].CreatedAt))
-	first := due[0].ID
+		due, err := s.Due(ctx, now, DueKey{}, 2)
+		require.NoError(t, err)
+		require.Len(t, due, 2)
+		assert.Less(t, due[0].ID, due[1].ID)
+		assert.Equal(t, sub, due[0].SubscriptionID)
+		assert.Equal(t, "Your turn", due[0].Notification.Title)
+		assert.True(t, now.Equal(due[0].CreatedAt))
+		first := due[0].ID
 
-	require.NoError(t, s.Reschedule(ctx, first, now.Add(time.Minute)))
-	due, err = s.Due(ctx, now, 10)
-	require.NoError(t, err)
-	assert.Len(t, due, 2)
-	for _, d := range due {
-		assert.NotEqual(t, first, d.ID)
-	}
-	later, err := s.Due(ctx, now.Add(time.Minute), 10)
-	require.NoError(t, err)
-	require.Len(t, later, 3)
-	assert.Equal(t, 1, later[0].Attempts)
+		require.NoError(t, s.Reschedule(ctx, first, now.Add(time.Minute)))
+		due, err = s.Due(ctx, now, DueKey{}, 10)
+		require.NoError(t, err)
+		assert.Len(t, due, 2)
+		for _, d := range due {
+			assert.NotEqual(t, first, d.ID)
+		}
+		later, err := s.Due(ctx, now.Add(time.Minute), DueKey{}, 10)
+		require.NoError(t, err)
+		require.Len(t, later, 3)
+		assert.Equal(t, first, later[2].ID)
+		assert.Equal(t, 1, later[2].Attempts)
 
-	require.NoError(t, s.DeleteDelivery(ctx, first))
-	due, err = s.Due(ctx, now.Add(time.Minute), 10)
-	require.NoError(t, err)
-	assert.Len(t, due, 2)
+		require.NoError(t, s.DeleteDelivery(ctx, first))
+		due, err = s.Due(ctx, now.Add(time.Minute), DueKey{}, 10)
+		require.NoError(t, err)
+		assert.Len(t, due, 2)
+	})
 }
 
 func TestRemoveSubscriptionCascades(t *testing.T) {
-	ctx := context.Background()
-	s := fresh(t)
-	putTrigger(t, s, "t1", "next")
-	subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-	sub := subscribers(t, s, "t1", "g1bob")[0]
-	enqueue(t, s, push(sub, "h1"))
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		ctx := context.Background()
+		s := fresh(t)
+		seedTrigger(t, s, "t1", "next")
+		subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
+		sub := optedIn(t, s, "t1", "g1bob")[0]
+		seedPush(t, s, push(sub, "h1"))
 
-	require.NoError(t, s.RemoveSubscription(ctx, sub))
-	assert.Empty(t, subscribers(t, s, "t1", "g1bob"))
-	due, err := s.Due(ctx, now, 10)
-	require.NoError(t, err)
-	assert.Empty(t, due)
+		require.NoError(t, s.RemoveSubscription(ctx, sub))
+		assert.Empty(t, optedIn(t, s, "t1", "g1bob"))
+		due, err := s.Due(ctx, now, DueKey{}, 10)
+		require.NoError(t, err)
+		assert.Empty(t, due)
+	})
 }
 
 func TestMoveSubscription(t *testing.T) {
-	ctx := context.Background()
-	t.Run("opt-ins and pushes follow the new endpoint", func(t *testing.T) {
-		s := fresh(t)
-		putTrigger(t, s, "t1", "next")
-		subscribe(t, s, "OLD", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-		sub := subscribers(t, s, "t1", "g1bob")[0]
-		enqueue(t, s, push(sub, "h1"))
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		ctx := context.Background()
+		t.Run("opt-ins and pushes follow the new endpoint", func(t *testing.T) {
+			s := fresh(t)
+			seedTrigger(t, s, "t1", "next")
+			subscribe(t, s, "OLD", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
+			sub := optedIn(t, s, "t1", "g1bob")[0]
+			seedPush(t, s, push(sub, "h1"))
 
-		require.NoError(t, s.MoveSubscription(ctx, "OLD", Subscription{Endpoint: "NEW", P256dh: "K2-p", Auth: "K2-a"}))
-		assert.Equal(t, []int64{sub}, subscribers(t, s, "t1", "g1bob"))
-		due, err := s.Due(ctx, now, 10)
-		require.NoError(t, err)
-		require.Len(t, due, 1)
-		assert.Equal(t, Subscription{Endpoint: "NEW", P256dh: "K2-p", Auth: "K2-a"}, due[0].Subscription)
-		assert.ErrorIs(t, s.DeleteSubscription(ctx, "OLD"), ErrUnknownSubscription)
-	})
-	t.Run("unknown old endpoint stores the new one", func(t *testing.T) {
-		s := fresh(t)
-		require.NoError(t, s.MoveSubscription(ctx, "GONE", Subscription{Endpoint: "NEW", P256dh: "K2-p", Auth: "K2-a"}))
-		require.NoError(t, s.DeleteSubscription(ctx, "NEW"))
-	})
-	t.Run("new endpoint already stored keeps both", func(t *testing.T) {
-		s := fresh(t)
-		putTrigger(t, s, "t1", "next")
-		subscribe(t, s, "OLD", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-		subscribe(t, s, "NEW", "K2", Optin{TriggerID: "t1", Value: "g1carol"})
+			require.NoError(t, s.MoveSubscription(ctx, "OLD", Subscription{Endpoint: "NEW", P256dh: "K2-p", Auth: "K2-a"}))
+			assert.Equal(t, []int64{sub}, optedIn(t, s, "t1", "g1bob"))
+			due, err := s.Due(ctx, now, DueKey{}, 10)
+			require.NoError(t, err)
+			require.Len(t, due, 1)
+			assert.Equal(t, Subscription{Endpoint: "NEW", P256dh: "K2-p", Auth: "K2-a"}, due[0].Subscription)
+			assert.ErrorIs(t, s.DeleteSubscription(ctx, "OLD"), ErrUnknownSubscription)
+		})
+		t.Run("unknown old endpoint stores the new one", func(t *testing.T) {
+			s := fresh(t)
+			require.NoError(t, s.MoveSubscription(ctx, "GONE", Subscription{Endpoint: "NEW", P256dh: "K2-p", Auth: "K2-a"}))
+			require.NoError(t, s.DeleteSubscription(ctx, "NEW"))
+		})
+		t.Run("new endpoint already stored keeps both", func(t *testing.T) {
+			s := fresh(t)
+			seedTrigger(t, s, "t1", "next")
+			subscribe(t, s, "OLD", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
+			subscribe(t, s, "NEW", "K2", Optin{TriggerID: "t1", Value: "g1carol"})
 
-		require.NoError(t, s.MoveSubscription(ctx, "OLD", Subscription{Endpoint: "NEW", P256dh: "K3-p", Auth: "K3-a"}))
-		assert.Len(t, subscribers(t, s, "t1", "g1bob"), 1)
-		assert.Len(t, subscribers(t, s, "t1", "g1carol"), 1)
+			require.NoError(t, s.MoveSubscription(ctx, "OLD", Subscription{Endpoint: "NEW", P256dh: "K3-p", Auth: "K3-a"}))
+			assert.Len(t, optedIn(t, s, "t1", "g1bob"), 1)
+			assert.Len(t, optedIn(t, s, "t1", "g1carol"), 1)
+		})
 	})
 }
 
 // Delivery deletes rows by an id read at the start of a batch, so an id
 // must never name a different row later.
 func TestIDsNotReused(t *testing.T) {
-	ctx := context.Background()
-	t.Run("subscription", func(t *testing.T) {
-		s := fresh(t)
-		putTrigger(t, s, "t1", "next")
-		subscribe(t, s, "B", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-		old := subscribers(t, s, "t1", "g1bob")[0]
-		require.NoError(t, s.DeleteSubscription(ctx, "B"))
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		ctx := context.Background()
+		t.Run("subscription", func(t *testing.T) {
+			s := fresh(t)
+			seedTrigger(t, s, "t1", "next")
+			subscribe(t, s, "B", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
+			old := optedIn(t, s, "t1", "g1bob")[0]
+			require.NoError(t, s.DeleteSubscription(ctx, "B"))
 
-		subscribe(t, s, "C", "K2", Optin{TriggerID: "t1", Value: "g1carol"})
-		assert.NotEqual(t, old, subscribers(t, s, "t1", "g1carol")[0])
-	})
-	t.Run("outbox", func(t *testing.T) {
-		s := fresh(t)
-		putTrigger(t, s, "t1", "next")
-		subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
-		sub := subscribers(t, s, "t1", "g1bob")[0]
-		enqueue(t, s, push(sub, "h1"))
-		due, err := s.Due(ctx, now, 10)
-		require.NoError(t, err)
-		require.Len(t, due, 1)
-		require.NoError(t, s.DeleteDelivery(ctx, due[0].ID))
-
-		enqueue(t, s, push(sub, "h2"))
-		due2, err := s.Due(ctx, now, 10)
-		require.NoError(t, err)
-		require.Len(t, due2, 1)
-		assert.NotEqual(t, due[0].ID, due2[0].ID)
-	})
-}
-
-func putTriggerAt(t *testing.T, s *Store, id, target, event string) {
-	t.Helper()
-	require.NoError(t, s.Update(context.Background(), func(tx *Tx) error {
-		return tx.PutTrigger(trigger.Trigger{ID: id, Target: target, Event: event, Title: "t", Body: "b", Link: "/", Declarer: "g1alice"})
-	}))
-}
-
-func triggerIDs(ts []trigger.Trigger) []string {
-	ids := make([]string, len(ts))
-	for i, tr := range ts {
-		ids[i] = tr.ID
-	}
-	return ids
-}
-
-func TestTargetTriggers(t *testing.T) {
-	ctx := context.Background()
-	s := fresh(t)
-	putTriggerAt(t, s, "b", "gno.land/r/a", "E")
-	putTriggerAt(t, s, "a", "gno.land/r/a", "E")
-	putTriggerAt(t, s, "c", "gno.land/r/other", "E")
-
-	got, err := s.TargetTriggers(ctx, "gno.land/r/a")
-	require.NoError(t, err)
-	assert.Equal(t, []string{"a", "b"}, triggerIDs(got))
-
-	got, err = s.TargetTriggers(ctx, "gno.land/r/none")
-	require.NoError(t, err)
-	assert.Empty(t, got)
-
-	for i := range MaxPerTarget + 1 {
-		putTriggerAt(t, s, fmt.Sprintf("many%03d", i), "gno.land/r/many", "E")
-	}
-	got, err = s.TargetTriggers(ctx, "gno.land/r/many")
-	require.NoError(t, err)
-	require.Len(t, got, MaxPerTarget)
-	assert.Equal(t, "many000", got[0].ID)
-	assert.Equal(t, fmt.Sprintf("many%03d", MaxPerTarget-1), got[MaxPerTarget-1].ID)
-}
-
-func TestTriggersByID(t *testing.T) {
-	ctx := context.Background()
-	s := fresh(t)
-	putTriggerAt(t, s, "a", "gno.land/r/a", "E")
-	putTriggerAt(t, s, "b", "gno.land/r/a", "E")
-	putTriggerAt(t, s, "c", "gno.land/r/a", "E")
-
-	cases := map[string]struct {
-		ids  []string
-		want []string
-	}{
-		"subset":         {[]string{"a", "c"}, []string{"a", "c"}},
-		"unknown absent": {[]string{"a", "nope"}, []string{"a"}},
-		"duplicates":     {[]string{"b", "b", "b"}, []string{"b"}},
-		"only unknown":   {[]string{"nope"}, nil},
-		"empty":          {nil, nil},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			got, err := s.TriggersByID(ctx, tc.ids)
+			subscribe(t, s, "C", "K2", Optin{TriggerID: "t1", Value: "g1carol"})
+			assert.NotEqual(t, old, optedIn(t, s, "t1", "g1carol")[0])
+		})
+		t.Run("outbox", func(t *testing.T) {
+			s := fresh(t)
+			seedTrigger(t, s, "t1", "next")
+			subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
+			sub := optedIn(t, s, "t1", "g1bob")[0]
+			seedPush(t, s, push(sub, "h1"))
+			due, err := s.Due(ctx, now, DueKey{}, 10)
 			require.NoError(t, err)
-			keys := make([]string, 0, len(got))
-			for id, tr := range got {
-				assert.Equal(t, id, tr.ID)
-				keys = append(keys, id)
-			}
-			assert.ElementsMatch(t, tc.want, keys)
+			require.Len(t, due, 1)
+			require.NoError(t, s.DeleteDelivery(ctx, due[0].ID))
+
+			seedPush(t, s, push(sub, "h2"))
+			due2, err := s.Due(ctx, now, DueKey{}, 10)
+			require.NoError(t, err)
+			require.Len(t, due2, 1)
+			assert.NotEqual(t, due[0].ID, due2[0].ID)
 		})
-	}
+	})
 }
 
-func TestMatching(t *testing.T) {
+func TestDueUsesIndex(t *testing.T) {
 	s := fresh(t)
-	putTriggerAt(t, s, "b", "gno.land/r/a", "E")
-	putTriggerAt(t, s, "a", "gno.land/r/a", "E")
-	putTriggerAt(t, s, "c", "gno.land/r/a", "Other")
-	putTriggerAt(t, s, "d", "gno.land/r/b", "E")
-
-	cases := map[string]struct {
-		target, event string
-		want          []string
-	}{
-		"both match":   {"gno.land/r/a", "E", []string{"a", "b"}},
-		"other event":  {"gno.land/r/a", "Other", []string{"c"}},
-		"other target": {"gno.land/r/b", "E", []string{"d"}},
-		"nothing":      {"gno.land/r/b", "Other", nil},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			var got []trigger.Trigger
-			require.NoError(t, s.Update(context.Background(), func(tx *Tx) error {
-				var err error
-				got, err = tx.Matching(tc.target, tc.event)
-				return err
-			}))
-			assert.Equal(t, tc.want, func() []string {
-				if len(got) == 0 {
-					return nil
-				}
-				return triggerIDs(got)
-			}())
-		})
-	}
-}
-
-func TestMatchingUsesIndex(t *testing.T) {
-	s := fresh(t)
-	rows, err := s.db.Query(`EXPLAIN QUERY PLAN `+selectMatching, "t", "e")
-	require.NoError(t, err)
-	defer rows.Close()
+	res := exec(t, s, Statement{`EXPLAIN QUERY PLAN ` + selectDue,
+		[]any{now.UnixMilli(), now.Add(-time.Minute).UnixMilli(), 1, 10}})
 	var plan string
-	for rows.Next() {
-		var id, parent, unused int
+	for _, row := range res[0].Rows {
 		var detail string
-		require.NoError(t, rows.Scan(&id, &parent, &unused, &detail))
+		require.NoError(t, column(row, "detail", &detail))
 		plan += detail + "\n"
 	}
-	require.NoError(t, rows.Err())
-	assert.Contains(t, plan, "triggers_by_target")
+	assert.Contains(t, plan, "outbox_due")
+	assert.NotContains(t, plan, "SCAN o")
+}
+
+func TestReplaceOptinsUnknownWritesNothing(t *testing.T) {
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		ctx := context.Background()
+		s := fresh(t)
+		seedTrigger(t, s, "t1", "")
+		err := s.ReplaceOptins(ctx, "https://push/unknown", []Optin{{TriggerID: "t1"}})
+		require.ErrorIs(t, err, ErrUnknownSubscription)
+		res := exec(t, s, Statement{SQL: `SELECT count(*) AS n FROM optins`})
+		assert.Equal(t, int64(0), res[0].Rows[0]["n"])
+	})
 }
 
 func TestCursorNextTx(t *testing.T) {
-	ctx := context.Background()
-	s := fresh(t)
-	want := Cursor{HeightDone: 41, Bound: 50, NextTx: 3}
-	require.NoError(t, s.Update(ctx, func(tx *Tx) error { return tx.SetCursor(want) }))
-	got, ok, err := s.Cursor(ctx)
-	require.NoError(t, err)
-	require.True(t, ok)
-	assert.Equal(t, want, got)
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		s := fresh(t)
+		want := Cursor{HeightDone: 41, Bound: 50, NextTx: 3}
+		seedCursor(t, s, want)
+		got, ok, err := s.Cursor(context.Background())
+		require.NoError(t, err)
+		require.True(t, ok)
+		assert.Equal(t, want, got)
+	})
 }
 
 func TestOpenRefusesOldSchema(t *testing.T) {
@@ -469,33 +391,29 @@ func TestOpenRefusesOldSchema(t *testing.T) {
 	assert.Contains(t, err.Error(), "start a new database with -start-height")
 
 	created := open(t, filepath.Join(t.TempDir(), "new.db"))
-	var version int
-	require.NoError(t, created.db.QueryRow(`PRAGMA user_version`).Scan(&version))
-	assert.Equal(t, 2, version)
+	assert.Equal(t, int64(2), exec(t, created, Statement{SQL: `PRAGMA user_version`})[0].Rows[0]["user_version"])
 
 	path = filepath.Join(t.TempDir(), "reopen.db")
 	open(t, path).Close()
 	open(t, path)
 }
 
-func TestOpenIgnoresLitestreamTables(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "replicated.db")
-	replicated, err := sql.Open("sqlite", "file:"+path)
+func TestOpenIgnoresTablesItDidNotCreate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "shared.db")
+	shared, err := sql.Open("sqlite", "file:"+path)
 	require.NoError(t, err)
-	_, err = replicated.Exec(`CREATE TABLE _litestream_seq (id INTEGER PRIMARY KEY, seq INTEGER); CREATE TABLE _litestream_lock (id INTEGER)`)
+	_, err = shared.Exec(`CREATE TABLE _litestream_seq (id INTEGER PRIMARY KEY, seq INTEGER); CREATE TABLE _litestream_lock (id INTEGER); CREATE TABLE app_data (k TEXT)`)
 	require.NoError(t, err)
-	require.NoError(t, replicated.Close())
+	require.NoError(t, shared.Close())
 
 	s := open(t, path)
-	var version int
-	require.NoError(t, s.db.QueryRow(`PRAGMA user_version`).Scan(&version))
-	assert.Equal(t, schemaVersion, version)
+	assert.Equal(t, int64(schemaVersion), exec(t, s, Statement{SQL: `PRAGMA user_version`})[0].Rows[0]["user_version"])
 	require.NoError(t, s.Close())
 
 	open(t, path)
 }
 
-func TestOpenRefusesOldSchemaBesideLitestreamTables(t *testing.T) {
+func TestOpenRefusesOldSchemaBesideOtherTables(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.db")
 	old, err := sql.Open("sqlite", "file:"+path)
 	require.NoError(t, err)
@@ -529,4 +447,10 @@ func TestOpenRefusesNewerSchema(t *testing.T) {
 	var version int
 	require.NoError(t, check.QueryRow(`PRAGMA user_version`).Scan(&version))
 	assert.Equal(t, 3, version)
+}
+
+func TestColumnRefusesUnsupportedDestination(t *testing.T) {
+	var f float64
+	err := column(map[string]any{"x": 1.5}, "x", &f)
+	require.ErrorContains(t, err, "*float64")
 }

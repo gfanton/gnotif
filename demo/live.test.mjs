@@ -13,6 +13,12 @@ test("the live log follows the live switch's state line, in step 1", () => {
   assert.ok(log < step2, "the log comes before step 2");
 });
 
+test("the log's heading names no channel, since pushes list there with live updates off", () => {
+  const head = page.match(/id="arrivals-head">([^<]*)</);
+  assert.ok(head, 'the page has an element with id="arrivals-head"');
+  assert.doesNotMatch(head[1], /live/i);
+});
+
 test("the live log is announced as messages arrive", () => {
   const tag = page.match(/<[^>]*\bid="arrivals"[^>]*>/);
   assert.ok(tag, 'the page has an element with id="arrivals"');

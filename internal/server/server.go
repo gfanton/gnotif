@@ -24,6 +24,7 @@ import (
 
 const (
 	maxWindow       = 1000
+	storeEvery      = 10 * time.Minute
 	pushTTL         = 24 * time.Hour
 	shutdownTimeout = 10 * time.Second
 	publishTimeout  = 5 * time.Second
@@ -63,10 +64,50 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 	defer st.Close()
-	if _, ok, err := st.Cursor(ctx); err != nil {
+
+	var hub *stream.Hub
+	var publisher *stream.Publisher
+	if cfg.Publish != "" {
+		publisher = stream.NewPublisher(stream.PublisherConfig{
+			URL: cfg.Publish, Token: cfg.PublishToken, Client: &http.Client{}, Timeout: publishTimeout, Log: cfg.Log,
+		})
+	}
+	publish := func(matches []trigger.Match) {
+		hub.Publish(matches)
+		if publisher != nil {
+			publisher.Publish(matches)
+		}
+	}
+
+	now := func() time.Time { return time.Now().UTC() }
+	sender := delivery.New(delivery.Config{
+		Store:     st,
+		Client:    cmp.Or(cfg.PushClient, delivery.NewClient()),
+		Keys:      cfg.VAPID,
+		Subject:   cfg.VAPIDSubject,
+		TTL:       pushTTL,
+		PushHosts: cfg.PushHosts,
+		Now:       now,
+		Log:       cfg.Log,
+	})
+	watcher := watch.New(watch.Config{
+		Source:      indexer.New(cfg.Indexer, cmp.Or(cfg.IndexerClient, &http.Client{Timeout: 30 * time.Second})),
+		Store:       st,
+		Registry:    registry,
+		StartHeight: cfg.StartHeight,
+		Poll:        cfg.Poll,
+		MaxAge:      cfg.MaxAge,
+		MaxWindow:   maxWindow,
+		StoreEvery:  storeEvery,
+		Send:        sender.Send,
+		Now:         now,
+		Log:         cfg.Log,
+		Publish:     publish,
+	})
+
+	// The snapshot must exist before a listener can ask it for a trigger.
+	if err := watcher.Load(ctx); err != nil {
 		return err
-	} else if !ok && cfg.StartHeight < 1 {
-		return watch.ErrNoStartHeight
 	}
 
 	ln := cfg.Listener
@@ -83,50 +124,13 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 	}
 
-	protocol := stream.Protocol{TriggersByID: st.TriggersByID, Log: cfg.Log}
-	hub := stream.NewHub(stream.HubConfig{Protocol: protocol, Max: cfg.StreamMax, Log: cfg.Log})
-	var publisher *stream.Publisher
-	if cfg.Publish != "" {
-		publisher = stream.NewPublisher(stream.PublisherConfig{
-			URL: cfg.Publish, Token: cfg.PublishToken, Client: &http.Client{}, Timeout: publishTimeout, Log: cfg.Log,
-		})
-	}
-	publish := func(matches []trigger.Match) {
-		hub.Publish(matches)
-		if publisher != nil {
-			publisher.Publish(matches)
-		}
-	}
-
-	now := func() time.Time { return time.Now().UTC() }
-	wake := make(chan struct{}, 1)
-	watcher := watch.New(watch.Config{
-		Source:      indexer.New(cfg.Indexer, cmp.Or(cfg.IndexerClient, &http.Client{Timeout: 30 * time.Second})),
-		Store:       st,
-		Registry:    registry,
-		StartHeight: cfg.StartHeight,
-		Poll:        cfg.Poll,
-		MaxAge:      cfg.MaxAge,
-		MaxWindow:   maxWindow,
-		Wake:        wake,
-		Now:         now,
-		Log:         cfg.Log,
-		Publish:     publish,
-	})
-	sender := delivery.New(delivery.Config{
-		Store:   st,
-		Client:  cmp.Or(cfg.PushClient, delivery.NewClient()),
-		Keys:    cfg.VAPID,
-		Subject: cfg.VAPIDSubject,
-		TTL:     pushTTL,
-		Wake:    wake,
-		Now:     now,
-		Log:     cfg.Log,
-	})
+	protocol := stream.Protocol{TriggersByID: watcher.TriggersByID, Log: cfg.Log}
+	hub = stream.NewHub(stream.HubConfig{Protocol: protocol, Max: cfg.StreamMax, Log: cfg.Log})
 
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", subscribe.NewHandler(subscribe.Config{
 		Store:     st,
+		Triggers:  watcher,
 		PublicKey: cfg.VAPID.Public,
 		PushHosts: cfg.PushHosts,
 		Stream:    hub,
@@ -141,10 +145,15 @@ func Run(ctx context.Context, cfg Config) error {
 
 	loopCtx, stop := context.WithCancel(ctx)
 	defer stop()
+	sendCtx, stopSending := context.WithCancel(context.WithoutCancel(ctx))
+	defer stopSending()
 	serveErr := make(chan error, len(servers))
 	var wg sync.WaitGroup
-	wg.Go(func() { watcher.Run(loopCtx) })
-	wg.Go(func() { sender.Run(loopCtx) })
+	wg.Go(func() {
+		watcher.Run(loopCtx)
+		stopSending()
+	})
+	wg.Go(func() { sender.Run(sendCtx) })
 	if publisher != nil {
 		wg.Go(func() { publisher.Run(loopCtx) })
 	}

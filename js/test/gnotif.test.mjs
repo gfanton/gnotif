@@ -186,6 +186,41 @@ test("enable without a kept set sends no opt-ins", async (t) => {
   ]);
 });
 
+const BOB = { trigger: "0000001", value: "g1bob" };
+const BOB_PAGE_ONLY = { trigger: "0000002", value: "g1bob", push: false };
+
+test("setOptins sends only the push items to the push registration", async (t) => {
+  const requests = stubEnable(t);
+  const g = new Gnotif({ server: SERVER });
+  await g.enable();
+  await g.setOptins([BOB, BOB_PAGE_ONLY]);
+  assert.deepEqual(requests.at(-1).body, { endpoint: "E", optins: [BOB] });
+});
+
+test("enable registers only the push items of the kept set", async (t) => {
+  const requests = stubEnable(t);
+  const g = new Gnotif({ server: SERVER });
+  await g.setOptins([BOB, BOB_PAGE_ONLY]);
+  await g.enable();
+  assert.deepEqual(requests.at(-1).body, { endpoint: "E", optins: [BOB] });
+});
+
+test("a set of page-only items empties the push registration", async (t) => {
+  const requests = stubEnable(t);
+  const g = new Gnotif({ server: SERVER });
+  await g.enable();
+  await g.setOptins([BOB_PAGE_ONLY]);
+  assert.deepEqual(requests.at(-1).body, { endpoint: "E", optins: [] });
+});
+
+test("an item listed twice is pushed when one copy allows push", async (t) => {
+  const requests = stubEnable(t);
+  const g = new Gnotif({ server: SERVER });
+  await g.enable();
+  await g.setOptins([{ ...BOB, push: false }, { ...BOB, push: true }]);
+  assert.deepEqual(requests.at(-1).body, { endpoint: "E", optins: [BOB] });
+});
+
 test("enabled is false without the Push API", async (t) => {
   stubBrowser(t, { permission: "granted", subscription: { endpoint: "E" } });
   t.after(stubGlobal("PushManager", undefined));

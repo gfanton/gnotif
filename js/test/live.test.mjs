@@ -2,106 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { Gnotif, GnotifError } from "../src/gnotif.js";
-
-const SERVER = "https://gnotif.example";
-const ACCEPTED = '{"type":"optins"}';
-const A = [{ trigger: "0000001", value: "g1bob" }];
-const B = [{ trigger: "0000001", value: "g1alice" }];
-
-function stubGlobal(name, value) {
-  const previous = Object.getOwnPropertyDescriptor(globalThis, name);
-  Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
-  return () => {
-    if (previous) Object.defineProperty(globalThis, name, previous);
-    else delete globalThis[name];
-  };
-}
-
-// FakeWebSocket records what the client sends and lets a test drive the
-// server's side. Like a browser, it reports its own close asynchronously.
-class FakeWebSocket {
-  static OPEN = 1;
-  static instances = [];
-
-  constructor(url) {
-    this.url = url;
-    this.sent = [];
-    this.readyState = 0;
-    this.closedWith = undefined;
-    this.listeners = {};
-    FakeWebSocket.instances.push(this);
-  }
-
-  addEventListener(type, fn) {
-    (this.listeners[type] ??= []).push(fn);
-  }
-
-  fire(type, event) {
-    for (const fn of this.listeners[type] ?? []) fn(event);
-  }
-
-  send(data) {
-    this.sent.push(data);
-  }
-
-  close(code) {
-    if (this.readyState === 3) return;
-    this.readyState = 3;
-    this.closedWith = code ?? 1005;
-    queueMicrotask(() => this.fire("close", { code: this.closedWith }));
-  }
-
-  open() {
-    this.readyState = 1;
-    this.fire("open", {});
-  }
-
-  receive(text) {
-    this.fire("message", { data: text });
-  }
-
-  drop(code = 1006) {
-    this.readyState = 3;
-    this.fire("close", { code });
-  }
-
-  optinsSent() {
-    return this.sent.map((s) => JSON.parse(s)).filter((f) => f.type === "optins").map((f) => f.optins);
-  }
-}
-
-// stubLive gives the client a page on https://dapp.example with no Push API,
-// a fake WebSocket and mocked timers.
-function stubLive(t, random = 0.5) {
-  FakeWebSocket.instances = [];
-  t.after(stubGlobal("WebSocket", FakeWebSocket));
-  t.after(stubGlobal("location", { origin: "https://dapp.example", href: "https://dapp.example/app/game" }));
-  t.after(stubGlobal("navigator", {}));
-  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
-  const rnd = { value: random };
-  t.mock.method(Math, "random", () => rnd.value);
-  return rnd;
-}
-
-const flush = () => new Promise((resolve) => setImmediate(resolve));
-const sockets = () => FakeWebSocket.instances;
-const last = () => FakeWebSocket.instances.at(-1);
-
-async function connected(t, optins = A, options = {}) {
-  const g = new Gnotif({ server: SERVER, ...options });
-  await g.setOptins(optins);
-  const p = g.connect();
-  last().open();
-  last().receive(ACCEPTED);
-  await p;
-  t.after(() => g.disconnect());
-  return g;
-}
-
-function notification(link) {
-  return { type: "notification", trigger: "0000001", value: "g1bob", title: "Your turn", body: "Game 7, turn 1",
-    link, height: 7, tx: "tx1", time: "2026-10-16T21:46:08.5Z", attrs: [{ key: "game", value: "7" }] };
-}
+import {
+  A, ACCEPTED, B, FakeWebSocket, SERVER, connected, flush, last, notification, sockets, stubGlobal, stubLive,
+} from "./fakes.mjs";
 
 test("connect opens the stream and resolves once the set is accepted", async (t) => {
   stubLive(t);
@@ -212,11 +115,11 @@ test("notifications reach handlers with the link resolved on the page origin", a
   const g = await connected(t);
   const got = [];
   g.on("notification", (n) => got.push(n));
-  last().receive(JSON.stringify(notification("/?game=7")));
-  last().receive(JSON.stringify(notification("//evil.example/x")));
+  last().receive(JSON.stringify(notification("/?game=7", "i1")));
+  last().receive(JSON.stringify(notification("//evil.example/x", "i2")));
   const { type, ...fields } = notification("https://dapp.example/?game=7");
   assert.equal(type, "notification");
-  assert.deepEqual(got[0], fields);
+  assert.deepEqual(got[0], { ...fields, source: "live" });
   assert.equal(got[1].link, "https://dapp.example/");
 });
 
@@ -231,13 +134,24 @@ test("a notification without its block time reaches no handler", async (t) => {
   assert.deepEqual(got, []);
 });
 
+test("a notification without its id reaches no handler", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  const got = [];
+  g.on("notification", (n) => got.push(n));
+  const { id, ...anonymous } = notification("/");
+  last().receive(JSON.stringify(anonymous));
+  last().receive(JSON.stringify({ ...anonymous, id: 7 }));
+  assert.deepEqual(got, []);
+});
+
 test("a link to another origin gives the service worker's scope", async (t) => {
   stubLive(t);
   const g = await connected(t, A, { serviceWorker: "/app/sw.js" });
   const got = [];
   g.on("notification", (n) => got.push(n));
-  last().receive(JSON.stringify(notification("//evil.example/x")));
-  last().receive(JSON.stringify(notification("/?game=7")));
+  last().receive(JSON.stringify(notification("//evil.example/x", "i1")));
+  last().receive(JSON.stringify(notification("/?game=7", "i2")));
   assert.equal(got[0].link, "https://dapp.example/app/");
   assert.equal(got[1].link, "https://dapp.example/?game=7");
 });
@@ -407,6 +321,22 @@ test("setOptins while reconnecting sends the latest set once", async (t) => {
   await Promise.all([p1, p2]);
 });
 
+// A reconnect the server keeps refusing must not hold setOptins: the set goes
+// out when a socket opens again.
+test("setOptins resolves while reconnecting, and the reopened socket sends the set", async (t) => {
+  stubLive(t, 0);
+  const g = await connected(t);
+  last().drop();
+  const outcome = await Promise.race([
+    g.setOptins(B).then(() => "settled"),
+    new Promise((resolve) => setImmediate(() => resolve("pending"))),
+  ]);
+  assert.equal(outcome, "settled");
+  t.mock.timers.tick(500);
+  last().open();
+  assert.deepEqual(last().optinsSent(), [B]);
+});
+
 test("one optins frame in flight", async (t) => {
   stubLive(t);
   const g = await connected(t, []);
@@ -434,6 +364,15 @@ test("disconnect closes and stops reconnecting", async (t) => {
   t.mock.timers.tick(60_000);
   assert.equal(sockets().length, 1);
   assert.equal(events, 0);
+});
+
+test("the live set carries every item, without the push key", async (t) => {
+  stubLive(t);
+  await connected(t, [{ trigger: "0000001", value: "g1bob" }, { trigger: "0000002", value: "g1bob", push: false }]);
+  assert.deepEqual(last().optinsSent()[0], [
+    { trigger: "0000001", value: "g1bob" },
+    { trigger: "0000002", value: "g1bob" },
+  ]);
 });
 
 test("unknown frame types are ignored", async (t) => {

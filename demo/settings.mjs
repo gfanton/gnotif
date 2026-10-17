@@ -12,8 +12,7 @@ const KEY = "gnotif-demo";
  */
 
 /**
- * Reads the stored settings. A record written before the live switch
- * existed was only written with push on.
+ * Reads the stored settings. A record without `push` reads as push on.
  * @param {Pick<Storage, "getItem">} storage
  * @returns {Settings | null} null when nothing usable is stored
  */
