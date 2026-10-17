@@ -1,7 +1,7 @@
 .tools/
 .cache/
 gnotif.db*
-js/types/
+js/dist/
 node_modules/
 .direnv/
 demo/gnotif.js

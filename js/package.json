@@ -10,17 +10,24 @@
     "url": "git+https://github.com/gfanton/gnotif.git",
     "directory": "js"
   },
-  "main": "./src/gnotif.js",
-  "types": "./types/gnotif.d.ts",
+  "main": "./dist/gnotif.js",
+  "types": "./dist/gnotif.d.ts",
   "exports": {
     ".": {
-      "types": "./types/gnotif.d.ts",
-      "default": "./src/gnotif.js"
+      "types": "./dist/gnotif.d.ts",
+      "default": "./dist/gnotif.js"
     },
     "./sw.js": "./src/sw.js"
   },
   "files": [
-    "src",
-    "types"
-  ]
+    "dist",
+    "src/sw.js"
+  ],
+  "scripts": {
+    "build": "node scripts/build.ts"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "valibot": "1.5.0"
+  }
 }

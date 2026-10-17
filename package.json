@@ -7,11 +7,18 @@
     "node": ">=24"
   },
   "scripts": {
-    "check": "tsc --noEmit -p js/tsconfig.json && tsc --noEmit -p js/tsconfig.sw.json",
-    "build": "tsc -p js/tsconfig.json --rootDir js/src --emitDeclarationOnly --outDir js/types",
-    "test": "node --test 'js/test/*.test.mjs' 'demo/*.test.mjs'"
+    "check": "tsc -p js/tsconfig.json && tsc --noEmit -p js/tsconfig.sw.json && tsc -p js/test/tsconfig.json && tsc -p js/scripts/tsconfig.json",
+    "lint": "oxlint --type-aware",
+    "fmt": "prettier --write 'js/**/*.ts'",
+    "fmt:check": "prettier --check 'js/**/*.ts'",
+    "build": "pnpm -r build",
+    "test": "pnpm build && node --test 'js/test/*.test.ts' js/test/sw.test.mjs 'demo/*.test.mjs'"
   },
   "devDependencies": {
+    "@types/node": "24.19.2",
+    "oxlint": "1.88.0",
+    "oxlint-tsgolint": "7.0.2004",
+    "prettier": "3.9.10",
     "typescript": "7.0.2"
   }
 }

@@ -1,34 +1,44 @@
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 
-import { Gnotif } from "../src/gnotif.js";
-import { A, SERVER, connected, last, notification, stubGlobal, stubLive } from "./fakes.mjs";
+import { Gnotif, type GnotifNotification } from "../src/gnotif.ts";
+import { A, SERVER, connected, last, notification, stubGlobal, stubLive } from "./fakes.ts";
+
+type Relay = (data: unknown) => void;
 
 // stubRelay gives the page a service worker container that captures the
 // client's message listener, and returns a function that relays data to it.
 // It must run before the client is constructed.
-function stubRelay(t) {
-  let listener;
-  t.after(stubGlobal("navigator", {
-    serviceWorker: {
-      addEventListener(type, fn) {
-        if (type === "message") listener = fn;
+function stubRelay(t: TestContext): Relay {
+  let listener: ((e: { data: unknown }) => void) | undefined;
+  t.after(
+    stubGlobal("navigator", {
+      serviceWorker: {
+        addEventListener(type: string, fn: (e: { data: unknown }) => void) {
+          if (type === "message") listener = fn;
+        },
       },
-    },
-  }));
-  return (data) => listener({ data });
+    }),
+  );
+  return (data) => {
+    assert.ok(listener !== undefined, "the client added no message listener");
+    listener({ data });
+  };
 }
 
-function pushed(link = "/?game=7", id = "i1") {
+function pushed(link = "/?game=7", id = "i1"): { type: string; notification: Record<string, unknown> } {
   const { type, ...fields } = notification(link, id);
   return { type: "gnotif.notification", notification: fields };
 }
 
-function relayed(t, options = {}) {
+function relayed(
+  t: TestContext,
+  options: NonNullable<ConstructorParameters<typeof Gnotif>[0]> = {},
+): { g: Gnotif; relay: Relay; got: GnotifNotification[] } {
   stubLive(t);
   const relay = stubRelay(t);
   const g = new Gnotif({ server: SERVER, ...options });
-  const got = [];
+  const got: GnotifNotification[] = [];
   g.on("notification", (n) => got.push(n));
   return { g, relay, got };
 }
@@ -56,14 +66,17 @@ for (const order of ["live first", "push first"]) {
     stubLive(t);
     const relay = stubRelay(t);
     const g = await connected(t);
-    const got = [];
+    const got: GnotifNotification[] = [];
     g.on("notification", (n) => got.push(n));
-    const live = () => last().receive(JSON.stringify(notification("/?game=7")));
-    const push = () => relay(pushed());
+    const live = (): void => last().receive(JSON.stringify(notification("/?game=7")));
+    const push = (): void => relay(pushed());
     const [first, second] = order === "live first" ? [live, push] : [push, live];
     first();
     second();
-    assert.deepEqual(got.map((n) => n.source), [order === "live first" ? "live" : "push"]);
+    assert.deepEqual(
+      got.map((n) => n.source),
+      [order === "live first" ? "live" : "push"],
+    );
   });
 }
 
@@ -90,7 +103,13 @@ test("two matches in one transaction both reach the handler", async (t) => {
   const { notification: n } = pushed();
   relay({ type: "gnotif.notification", notification: n });
   relay({ type: "gnotif.notification", notification: { ...n, id: "i2", trigger: "0000002" } });
-  assert.deepEqual(got.map((x) => [x.id, x.trigger, x.tx]), [["i1", "0000001", "tx1"], ["i2", "0000002", "tx1"]]);
+  assert.deepEqual(
+    got.map((x) => [x.id, x.trigger, x.tx]),
+    [
+      ["i1", "0000001", "tx1"],
+      ["i2", "0000002", "tx1"],
+    ],
+  );
 });
 
 test("a relayed link to another origin gives the worker's scope", async (t) => {
@@ -106,11 +125,14 @@ test("a relay after disconnect still reaches the handler", async (t) => {
   stubLive(t);
   const relay = stubRelay(t);
   const g = await connected(t);
-  const got = [];
+  const got: GnotifNotification[] = [];
   g.on("notification", (n) => got.push(n));
   g.disconnect();
   relay(pushed());
-  assert.deepEqual(got.map((n) => n.source), ["push"]);
+  assert.deepEqual(
+    got.map((n) => n.source),
+    ["push"],
+  );
 });
 
 test("an id older than the last 256 delivered is delivered again", async (t) => {

@@ -77,7 +77,13 @@ conformance: ## Check the live endpoint of GNOTIF_SERVER, opting into a trigger 
 	test -n "$(GNOTIF_SERVER)" && test -n "$(GNOTIF_TARGET)" || { echo "conformance: set GNOTIF_SERVER=<gnotif server URL> GNOTIF_TARGET=<realm path>" >&2; exit 1; }
 	GNOTIF_SERVER=$(GNOTIF_SERVER) GNOTIF_TARGET=$(GNOTIF_TARGET) node --test e2e/conformance/stream.test.mjs
 
-$(DEMO_JS): demo/%.js: js/src/%.js
+js/dist/gnotif.js: $(PNPM_STAMP) $(wildcard js/src/*.ts) js/scripts/build.ts
+	pnpm build
+
+demo/gnotif.js: js/dist/gnotif.js
+	cp $< $@
+
+demo/sw.js: js/src/sw.js
 	cp $< $@
 
 demo: $(DEMO_JS) ## Serve the demo dapp on http://localhost:3000
@@ -103,8 +109,8 @@ deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>
 	done
 	touch $(TOOLS)/deploy/gnowork.toml
 
-clean: ## Remove built tools, deploy copies, the website build and the demo's copied scripts
-	rm -rf $(TOOLS) site/dist
+clean: ## Remove built tools, deploy copies, the website build, the package build and the demo's copied scripts
+	rm -rf $(TOOLS) site/dist js/dist
 	rm -f $(DEMO_JS)
 
 fclean: clean ## Also remove the gno toolchain, the realms' dependencies in .cache and the installed JavaScript packages
