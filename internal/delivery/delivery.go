@@ -374,7 +374,7 @@ func (s *Sender) deliver(ctx context.Context, it item) error {
 	}
 }
 
-// forget deletes it's outbox row, if it has one.
+// forget deletes its outbox row, if it has one.
 func (s *Sender) forget(ctx context.Context, it item) error {
 	if it.row == 0 {
 		return nil

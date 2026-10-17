@@ -1,7 +1,8 @@
 package store
 
-// schemaVersion is stored in PRAGMA user_version of every database this
-// gnotifd creates.
+// schemaVersion is recorded in every database this gnotifd creates: in
+// PRAGMA user_version of a SQLite file, in table gnotifd_schema of a remote
+// store.
 const schemaVersion = 2
 
 var schema = []string{

@@ -30,7 +30,8 @@ var ErrSchemaNewer = errors.New("database was made by a newer gnotifd")
 // version; the trigger snapshot returns no more.
 const MaxPerTarget = 64
 
-// Store is the SQLite database. It is safe for concurrent use.
+// Store is gnotifd's database: a SQLite file or a remote store. It is safe
+// for concurrent use.
 type Store struct {
 	ex executor
 }

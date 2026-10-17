@@ -513,8 +513,8 @@ func TestReplaySendsAgain(t *testing.T) {
 	assert.Equal(t, store.Cursor{HeightDone: 12, Bound: 12}, h.cursor(t))
 }
 
-// Every write is a file the database's replica keeps and a restore reads, so
-// an idle chain must not write one every poll.
+// Each cursor store is a round trip to a remote store and a row written, so
+// an idle chain must not store it every poll.
 func TestQuietPositionStoredEveryStoreEvery(t *testing.T) {
 	h := newHarness(t, 1)
 	h.w.cfg.StoreEvery = 10 * time.Minute

@@ -21,7 +21,8 @@ type Statement struct {
 // Result is the outcome of one Statement. Rows hold nil, int64, float64 or
 // string values, keyed by column name. Changes counts the rows the
 // statement inserted, updated or deleted, RETURNING included; it is 0 for a
-// SELECT or a schema change.
+// SELECT or a schema change. A SQLite file also counts the rows a foreign
+// key cascade deletes; a remote store may count only the statement's own.
 type Result struct {
 	Rows    []map[string]any
 	Changes int64
@@ -32,7 +33,8 @@ type executor interface {
 	exec(ctx context.Context, stmts []Statement) ([]Result, error)
 	close() error
 	// version reports the schema version a database holds. found is false
-	// when it holds none.
+	// when a remote store holds none; a SQLite file always holds one, 0
+	// until set.
 	version(ctx context.Context) (v int, found bool, err error)
 	// setVersion returns the statements that record v as the schema version.
 	setVersion(v int) []Statement
