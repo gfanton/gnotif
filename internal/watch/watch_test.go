@@ -300,6 +300,28 @@ func (f *faultyStore) Exec(ctx context.Context, stmts []store.Statement) ([]stor
 	return f.Store.Exec(ctx, stmts)
 }
 
+// countingStore is the harness's store, recording the calls the watcher makes.
+type countingStore struct {
+	*store.Store
+	reads int                 // Cursor and Triggers calls
+	execs [][]store.Statement // per Exec call, its statements
+}
+
+func (c *countingStore) Exec(ctx context.Context, stmts []store.Statement) ([]store.Result, error) {
+	c.execs = append(c.execs, stmts)
+	return c.Store.Exec(ctx, stmts)
+}
+
+func (c *countingStore) Cursor(ctx context.Context) (store.Cursor, bool, error) {
+	c.reads++
+	return c.Store.Cursor(ctx)
+}
+
+func (c *countingStore) Triggers(ctx context.Context) ([]trigger.Trigger, error) {
+	c.reads++
+	return c.Store.Triggers(ctx)
+}
+
 // faulty puts a faultyStore between the watcher and the store.
 func (h *harness) faulty() *faultyStore {
 	f := &faultyStore{Store: h.store}
@@ -511,6 +533,33 @@ func TestQuietPositionStoredEveryStoreEvery(t *testing.T) {
 	h.clock = h.clock.Add(10 * time.Minute)
 	h.tick(t)
 	assert.Equal(t, store.Cursor{HeightDone: 20, Bound: 20}, h.cursor(t))
+}
+
+// A quiet poll makes no store call; the cursor store, once the stored cursor
+// is StoreEvery old, is the only one.
+func TestQuietPollMakesNoStoreCall(t *testing.T) {
+	h := newHarness(t, 1)
+	h.w.cfg.StoreEvery = 10 * time.Minute
+	h.setCursor(t, store.Cursor{HeightDone: 9, Bound: 12})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
+	h.tick(t) // loads, and stores the cursor: this watcher has stored none yet
+	calls := &countingStore{Store: h.store}
+	h.w.cfg.Store = calls
+
+	h.fake.add(15, turn("7", "g1bob")) // no trigger matches it
+	h.fake.set(func(f *fakeIndexer) { f.latest = 20 })
+	for range 3 {
+		h.clock = h.clock.Add(3 * time.Minute)
+		h.tick(t)
+	}
+	assert.Zero(t, calls.reads)
+	assert.Empty(t, calls.execs)
+	assert.Equal(t, []indexer.Window{{From: 9, To: 12}, {From: 12, To: 20}}, h.fake.recorded())
+
+	h.clock = h.clock.Add(time.Minute)
+	h.tick(t)
+	assert.Zero(t, calls.reads)
+	assert.Equal(t, [][]store.Statement{{store.CursorStatement(store.Cursor{HeightDone: 20, Bound: 20})}}, calls.execs)
 }
 
 // A window read again after a restart would publish its matches twice.
