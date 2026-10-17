@@ -6,6 +6,7 @@
 //
 // The VAPID key pair comes from GNOTIF_VAPID_PUBLIC_KEY and
 // GNOTIF_VAPID_PRIVATE_KEY; keygen prints a new pair in that form.
+// GNOTIF_PUBLISH_TOKEN, when set, is sent as a bearer token to -publish.
 package main
 
 import (
@@ -15,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -76,11 +78,14 @@ func parseConfig(args []string, getenv func(string) string) (server.Config, erro
 	fs.StringVar(&cfg.Indexer, "indexer", "", "tx-indexer GraphQL URL (required)")
 	fs.StringVar(&cfg.Registry, "registry", "", "package path of the gnotif registry realm, ending in /v<N>; later versions are followed too (required)")
 	fs.Int64Var(&cfg.StartHeight, "start-height", 0, "registry deploy height, required on first start")
-	fs.StringVar(&cfg.DB, "db", "gnotif.db", "SQLite database file")
+	fs.StringVar(&cfg.DB, "db", "gnotif.db", "SQLite database file, or the http(s) URL of a remote store")
 	fs.DurationVar(&cfg.Poll, "poll", 5*time.Second, "indexer poll interval")
 	fs.DurationVar(&cfg.MaxAge, "max-age", 10*time.Minute, "oldest event that still sends a notification")
 	fs.StringVar(&cfg.VAPIDSubject, "vapid-subject", "", "contact email or https URL sent to push services (required)")
 	fs.StringVar(&pushHosts, "push-hosts", strings.Join(subscribe.DefaultPushHosts, ","), "comma-separated push service hosts")
+	fs.IntVar(&cfg.StreamMax, "stream-max", 0, "most live connections held at once; 0 turns live connections off")
+	fs.StringVar(&cfg.HubListen, "hub-listen", "", "address of the external-hub listener (off when empty)")
+	fs.StringVar(&cfg.Publish, "publish", "", "URL receiving each window's matches for an external hub (off when empty)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			var flags strings.Builder
@@ -96,6 +101,19 @@ func parseConfig(args []string, getenv func(string) string) (server.Config, erro
 	if cfg.MaxAge < 0 {
 		return server.Config{}, errors.New("-max-age must not be negative")
 	}
+	if cfg.StreamMax < 0 {
+		return server.Config{}, errors.New("-stream-max must not be negative")
+	}
+	if cfg.Publish != "" {
+		u, err := url.Parse(cfg.Publish)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return server.Config{}, errors.New("-publish must be an http or https URL")
+		}
+	}
+	if (cfg.HubListen == "") != (cfg.Publish == "") {
+		return server.Config{}, errors.New("-hub-listen and -publish connect an external hub together: set both or neither")
+	}
+	cfg.PublishToken = getenv("GNOTIF_PUBLISH_TOKEN")
 
 	// webpush-go adds "mailto:" to a subject that is not an https URL; a
 	// doubled prefix makes Apple's push service reject every push.

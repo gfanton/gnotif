@@ -81,10 +81,11 @@ import { Gnotif } from "gnotif";
 const gnotif = new Gnotif({ network: "onyx" });
 const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
 if (!message) throw new Error("gnotif.xyz has not read this realm's trigger yet");
+const optins = [{ trigger: message.id, value: address }];
 
 button.addEventListener("click", async () => {
   await gnotif.enable();
-  await gnotif.setOptins([{ trigger: message.id, value: address }]);
+  await gnotif.setOptins(optins);
 });
 ```
 
@@ -92,9 +93,26 @@ button.addEventListener("click", async () => {
 - `gno.land/r/<you>/notify` is your realm's path, where `<you>` is the address you deploy it with.
 - `triggers()` asks gnotif.xyz for your realm's triggers. This realm has one, the trigger from step 2. Ask on every page load, because a trigger's id can change ([Triggers](triggers.md#a-triggers-id-can-change)).
 - `enable()` asks the browser for permission to show notifications, so call it from a click. `button` is a button on your page.
-- `setOptins()` opts this browser in. `address` is the address of the person using the page, such as the one their wallet shows.
+- `optins` is the set this browser opts in to, and `setOptins()` sends it. `address` is the address of the person using the page, such as the one their wallet shows.
 
 [The client's README](../js/README.md) documents each method, its errors and the `icon` option.
+
+### Live updates on the page
+
+An open page can also receive each notification as it happens, with no permission prompt and no service worker. One handler gets both the live ones and the pushes the service worker passes to the page, once each. Register it, set the opt-ins, connect, and only then read the state from the chain:
+
+```js
+gnotif.on("notification", (n) => refreshFromChain());
+await gnotif.setOptins(optins);
+await gnotif.connect();
+await refreshFromChain();
+```
+
+- `on("notification")` receives the notification's title, body and link, with the event's attributes, the block it is in, and a `source` of `"live"` or `"push"`. A notification is a hint, so the handler reads the chain again. `refreshFromChain` is your page's own code.
+- `setOptins()` replaces the whole set, so pass the same `optins` from the click handler and here. An item without `push` is pushed and heard live. To keep an item on the page only, set `push: false` on it, as in `{ trigger: message.id, value: address, push: false }`: the OS shows nothing for it.
+- `connect()` sends the set to the server, address included, so call it when the person asks for live updates. `disconnect()` closes the live connection only; pushes still reach the handler until the function `on()` returns removes it.
+- After a drop the connection comes back by itself, firing `reconnecting` and then `reconnect`. Nothing sent in between is replayed, so read the page's state from the chain again on `reconnect`.
+- gnotif.xyz serves live updates. A gnotifd of your own serves them once you set `-stream-max` ([Running gnotifd](running-gnotifd.md#flags)).
 
 ## 4. Try it on onyx
 

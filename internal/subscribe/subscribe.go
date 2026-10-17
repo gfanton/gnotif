@@ -3,13 +3,13 @@
 package subscribe
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"slices"
 
+	"github.com/gfanton/gnotif/internal/optin"
 	"github.com/gfanton/gnotif/internal/store"
 	"github.com/gfanton/gnotif/internal/trigger"
 )
@@ -24,11 +24,19 @@ var DefaultPushHosts = []string{
 
 const maxBody = 8192
 
+// Triggers reads the declared triggers.
+type Triggers interface {
+	TargetTriggers(ctx context.Context, target string) ([]trigger.Trigger, error)
+	TriggersByID(ctx context.Context, ids []string) (map[string]trigger.Trigger, error)
+}
+
 // Config holds the handler's dependencies.
 type Config struct {
 	Store     *store.Store
+	Triggers  Triggers
 	PublicKey string // VAPID public key browsers subscribe with
 	PushHosts []string
+	Stream    http.Handler // serves GET /v1/stream; nil serves no live connections
 	Log       *slog.Logger
 }
 
@@ -56,21 +64,17 @@ type subscriptionJSON struct {
 	OldEndpoint string `json:"oldEndpoint"`
 }
 
-type optinJSON struct {
-	Trigger string `json:"trigger"`
-	Value   string `json:"value"`
-}
-
 type optinsJSON struct {
-	Endpoint string      `json:"endpoint"`
-	Optins   []optinJSON `json:"optins"`
+	Endpoint string        `json:"endpoint"`
+	Optins   []optin.Optin `json:"optins"`
 }
 
 type handler struct {
 	cfg Config
 }
 
-// NewHandler returns the /v1/ API. Every answer allows any origin.
+// NewHandler returns the /v1/ API, live connections included. Every answer
+// allows any origin.
 func NewHandler(cfg Config) http.Handler {
 	h := &handler{cfg: cfg}
 	mux := http.NewServeMux()
@@ -79,6 +83,9 @@ func NewHandler(cfg Config) http.Handler {
 	mux.HandleFunc("PUT /v1/subscription", h.putSubscription)
 	mux.HandleFunc("PUT /v1/subscription/optins", h.putOptins)
 	mux.HandleFunc("DELETE /v1/subscription", h.deleteSubscription)
+	if cfg.Stream != nil {
+		mux.Handle("GET /v1/stream", cfg.Stream)
+	}
 	mux.HandleFunc("OPTIONS /v1/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -104,7 +111,7 @@ func (h *handler) triggers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid target")
 		return
 	}
-	ts, err := h.cfg.Store.TargetTriggers(r.Context(), target)
+	ts, err := h.cfg.Triggers.TargetTriggers(r.Context(), target)
 	if err != nil {
 		h.internal(w, err)
 		return
@@ -154,22 +161,13 @@ func (h *handler) putOptins(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	if len(req.Optins) > maxOptins {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("more than %d opt-ins", maxOptins))
+	err := optin.Check(r.Context(), req.Optins, h.cfg.Triggers.TriggersByID)
+	if rule, ok := errors.AsType[optin.Error](err); ok {
+		writeError(w, http.StatusBadRequest, rule.Error())
 		return
 	}
-	ids := make([]string, 0, len(req.Optins))
-	for _, o := range req.Optins {
-		ids = append(ids, o.Trigger)
-	}
-	slices.Sort(ids)
-	byID, err := h.cfg.Store.TriggersByID(r.Context(), slices.Compact(ids))
 	if err != nil {
 		h.internal(w, err)
-		return
-	}
-	if err := checkOptins(req.Optins, byID); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	optins := make([]store.Optin, len(req.Optins))

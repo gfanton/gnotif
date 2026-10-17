@@ -72,8 +72,13 @@ func TestParseConfig(t *testing.T) {
 		args []string
 		want string
 	}{
-		"zero poll":        {[]string{"-poll", "0"}, "-poll must be positive"},
-		"negative max-age": {[]string{"-max-age", "-1s"}, "-max-age must not be negative"},
+		"zero poll":            {[]string{"-poll", "0"}, "-poll must be positive"},
+		"negative max-age":     {[]string{"-max-age", "-1s"}, "-max-age must not be negative"},
+		"negative stream-max":  {[]string{"-stream-max", "-1"}, "-stream-max must not be negative"},
+		"publish scheme":       {[]string{"-publish", "ftp://hub.example/publish"}, "-publish must be an http or https URL"},
+		"publish without host": {[]string{"-publish", "http:///publish"}, "-publish must be an http or https URL"},
+		"hub listener alone":   {[]string{"-hub-listen", "127.0.0.1:8081"}, "-hub-listen and -publish connect an external hub together: set both or neither"},
+		"publish alone":        {[]string{"-publish", "http://hub.internal/publish"}, "-hub-listen and -publish connect an external hub together: set both or neither"},
 	}
 	for name, tc := range invalid {
 		t.Run(name, func(t *testing.T) {
@@ -87,6 +92,26 @@ func TestParseConfig(t *testing.T) {
 		cfg, err := parseConfig(args, env(""))
 		require.NoError(t, err)
 		assert.Equal(t, "ops@gnotif.example", cfg.VAPIDSubject)
+	})
+
+	t.Run("live defaults", func(t *testing.T) {
+		cfg, err := parseConfig(requiredArgs, env(""))
+		require.NoError(t, err)
+		assert.Equal(t, 0, cfg.StreamMax, "live connections are off unless the operator sets a cap")
+		assert.Empty(t, cfg.HubListen)
+		assert.Empty(t, cfg.Publish)
+		assert.Empty(t, cfg.PublishToken)
+	})
+
+	t.Run("external hub", func(t *testing.T) {
+		args := append([]string{"-hub-listen", "127.0.0.1:8081", "-publish", "http://hub.internal/publish", "-stream-max", "0"}, requiredArgs...)
+		vars := map[string]string{"GNOTIF_VAPID_PUBLIC_KEY": "pub", "GNOTIF_VAPID_PRIVATE_KEY": "priv", "GNOTIF_PUBLISH_TOKEN": "t0k"}
+		cfg, err := parseConfig(args, func(k string) string { return vars[k] })
+		require.NoError(t, err)
+		assert.Equal(t, 0, cfg.StreamMax)
+		assert.Equal(t, "127.0.0.1:8081", cfg.HubListen)
+		assert.Equal(t, "http://hub.internal/publish", cfg.Publish)
+		assert.Equal(t, "t0k", cfg.PublishToken)
 	})
 
 	t.Run("push hosts", func(t *testing.T) {

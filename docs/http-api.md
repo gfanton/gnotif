@@ -9,6 +9,7 @@ gnotifd serves its API under `/v1/` at its root. A hosted server can put it unde
 | `PUT /v1/subscription` | a push subscription, with an optional `oldEndpoint` | 204 |
 | `PUT /v1/subscription/optins` | the subscription's endpoint and its opt-ins | 204 |
 | `DELETE /v1/subscription` | the subscription's endpoint | 204 |
+| `GET /v1/stream` | a WebSocket upgrade | 101, a [live connection](#live-notifications) |
 
 The API has no accounts. A subscription is known by its push endpoint, which only the browser, its push service and the gnotif server know, and knowing the endpoint is enough to change or delete it.
 
@@ -106,6 +107,65 @@ The server has no route that reads opt-ins back. A page keeps the set it last se
 ```json
 {"endpoint": "https://fcm.googleapis.com/fcm/send/..."}
 ```
+
+## Live notifications
+
+`GET /v1/stream` with a WebSocket upgrade opens a live connection. While the page stays open, it receives the notifications its opt-ins name, the same ones a push carries. Frames are JSON text. A connection starts with no opt-ins and receives nothing until a set is accepted.
+
+| Request | Answer |
+|---|---|
+| without a WebSocket upgrade | 426, `{"error": "websocket upgrade required"}` |
+| while the server holds its most connections | 503, `{"error": "too many live connections"}` |
+| on a server with live notifications off | 503, `{"error": "live notifications are off on this server"}` |
+
+### Client frames
+
+Each text frame of at most 8,192 bytes gets exactly one reply.
+
+| The client sends | The server replies |
+|---|---|
+| exactly `{"type":"ping"}` | exactly `{"type":"pong"}` |
+| `{"type": "optins", "optins": [{"trigger": "0000001", "value": "g1..."}]}` | `{"type": "optins"}`, or `{"type": "error", "error": "<message>"}` |
+| text that is not a JSON object, or whose `type` or `optins` has the wrong type | `{"type": "error", "error": "invalid JSON message"}` |
+| a JSON object with another `type`, or none | `{"type": "error", "error": "unknown message type"}` |
+
+The ping is recognised by its exact text: the same JSON spaced differently is an unknown message type. An `optins` frame replaces the connection's whole set. It follows the rules of [Set the opt-ins](#set-the-opt-ins), with the same messages, and a refused set leaves the previous one in place.
+
+### Notification frames
+
+For every match whose trigger and value are in its set, the connection receives:
+
+```json
+{"type": "notification", "id": "...", "trigger": "0000001", "value": "g1...",
+ "title": "Your turn", "body": "Game 0000001, turn 3", "link": "/?game=0000001",
+ "height": 181221, "tx": "...", "time": "2026-10-16T21:46:08.5Z",
+ "attrs": [{"key": "game", "value": "0000001"}, {"key": "next", "value": "g1..."}, {"key": "turn", "value": "3"}]}
+```
+
+`id` identifies the match: a push in the [full form](#push-payload) for the same match carries the same `id`, so a client that hears both can keep one.
+
+`title`, `body` and `link` are those of the push for the same match. `attrs` lists the event's attributes in order. `height` and `tx` name the transaction that emitted the event, so a page can check it on chain. `time` is the block's time, in UTC, as RFC 3339.
+
+Frames follow chain order. Each is sent once, after gnotifd has processed its block, and nothing is stored or replayed: a client that was disconnected misses the frames sent meanwhile.
+
+### Limits and closing
+
+- A client frame over 8,192 bytes closes the connection with code 1009, and a binary frame with 1003.
+- A connection more than 256 frames behind is closed with 1013.
+- gnotifd closes every connection with 1001 when it stops.
+
+A server may close a connection at any time. The client reconnects and sends its set again.
+
+## Push payload
+
+A Web Push carries one JSON message in a single encrypted record, so it is at most 3,993 bytes. It has one of two forms:
+
+- The full form is the [notification frame](#notification-frames) without `type`: `id`, `trigger`, `value`, `title`, `body`, `link`, `height`, `tx`, `time` and `attrs`. A push uses it when the JSON fits.
+- The short form is `{"title": "...", "body": "...", "link": "..."}`. A push uses it when the full form does not fit. A link that would overflow the record becomes `/`.
+
+A push gnotifd sends straight after reading its match has the full form when it fits. A push that comes back from the outbox (retried, held past the memory cap, or written when gnotifd stopped) does not hold its match, so it always has the short form.
+
+The service worker shows `title`, `body` and `link` from either form, and posts only the full form to the page.
 
 ## Errors
 

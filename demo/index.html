@@ -140,6 +140,8 @@ code, pre { font-family: var(--font-display); font-size: 0.92em; }
 
 .field { display: flex; flex-direction: column; gap: var(--space-2); }
 .field label { font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); }
+.field label.check { display: flex; align-items: center; gap: var(--space-2); color: var(--color-text); cursor: pointer; }
+.check input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--color-indicator); }
 .row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .row input { flex: 1 1 16rem; min-width: 0; }
 input[type="text"] { font: inherit; font-size: var(--text-base); line-height: 1.55; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-canvas); color: var(--color-text); }
@@ -175,6 +177,31 @@ input[readonly]:hover { border-color: var(--color-line); }
 .status:empty { display: none; }
 .status.error { color: var(--color-error); }
 .status .mono { font-size: var(--text-xs); }
+
+/* ---- Live arrivals */
+.arrivals { display: flex; flex-direction: column; gap: var(--space-2); }
+.arrivals ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-line); border-radius: var(--radius); overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-3); }
+.arrivals ol:empty { display: none; }
+.arrivals ol:not(:empty) + .hint { display: none; }
+.arrival { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); line-height: 1.35; }
+.arrival:not(.pending, .late) { box-shadow: inset 2px 0 var(--color-indicator); animation: arrive 1.6s ease-out; }
+.arrival:is(.pending, .late) { outline: 1px dashed var(--color-text-muted); outline-offset: calc(-1 * var(--space-1)); }
+.arrival.late { outline-color: var(--color-error); }
+.arrival:is(.pending, .late) b { color: var(--color-text-muted); font-weight: 500; }
+.arrival + .arrival { border-top: 1px solid var(--color-line); }
+.arrival time { grid-row: span 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
+.arrival b { font-weight: 600; }
+.arrival span { color: var(--color-text-muted); overflow-wrap: anywhere; }
+.arrival :is(small, .meta) { grid-column: 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
+.arrival small:empty { display: none; }
+.arrival .meta summary { width: fit-content; cursor: pointer; }
+.arrival .meta summary:hover { color: var(--color-text); }
+.arrival .meta dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 var(--space-1); }
+.arrival .meta dd { margin: 0; color: var(--color-text); overflow-wrap: anywhere; }
+.arrival.late small { color: var(--color-error); }
+.arrival time .indicator { position: relative; margin-right: var(--space-2); background: var(--color-text-muted); }
+.pending time .indicator::after { content: ""; position: absolute; inset: -0.35em; border-radius: 50%; border: 1px solid var(--color-text-muted); opacity: 0; animation: ping 2.4s ease-out infinite; }
+@keyframes arrive { from { background: color-mix(in oklch, var(--color-indicator) 22%, transparent); } }
 
 /* ---- The notification, previewed */
 .preview { display: flex; flex-direction: column; gap: var(--space-3); }
@@ -220,6 +247,7 @@ input[readonly]:hover { border-color: var(--color-line); }
 /* Reduced motion: nothing moves. Last, so it wins over every animation above. */
 @media (prefers-reduced-motion: reduce) {
   .wordmark .dot::after { animation: none; }
+  .arrival:not(.pending, .late), .pending time .indicator::after { animation: none; }
 }
 </style>
 </head>
@@ -268,6 +296,16 @@ input[readonly]:hover { border-color: var(--color-line); }
         <button type="button" class="button" id="disable" hidden>Turn off</button>
       </div>
       <p class="state" id="state"><i class="indicator" aria-hidden="true"></i><span id="state-text">Checking…</span></p>
+      <div class="field">
+        <label class="check" for="live"><input type="checkbox" id="live" aria-describedby="live-hint"> Live updates on this page</label>
+        <p class="hint" id="live-hint">Keeps a connection to the gnotif server open while this page is open, and sends it your address. Messages then show here as they arrive, with no permission prompt.</p>
+      </div>
+      <p class="state" id="live-state"><i class="indicator" aria-hidden="true"></i><span id="live-state-text">Live updates off</span></p>
+      <div class="arrivals" id="arrivals" role="log" aria-labelledby="arrivals-head" hidden>
+        <p class="eyebrow" id="arrivals-head">Arrived on this page</p>
+        <ol id="arrivals-list"></ol>
+        <p class="hint">Nothing has arrived yet.</p>
+      </div>
       <p class="status" id="message" role="status" aria-live="polite"></p>
       <details class="reveal">
         <summary>See the code</summary>
@@ -281,6 +319,13 @@ input[readonly]:hover { border-color: var(--color-line); }
 </span></span><span class="line"><span class="cl"><span class="nx">button</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">&#34;click&#34;</span><span class="p">,</span> <span class="kr">async</span> <span class="p">()</span> <span class="p">=&gt;</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">  <span class="kr">await</span> <span class="nx">gnotif</span><span class="p">.</span><span class="nx">enable</span><span class="p">();</span>
 </span></span><span class="line"><span class="cl">  <span class="kr">await</span> <span class="nx">gnotif</span><span class="p">.</span><span class="nx">setOptins</span><span class="p">([{</span> <span class="nx">trigger</span><span class="o">:</span> <span class="nx">echo</span><span class="p">.</span><span class="nx">id</span><span class="p">,</span> <span class="nx">value</span><span class="o">:</span> <span class="nx">address</span> <span class="p">}]);</span>
+</span></span><span class="line"><span class="cl"><span class="p">});</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">gnotif</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s2">&#34;notification&#34;</span><span class="p">,</span> <span class="p">(</span><span class="nx">n</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="nx">show</span><span class="p">(</span><span class="nx">n</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"><span class="nx">live</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s2">&#34;change&#34;</span><span class="p">,</span> <span class="kr">async</span> <span class="p">()</span> <span class="p">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">live</span><span class="p">.</span><span class="nx">checked</span><span class="p">)</span> <span class="k">return</span> <span class="nx">gnotif</span><span class="p">.</span><span class="nx">disconnect</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">await</span> <span class="nx">gnotif</span><span class="p">.</span><span class="nx">setOptins</span><span class="p">([{</span> <span class="nx">trigger</span><span class="o">:</span> <span class="nx">echo</span><span class="p">.</span><span class="nx">id</span><span class="p">,</span> <span class="nx">value</span><span class="o">:</span> <span class="nx">address</span> <span class="p">}]);</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">await</span> <span class="nx">gnotif</span><span class="p">.</span><span class="nx">connect</span><span class="p">();</span>
 </span></span><span class="line"><span class="cl"><span class="p">});</span></span></span></code></pre>
         </div>
       </details>

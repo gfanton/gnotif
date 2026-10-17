@@ -2,13 +2,15 @@
 
 echo sends you your own message as a browser notification: one person, one message, one notification. You turn on notifications for your gno.land address, call the echo realm with a message, and the browser shows it, even with the page closed. The page sends the message with the Adena wallet, or links to Adena's install page when the browser has none, and always gives you a gnokey command to run. Under each step, "See the code" shows the client calls and the realm functions behind it; `snippets.test.mjs` checks them against `app.mjs` and `echo.gno`. The deployed demo runs at https://demo.gnotif.xyz, on the onyx testnet, with `https://gnotif.xyz/onyx` as its server.
 
+With "Live updates on this page" switched on, the page also holds a connection to the server and lists the five newest arrivals, newest first. A message sent with Adena first shows as a waiting row with a clock; its arrival settles the row and says how many seconds it took, and a row still waiting after 60 s turns red. Each arrival shows its block. Opening it lists the block time, the transaction, the channel that delivered it, the trigger, the event's attributes and the link. Turning live updates off empties the list. A push also lists there, with live updates on or off, since the service worker passes it on to the open page.
+
 This folder holds the realms and the page:
 
 | Path | What it is |
 |---|---|
 | `gno.land/r/echo/v0/` | the echo realm, which the page calls |
 | `gno.land/r/pingpong/v0/` | pingpong, an example of a two-player dapp |
-| `index.html`, `app.mjs`, `address.mjs`, `adena.mjs`, `echo-tx.mjs`, `optin.mjs` | the page, a static dapp that opts the browser in with the `gnotif` client |
+| `index.html`, `app.mjs`, `address.mjs`, `adena.mjs`, `echo-tx.mjs`, `optin.mjs`, `live-log.mjs` | the page, a static dapp that opts the browser in with the `gnotif` client |
 | `icon.png` | the image each notification shows, the gnotif mark |
 | `config.js` | the gnotif client's options, the echo realm, the chain and the gnoweb that the page uses |
 
@@ -92,11 +94,12 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
    export $(cat .tools/vapid.env)
    go run ./cmd/gnotifd -indexer http://127.0.0.1:8546/graphql/query \
      -registry gno.land/r/dev/gnotif/v0 -start-height 1 -max-age 1h \
-     -vapid-subject <contact> -db .tools/gnotif.db
+     -stream-max 100 -vapid-subject <contact> -db .tools/gnotif.db
    ```
 
    - `<contact>` is where push services can reach you: any email address or https URL of yours.
    - `-max-age 1h` lets gnotifd notify for gnodev's blocks, whose time can be old ([Running gnotifd](../docs/running-gnotifd.md#the-indexer-and-the-start-height)).
+   - `-stream-max 100` turns on the live connections behind the page's "Live updates" switch; gnotifd refuses them by default.
 
    Within a few seconds, gnotifd lists echo's trigger, with `"verified":true`:
 

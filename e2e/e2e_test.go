@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/coder/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -38,11 +40,27 @@ type pushed struct {
 	header http.Header
 }
 
-// recorder is a TLS push server and the pushes it received.
+// recorder is a TLS push server and the pushes it received, beside an
+// external hub's -publish end and the frames it was sent.
 type recorder struct {
 	server *httptest.Server
 	mu     sync.Mutex
 	pushes []pushed
+	hooked []string
+}
+
+// hookedFor returns the frames the external hub was sent for value.
+func (r *recorder) hookedFor(value string) []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []string
+	for _, f := range r.hooked {
+		var n struct{ Value string }
+		if json.Unmarshal([]byte(f), &n) == nil && n.Value == value {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func (r *recorder) count() int {
@@ -75,6 +93,21 @@ func startGnotifd(t *testing.T, s *stack) (base string, rec *recorder) {
 	}))
 	t.Cleanup(rec.server.Close)
 
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var batch []struct{ Key, Frame string }
+		if json.NewDecoder(r.Body).Decode(&batch) != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		rec.mu.Lock()
+		for _, item := range batch {
+			rec.hooked = append(rec.hooked, item.Frame)
+		}
+		rec.mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(hook.Close)
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	base = "http://" + ln.Addr().String()
@@ -95,6 +128,8 @@ func startGnotifd(t *testing.T, s *stack) (base string, rec *recorder) {
 			VAPIDSubject: "e2e@gnotif.example",
 			PushHosts:    []string{rec.server.Listener.Addr().String()},
 			PushClient:   rec.server.Client(),
+			StreamMax:    10,
+			Publish:      hook.URL,
 			Log:          slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
 		})
 	}()
@@ -151,6 +186,18 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 		"optins":   []map[string]string{{"trigger": triggerID, "value": s.addrs["player2"]}},
 	})
 
+	liveCtx, liveCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	t.Cleanup(liveCancel)
+	live, _, err := websocket.Dial(liveCtx, base+"/v1/stream", nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { live.CloseNow() })
+	set, err := json.Marshal(map[string]any{"type": "optins", "optins": []map[string]string{{"trigger": triggerID, "value": s.addrs["player2"]}}})
+	require.NoError(t, err)
+	require.NoError(t, live.Write(liveCtx, websocket.MessageText, set))
+	_, reply, err := live.Read(liveCtx)
+	require.NoError(t, err)
+	require.Equal(t, `{"type":"optins"}`, string(reply))
+
 	s.call("devtest", "NewGame", s.addrs["player2"])
 	s.call("player2", "Accept", "0000001")
 	require.Never(t, func() bool { return count() > 0 }, 3*time.Second, 100*time.Millisecond, "a push arrived before anyone played")
@@ -180,13 +227,40 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 	}), "FetchTx(%d, %d) = %+v", playHeight, refs[i].Index, batch.Events)
 
 	rec.mu.Lock()
-	defer rec.mu.Unlock()
 	for _, p := range rec.pushes {
 		assert.Equal(t, "/push/1", p.path)
 		assert.Equal(t, "86400", p.header.Get("TTL"))
 		assert.Equal(t, "aes128gcm", p.header.Get("Content-Encoding"))
 		assert.True(t, strings.HasPrefix(p.header.Get("Authorization"), "vapid t="), p.header.Get("Authorization"))
 	}
+	rec.mu.Unlock()
+
+	// The live connection hears the same two turns, frame for frame what the
+	// external hub was sent for player2.
+	var frames []string
+	for range 2 {
+		_, frame, err := live.Read(liveCtx)
+		require.NoError(t, err)
+		frames = append(frames, string(frame))
+		var n struct {
+			Type, ID, Trigger, Value string
+			Attrs                    []struct{ Key, Value string }
+		}
+		require.NoError(t, json.Unmarshal(frame, &n))
+		assert.Equal(t, "notification", n.Type)
+		assert.Regexp(t, "^[0-9a-f]{32}$", n.ID)
+		assert.Equal(t, triggerID, n.Trigger)
+		assert.Equal(t, s.addrs["player2"], n.Value)
+		assert.Contains(t, n.Attrs, struct{ Key, Value string }{"game", "0000001"})
+	}
+	player2 := func() []string { return rec.hookedFor(s.addrs["player2"]) }
+	require.Eventually(t, func() bool { return len(player2()) == 2 }, 10*time.Second, 100*time.Millisecond)
+	assert.Equal(t, frames, player2())
+
+	conformance := exec.Command("node", "--test", "conformance/stream.test.mjs")
+	conformance.Env = append(os.Environ(), "GNOTIF_SERVER="+base, "GNOTIF_TARGET="+pingpongPath)
+	report, err := conformance.CombinedOutput()
+	require.NoError(t, err, "conformance suite:\n%s", report)
 }
 
 type listedTrigger struct {

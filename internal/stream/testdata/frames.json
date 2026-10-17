@@ -1,0 +1,50 @@
+[
+  {
+    "name": "ping",
+    "frame": "{\"type\":\"ping\"}",
+    "reply": "{\"type\":\"pong\"}"
+  },
+  {
+    "name": "spaced ping",
+    "frame": "{ \"type\": \"ping\" }",
+    "reply": "{\"type\":\"error\",\"error\":\"unknown message type\"}"
+  },
+  {
+    "name": "not JSON",
+    "frame": "hello",
+    "reply": "{\"type\":\"error\",\"error\":\"invalid JSON message\"}"
+  },
+  {
+    "name": "no type",
+    "frame": "{}",
+    "reply": "{\"type\":\"error\",\"error\":\"unknown message type\"}"
+  },
+  {
+    "name": "accepted",
+    "frame": "{\"type\":\"optins\",\"optins\":[{\"trigger\":\"0000001\",\"value\":\"g1bob\"},{\"trigger\":\"0000002\",\"value\":\"\"}]}",
+    "reply": "{\"type\":\"optins\"}",
+    "keys": [["0000001", "g1bob"], ["0000002", ""]]
+  },
+  {
+    "name": "duplicate",
+    "frame": "{\"type\":\"optins\",\"optins\":[{\"trigger\":\"0000001\",\"value\":\"g1bob\"},{\"trigger\":\"0000001\",\"value\":\"g1bob\"}]}",
+    "reply": "{\"type\":\"optins\"}",
+    "keys": [["0000001", "g1bob"]]
+  },
+  {
+    "name": "empty",
+    "frame": "{\"type\":\"optins\",\"optins\":[]}",
+    "reply": "{\"type\":\"optins\"}",
+    "keys": []
+  },
+  {
+    "name": "unknown trigger",
+    "frame": "{\"type\":\"optins\",\"optins\":[{\"trigger\":\"nope\",\"value\":\"\"}]}",
+    "reply": "{\"type\":\"error\",\"error\":\"unknown trigger \\\"nope\\\"\"}"
+  },
+  {
+    "name": "missing value",
+    "frame": "{\"type\":\"optins\",\"optins\":[{\"trigger\":\"0000001\",\"value\":\"\"}]}",
+    "reply": "{\"type\":\"error\",\"error\":\"trigger 0000001 needs a value for next\"}"
+  }
+]

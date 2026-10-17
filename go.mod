@@ -5,6 +5,7 @@ go 1.27
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.1-0.20260422052225-76cc00f5ac2d
 	github.com/alecthomas/chroma/v2 v2.27.0
+	github.com/coder/websocket v1.8.15
 	github.com/stretchr/testify v1.12.1
 	github.com/yuin/goldmark v1.8.6
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
