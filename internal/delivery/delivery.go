@@ -61,8 +61,11 @@ type Sender struct {
 	// that matches none.
 	services map[string]*service
 	rows     map[int64]bool // ids of the outbox rows held
-	held     int            // pushes queued or in flight
-	stopped  bool
+	// settled holds the outbox rows whose outcome was stored since the
+	// current check started, which that check's read may still list as due.
+	settled map[int64]bool
+	held    int // pushes queued or in flight
+	stopped bool
 }
 
 // service is one push service's queue.
@@ -97,6 +100,7 @@ func New(cfg Config) *Sender {
 		added:    make(chan struct{}, 1),
 		services: map[string]*service{},
 		rows:     map[int64]bool{},
+		settled:  map[int64]bool{},
 	}
 }
 
@@ -216,7 +220,10 @@ func (s *Sender) serve(ctx context.Context, svc *service) {
 		}
 		s.mu.Lock()
 		s.held--
-		delete(s.rows, it.row)
+		if it.row != 0 {
+			delete(s.rows, it.row)
+			s.settled[it.row] = true
+		}
 		s.mu.Unlock()
 	}
 }
@@ -242,9 +249,11 @@ func (s *Sender) next(ctx context.Context, svc *service) (item, bool) {
 }
 
 // check hands the outbox's due pushes to their routines, as many as memory
-// has room for. A row already held stays with the routine holding it.
+// has room for. A row already held stays with the routine holding it, and a
+// row settled while Due ran is skipped. Only one check runs at a time.
 func (s *Sender) check(ctx context.Context) {
 	s.mu.Lock()
+	clear(s.settled)
 	room := memoryCap - s.held
 	s.mu.Unlock()
 	if room <= 0 {
@@ -264,7 +273,7 @@ func (s *Sender) check(ctx context.Context) {
 		if s.held >= memoryCap {
 			return
 		}
-		if !s.rows[d.ID] {
+		if !s.rows[d.ID] && !s.settled[d.ID] {
 			s.hold(fromRow(d))
 		}
 	}

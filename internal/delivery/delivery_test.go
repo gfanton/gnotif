@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/gfanton/gnotif/internal/store"
+	"github.com/gfanton/gnotif/internal/store/storetest"
 	"github.com/gfanton/gnotif/internal/trigger"
 )
 
@@ -164,7 +166,13 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "gnotif.db"))
+	return newHarnessOn(t, filepath.Join(t.TempDir(), "gnotif.db"))
+}
+
+// newHarnessOn is newHarness on the store at dsn.
+func newHarnessOn(t *testing.T, dsn string) *harness {
+	t.Helper()
+	st, err := store.Open(context.Background(), dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { st.Close() })
 	priv, pub, err := webpush.GenerateVAPIDKeys()
@@ -415,6 +423,105 @@ func (h *harness) wait(t *testing.T, r *running) {
 	t.Helper()
 	require.Eventually(t, r.returned, 15*time.Second, 5*time.Millisecond, "Run did not return")
 	require.NoError(t, r.err)
+}
+
+// drive runs the routines of h.sender without Run, so that only the test
+// checks the outbox, one check at a time. The returned check checks it and
+// starts the routines of the services it found. The routines stop at the
+// test's end.
+func (h *harness) drive(t *testing.T) (check func()) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	var routines sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		for _, p := range h.services {
+			p.unblock()
+		}
+		routines.Wait()
+	})
+	return func() {
+		h.sender.check(ctx)
+		h.sender.start(ctx, &routines)
+	}
+}
+
+// outboxProxy stands between a sender and a remote store. It records the
+// most rows one Due read returned, and can hold back the answer to one.
+type outboxProxy struct {
+	url     string
+	armed   atomic.Bool
+	reached chan struct{} // closed once the held read has its answer
+	release chan struct{} // closed to send the held answer
+	once    sync.Once
+	mu      sync.Mutex
+	most    int
+}
+
+func newOutboxProxy(t *testing.T) *outboxProxy {
+	t.Helper()
+	upstream := storetest.NewServer(t)
+	p := &outboxProxy{reached: make(chan struct{}), release: make(chan struct{})}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if !assert.NoError(t, err) {
+			return
+		}
+		resp, err := http.Post(upstream.URL, "application/json", bytes.NewReader(body))
+		if !assert.NoError(t, err) {
+			return
+		}
+		defer resp.Body.Close()
+		out, err := io.ReadAll(resp.Body)
+		if !assert.NoError(t, err) {
+			return
+		}
+		if bytes.Contains(body, []byte("FROM outbox o JOIN")) {
+			var results []struct{ Rows []json.RawMessage }
+			if !assert.NoError(t, json.Unmarshal(out, &results)) || !assert.Len(t, results, 1) {
+				return
+			}
+			p.mu.Lock()
+			p.most = max(p.most, len(results[0].Rows))
+			p.mu.Unlock()
+			if p.armed.CompareAndSwap(true, false) {
+				close(p.reached)
+				<-p.release
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+		w.Write(out)
+	}))
+	t.Cleanup(srv.Close)
+	// Close waits for the held answer.
+	t.Cleanup(p.send)
+	p.url = srv.URL
+	return p
+}
+
+// hold holds back the answer to the next Due read.
+func (p *outboxProxy) hold() { p.armed.Store(true) }
+
+// send sends the held answer.
+func (p *outboxProxy) send() { p.once.Do(func() { close(p.release) }) }
+
+// mostRows returns the most rows one Due read returned.
+func (p *outboxProxy) mostRows() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.most
+}
+
+// closed reports whether ch is closed.
+func closed(ch <-chan struct{}) func() bool {
+	return func() bool {
+		select {
+		case <-ch:
+			return true
+		default:
+			return false
+		}
+	}
 }
 
 // held returns how many pushes s holds in memory.
@@ -746,17 +853,45 @@ func TestOutboxRowQueuedOnce(t *testing.T) {
 	h := newHarness(t)
 	h.queue(t, h.push.srv.URL+"/push/row", now, 0)
 	h.push.block()
-	r := h.start(t, context.Background(), h.sender)
+	check := h.drive(t)
+	check()
 	require.Eventually(t, func() bool { return h.push.count() == 1 }, 5*time.Second, 5*time.Millisecond)
 
 	for range 3 {
-		h.sender.check(context.Background())
+		check()
 	}
 	h.push.unblock()
 	require.Eventually(t, func() bool { return held(h.sender) == 0 }, 5*time.Second, 5*time.Millisecond)
-	h.stop(t, r)
 
 	assert.Equal(t, 1, h.push.count())
+	assert.Empty(t, h.outbox(t))
+}
+
+// A check's read can list a row whose outcome a routine stores before the
+// read returns; on a remote store the window is a round trip.
+func TestRowSettledDuringCheckNotQueuedAgain(t *testing.T) {
+	proxy := newOutboxProxy(t)
+	h := newHarnessOn(t, proxy.url)
+	h.queue(t, h.push.srv.URL+"/push/row", now, 0)
+	h.push.block()
+	check := h.drive(t)
+	check()
+	require.Eventually(t, func() bool { return h.push.count() == 1 }, 5*time.Second, 5*time.Millisecond)
+
+	proxy.hold()
+	checked := make(chan struct{})
+	go func() {
+		defer close(checked)
+		h.sender.check(context.Background())
+	}()
+	require.Eventually(t, closed(proxy.reached), 5*time.Second, 5*time.Millisecond, "the check never read the row")
+	h.push.unblock()
+	require.Eventually(t, func() bool { return held(h.sender) == 0 }, 5*time.Second, 5*time.Millisecond)
+	proxy.send()
+	require.Eventually(t, closed(checked), 5*time.Second, 5*time.Millisecond)
+	require.Eventually(t, func() bool { return held(h.sender) == 0 }, 5*time.Second, 5*time.Millisecond)
+
+	assert.Equal(t, 1, h.push.count(), "the delivered row was sent again")
 	assert.Empty(t, h.outbox(t))
 }
 
