@@ -167,7 +167,6 @@ Limits:
   written at stop), or too large for the full form, reaches the OS
   only.
 - Every open tab gets its own copy of a relayed push.
-- iOS home-screen apps may not receive the relay.
 
 ### `on(event, handler)`
 
