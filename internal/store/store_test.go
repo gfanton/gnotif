@@ -214,7 +214,7 @@ func TestEnqueueIdempotent(t *testing.T) {
 
 	assert.True(t, enqueue(t, s, push(sub, "h1")))
 	assert.False(t, enqueue(t, s, push(sub, "h1")))
-	due, err := s.Due(ctx, now, 10)
+	due, err := s.Due(ctx, now, DueKey{}, 10)
 	require.NoError(t, err)
 	assert.Len(t, due, 1)
 }
@@ -248,7 +248,7 @@ func TestPutSubscriptionKeepsOptins(t *testing.T) {
 		ids := optedIn(t, s, "t1", "g1bob")
 		require.Len(t, ids, 1)
 		seedPush(t, s, push(ids[0], "h1"))
-		due, err := s.Due(ctx, now, 10)
+		due, err := s.Due(ctx, now, DueKey{}, 10)
 		require.NoError(t, err)
 		require.Len(t, due, 1)
 		assert.Equal(t, Subscription{Endpoint: "E", P256dh: "K2-p", Auth: "K2-a"}, due[0].Subscription)
@@ -295,7 +295,7 @@ func TestDueAndReschedule(t *testing.T) {
 			seedPush(t, s, push(sub, h))
 		}
 
-		due, err := s.Due(ctx, now, 2)
+		due, err := s.Due(ctx, now, DueKey{}, 2)
 		require.NoError(t, err)
 		require.Len(t, due, 2)
 		assert.Less(t, due[0].ID, due[1].ID)
@@ -305,20 +305,20 @@ func TestDueAndReschedule(t *testing.T) {
 		first := due[0].ID
 
 		require.NoError(t, s.Reschedule(ctx, first, now.Add(time.Minute)))
-		due, err = s.Due(ctx, now, 10)
+		due, err = s.Due(ctx, now, DueKey{}, 10)
 		require.NoError(t, err)
 		assert.Len(t, due, 2)
 		for _, d := range due {
 			assert.NotEqual(t, first, d.ID)
 		}
-		later, err := s.Due(ctx, now.Add(time.Minute), 10)
+		later, err := s.Due(ctx, now.Add(time.Minute), DueKey{}, 10)
 		require.NoError(t, err)
 		require.Len(t, later, 3)
 		assert.Equal(t, first, later[2].ID)
 		assert.Equal(t, 1, later[2].Attempts)
 
 		require.NoError(t, s.DeleteDelivery(ctx, first))
-		due, err = s.Due(ctx, now.Add(time.Minute), 10)
+		due, err = s.Due(ctx, now.Add(time.Minute), DueKey{}, 10)
 		require.NoError(t, err)
 		assert.Len(t, due, 2)
 	})
@@ -335,7 +335,7 @@ func TestRemoveSubscriptionCascades(t *testing.T) {
 
 		require.NoError(t, s.RemoveSubscription(ctx, sub))
 		assert.Empty(t, optedIn(t, s, "t1", "g1bob"))
-		due, err := s.Due(ctx, now, 10)
+		due, err := s.Due(ctx, now, DueKey{}, 10)
 		require.NoError(t, err)
 		assert.Empty(t, due)
 	})
@@ -353,7 +353,7 @@ func TestMoveSubscription(t *testing.T) {
 
 			require.NoError(t, s.MoveSubscription(ctx, "OLD", Subscription{Endpoint: "NEW", P256dh: "K2-p", Auth: "K2-a"}))
 			assert.Equal(t, []int64{sub}, optedIn(t, s, "t1", "g1bob"))
-			due, err := s.Due(ctx, now, 10)
+			due, err := s.Due(ctx, now, DueKey{}, 10)
 			require.NoError(t, err)
 			require.Len(t, due, 1)
 			assert.Equal(t, Subscription{Endpoint: "NEW", P256dh: "K2-p", Auth: "K2-a"}, due[0].Subscription)
@@ -398,13 +398,13 @@ func TestIDsNotReused(t *testing.T) {
 			subscribe(t, s, "E", "K1", Optin{TriggerID: "t1", Value: "g1bob"})
 			sub := optedIn(t, s, "t1", "g1bob")[0]
 			seedPush(t, s, push(sub, "h1"))
-			due, err := s.Due(ctx, now, 10)
+			due, err := s.Due(ctx, now, DueKey{}, 10)
 			require.NoError(t, err)
 			require.Len(t, due, 1)
 			require.NoError(t, s.DeleteDelivery(ctx, due[0].ID))
 
 			seedPush(t, s, push(sub, "h2"))
-			due2, err := s.Due(ctx, now, 10)
+			due2, err := s.Due(ctx, now, DueKey{}, 10)
 			require.NoError(t, err)
 			require.Len(t, due2, 1)
 			assert.NotEqual(t, due[0].ID, due2[0].ID)
@@ -535,7 +535,7 @@ func TestMatchingUsesIndex(t *testing.T) {
 
 func TestDueUsesIndex(t *testing.T) {
 	s := fresh(t)
-	rows, err := s.db.Query(`EXPLAIN QUERY PLAN `+selectDue, 0, 10)
+	rows, err := s.db.Query(`EXPLAIN QUERY PLAN `+selectDue, now.UnixMilli(), now.Add(-time.Minute).UnixMilli(), 1, 10)
 	require.NoError(t, err)
 	defer rows.Close()
 	var plan string

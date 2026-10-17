@@ -28,6 +28,7 @@ const (
 	maxBackoff  = time.Hour
 	maxQueueAge = 24 * time.Hour
 	checkEvery  = time.Second
+	checkPage   = 100
 	// memoryCap is the most pushes held in memory, queued or in flight, across
 	// every push service.
 	memoryCap = 10_000
@@ -64,7 +65,8 @@ type Sender struct {
 	// settled holds the outbox rows whose outcome was stored since the
 	// current check started, which that check's read may still list as due.
 	settled map[int64]bool
-	held    int // pushes queued or in flight
+	after   store.DueKey // where the next check's page starts
+	held    int          // pushes queued or in flight
 	stopped bool
 }
 
@@ -248,18 +250,22 @@ func (s *Sender) next(ctx context.Context, svc *service) (item, bool) {
 	return item{}, false
 }
 
-// check hands the outbox's due pushes to their routines, as many as memory
-// has room for. A row already held stays with the routine holding it, and a
-// row settled while Due ran is skipped. Only one check runs at a time.
+// check hands one page of the outbox's due pushes to their routines: at most
+// checkPage, and no more than memory has room for. A page starts after the
+// last row the previous one read, and the reads start over after a short
+// page, so rows held by a stalled service cannot keep the others out of
+// reach. A row already held stays with the routine holding it, and a row
+// settled while Due ran is skipped. Only one check runs at a time.
 func (s *Sender) check(ctx context.Context) {
 	s.mu.Lock()
 	clear(s.settled)
-	room := memoryCap - s.held
+	limit := min(checkPage, memoryCap-s.held)
+	after := s.after
 	s.mu.Unlock()
-	if room <= 0 {
+	if limit <= 0 {
 		return
 	}
-	due, err := s.cfg.Store.Due(ctx, s.cfg.Now(), room)
+	page, err := s.cfg.Store.Due(ctx, s.cfg.Now(), after, limit)
 	if err != nil {
 		if ctx.Err() == nil {
 			s.cfg.Log.Warn("outbox check failed", "err", err)
@@ -268,7 +274,12 @@ func (s *Sender) check(ctx context.Context) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, d := range due {
+	s.after = store.DueKey{}
+	if len(page) == limit {
+		last := page[len(page)-1]
+		s.after = store.DueKey{At: last.NextAttempt, ID: last.ID}
+	}
+	for _, d := range page {
 		// Send may have filled the room while Due ran.
 		if s.held >= memoryCap {
 			return

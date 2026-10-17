@@ -72,7 +72,15 @@ type Delivery struct {
 	Subscription   Subscription
 	Notification   trigger.Notification
 	Attempts       int
+	NextAttempt    time.Time
 	CreatedAt      time.Time
+}
+
+// DueKey is a place in the outbox's due order: by next attempt, then by id.
+// The zero DueKey comes before every queued push.
+type DueKey struct {
+	At time.Time
+	ID int64
 }
 
 // Open opens or creates the store and its schema. A dsn starting with
@@ -292,16 +300,16 @@ func (s *Store) RemoveSubscription(ctx context.Context, id int64) error {
 
 const selectDue = `
 	SELECT o.id, o.subscription_id, s.endpoint, s.p256dh, s.auth,
-	       o.title, o.body, o.link, o.attempts, o.created_at
+	       o.title, o.body, o.link, o.attempts, o.next_attempt_at, o.created_at
 	FROM outbox o JOIN subscriptions s ON s.id = o.subscription_id
-	WHERE o.next_attempt_at <= ?
+	WHERE o.next_attempt_at <= ? AND (o.next_attempt_at, o.id) > (?, ?)
 	ORDER BY o.next_attempt_at, o.id
 	LIMIT ?`
 
 // Due returns at most limit queued pushes whose next attempt is at or
-// before now, earliest due first.
-func (s *Store) Due(ctx context.Context, now time.Time, limit int) ([]Delivery, error) {
-	res, err := s.Exec(ctx, []Statement{{selectDue, []any{now.UTC().UnixMilli(), limit}}})
+// before now, in due order from the first after after.
+func (s *Store) Due(ctx context.Context, now time.Time, after DueKey, limit int) ([]Delivery, error) {
+	res, err := s.Exec(ctx, []Statement{{selectDue, []any{now.UTC().UnixMilli(), after.At.UTC().UnixMilli(), after.ID, limit}}})
 	if err != nil {
 		return nil, fmt.Errorf("read due pushes: %w", err)
 	}
@@ -318,7 +326,7 @@ func (s *Store) Due(ctx context.Context, now time.Time, limit int) ([]Delivery, 
 
 func scanDelivery(r map[string]any) (Delivery, error) {
 	var d Delivery
-	var attempts, created int64
+	var attempts, next, created int64
 	var err error
 	for _, c := range []struct {
 		name string
@@ -327,13 +335,14 @@ func scanDelivery(r map[string]any) (Delivery, error) {
 		{"id", &d.ID}, {"subscription_id", &d.SubscriptionID},
 		{"endpoint", &d.Subscription.Endpoint}, {"p256dh", &d.Subscription.P256dh}, {"auth", &d.Subscription.Auth},
 		{"title", &d.Notification.Title}, {"body", &d.Notification.Body}, {"link", &d.Notification.Link},
-		{"attempts", &attempts}, {"created_at", &created},
+		{"attempts", &attempts}, {"next_attempt_at", &next}, {"created_at", &created},
 	} {
 		if err = column(r, c.name, c.dst); err != nil {
 			return Delivery{}, err
 		}
 	}
 	d.Attempts = int(attempts)
+	d.NextAttempt = time.UnixMilli(next).UTC()
 	d.CreatedAt = time.UnixMilli(created).UTC()
 	return d, nil
 }

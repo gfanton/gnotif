@@ -70,7 +70,7 @@ func TestQueueIsIdempotent(t *testing.T) {
 		require.NoError(t, s.Queue(ctx, []Pending{p}))
 		require.NoError(t, s.Queue(ctx, []Pending{p}))
 
-		due, err := s.Due(ctx, now, 10)
+		due, err := s.Due(ctx, now, DueKey{}, 10)
 		require.NoError(t, err)
 		require.Len(t, due, 1)
 		assert.Equal(t, 3, due[0].Attempts)
@@ -87,12 +87,38 @@ func TestQueueDueAtNextAttempt(t *testing.T) {
 
 		require.NoError(t, s.Queue(ctx, []Pending{p}))
 
-		due, err := s.Due(ctx, now, 10)
+		due, err := s.Due(ctx, now, DueKey{}, 10)
 		require.NoError(t, err)
 		assert.Empty(t, due)
-		due, err = s.Due(ctx, p.NextAttempt, 10)
+		due, err = s.Due(ctx, p.NextAttempt, DueKey{}, 10)
 		require.NoError(t, err)
 		assert.Len(t, due, 1)
+	})
+}
+
+func TestDuePagesAfterKey(t *testing.T) {
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		ctx := context.Background()
+		s := fresh(t)
+		sub := queueFixture(t, s)
+		require.NoError(t, s.Queue(ctx, []Pending{
+			{Push: push(sub, "late"), NextAttempt: now},
+			{Push: push(sub, "early"), NextAttempt: now.Add(-time.Minute)},
+			{Push: push(sub, "early too"), NextAttempt: now.Add(-time.Minute)},
+		}))
+
+		first, err := s.Due(ctx, now, DueKey{}, 2)
+		require.NoError(t, err)
+		require.Len(t, first, 2)
+		last := first[1]
+		rest, err := s.Due(ctx, now, DueKey{At: last.NextAttempt, ID: last.ID}, 2)
+		require.NoError(t, err)
+		require.Len(t, rest, 1)
+
+		page := append(first, rest...)
+		assert.Equal(t, []time.Time{now.Add(-time.Minute), now.Add(-time.Minute), now},
+			[]time.Time{page[0].NextAttempt, page[1].NextAttempt, page[2].NextAttempt})
+		assert.Less(t, page[0].ID, page[1].ID, "ties go by id")
 	})
 }
 

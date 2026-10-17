@@ -276,7 +276,7 @@ func numbered(p store.Push, first, n int) []store.Push {
 // flush sends every due outbox push once, as a routine does.
 func (h *harness) flush(t *testing.T) {
 	t.Helper()
-	due, err := h.store.Due(context.Background(), now, memoryCap)
+	due, err := h.store.Due(context.Background(), now, store.DueKey{}, memoryCap)
 	require.NoError(t, err)
 	for _, d := range due {
 		require.NoError(t, h.sender.deliver(context.Background(), fromRow(d)))
@@ -286,7 +286,7 @@ func (h *harness) flush(t *testing.T) {
 // delivery returns the queued push for endpoint due at or before at.
 func (h *harness) delivery(t *testing.T, endpoint string, at time.Time) (store.Delivery, bool) {
 	t.Helper()
-	due, err := h.store.Due(context.Background(), at, 100)
+	due, err := h.store.Due(context.Background(), at, store.DueKey{}, 100)
 	require.NoError(t, err)
 	for _, d := range due {
 		if d.Subscription.Endpoint == endpoint {
@@ -299,7 +299,7 @@ func (h *harness) delivery(t *testing.T, endpoint string, at time.Time) (store.D
 // outbox returns the titles of the outbox's pushes, earliest due first.
 func (h *harness) outbox(t *testing.T) []string {
 	t.Helper()
-	due, err := h.store.Due(context.Background(), now.Add(48*time.Hour), memoryCap)
+	due, err := h.store.Due(context.Background(), now.Add(48*time.Hour), store.DueKey{}, memoryCap)
 	require.NoError(t, err)
 	out := make([]string, 0, len(due))
 	for _, d := range due {
@@ -893,6 +893,38 @@ func TestRowSettledDuringCheckNotQueuedAgain(t *testing.T) {
 
 	assert.Equal(t, 1, h.push.count(), "the delivered row was sent again")
 	assert.Empty(t, h.outbox(t))
+}
+
+// Rows held by a stalled push service must not fill every check's read and
+// keep another service's due rows out of reach.
+func TestCheckPagesPastHeldRows(t *testing.T) {
+	proxy := newOutboxProxy(t)
+	h := newHarnessOn(t, proxy.url)
+	other := h.newService(t)
+	h.sender.cfg.PushHosts = []string{h.push.host(), other.host()}
+	stalled := numbered(h.subscribe(t, h.push.srv.URL+"/push/stalled"), 1, checkPage+50)
+	pending := make([]store.Pending, len(stalled))
+	for i, p := range stalled {
+		pending[i] = store.Pending{Push: p, NextAttempt: now}
+	}
+	require.NoError(t, h.store.Queue(context.Background(), pending))
+	h.queue(t, other.srv.URL+"/push/free", now, 0)
+	h.push.block()
+	check := h.drive(t)
+
+	require.Eventually(t, func() bool {
+		check()
+		return other.count() == 1
+	}, 5*time.Second, 5*time.Millisecond)
+
+	// Due before every row read so far: reached once a short page starts the
+	// reads over.
+	h.queuePush(t, queued{endpoint: other.srv.URL + "/push/early", created: now.Add(-time.Minute)})
+	require.Eventually(t, func() bool {
+		check()
+		return other.count() == 2
+	}, 5*time.Second, 5*time.Millisecond)
+	assert.LessOrEqual(t, proxy.mostRows(), checkPage, "a check read more than one page")
 }
 
 // The outbox check fills memory up to the cap and leaves the other due rows
