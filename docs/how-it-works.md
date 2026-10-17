@@ -106,7 +106,7 @@ A notification is a hint, and the chain holds the truth: a page reads the state 
 
 ## The service worker
 
-The dapp's `sw.js` shows each push, opens its link on a click, and [hands a renewed subscription to the server](http-api.md#replace-a-rotated-subscription). [The client's README](../js/README.md#notifications) describes how it behaves.
+The dapp's `sw.js` shows each push, opens its link on a click, posts each full push to the open pages in its scope, and [hands a renewed subscription to the server](http-api.md#replace-a-rotated-subscription). [The client's README](../js/README.md#notifications) describes how it behaves.
 
 ## Rules for gnotif servers
 
@@ -118,6 +118,7 @@ Any server built on the registry, gnotifd or another, must:
 - fall back to `/` when a filled-in link starts with `//`;
 - send a live connection only the matches for its exact opt-ins;
 - give a live notification the same title, body and link as the push of the same match;
+- give a live notification an `id`, and the full push of the same match the same `id`;
 - leave the final origin check to the client: the service worker opens a link only when it resolves to the dapp's own origin.
 
 ## Rules for a new registry version

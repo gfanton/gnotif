@@ -76,7 +76,8 @@ keeping an id. It rejects with a `TypeError`, before any request, when
 ### `enable()`
 
 Asks for notification permission, subscribes the browser, and registers
-it with the server, with the opt-ins `setOptins` kept if it was called.
+it with the server, with the items of the opt-ins `setOptins` kept
+that are not `push: false`, if it was called.
 It resolves the subscription as `PushSubscriptionJSON`. Call it from a
 user gesture such as a click, or the browser may refuse or hide the
 permission prompt.
@@ -138,9 +139,9 @@ chain, so a notification that lands during the read is not lost:
 const off = gnotif.on("notification", (n) => refreshFromChain());
 gnotif.on("reconnect", () => refreshFromChain());
 
+const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
 await gnotif.setOptins([
-  { trigger: message.id, value: address },
-  { trigger: turn.id, value: address, push: false }, // the page only
+  { trigger: message.id, value: address, push: false }, // the page only
 ]);
 await gnotif.connect();
 await refreshFromChain();
@@ -163,7 +164,8 @@ Limits:
 
 - An old copy of `sw.js` relays nothing. Copy it again after an
   upgrade.
-- A push that was retried, or too large for the relay, reaches the OS
+- A push sent from the outbox (retried, held past the memory cap, or
+  written at stop), or too large for the full form, reaches the OS
   only.
 - Every open tab gets its own copy of a relayed push.
 - iOS home-screen apps may not receive the relay.
@@ -187,8 +189,10 @@ another origin arrives as the service worker's scope, as for a push: the
 path `sw.js` is served from, `/` for a dapp at the root of its origin.
 `attrs` lists the event's attributes as `{ key, value }`, `height` and
 `tx` name the transaction that emitted the event, and `time` is the
-block's time, in UTC, as RFC 3339. A frame without `time` reaches no
-handler, so this client needs a server that sends it.
+block's time, in UTC, as RFC 3339. A frame that lacks any of `id`,
+`trigger`, `value`, `title`, `body`, `link`, `height`, `tx`, `time` or
+`attrs` reaches no handler, so this client needs a server that sends
+them all.
 
 Nothing is replayed after a drop, so read the state from the chain
 again on `reconnect`.
