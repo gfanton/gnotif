@@ -251,7 +251,7 @@ export class Gnotif {
     const { publicKey } = /** @type {{ publicKey: string }} */ (await this.#request("GET", "/v1/vapid"));
     const key = base64UrlToBytes(publicKey);
     let sub = await reg.pushManager.getSubscription();
-    if (sub && !sameKey(sub.options.applicationServerKey, key)) {
+    if (sub !== null && !sameKey(sub.options.applicationServerKey, key)) {
       await sub.unsubscribe();
       sub = null;
     }
@@ -277,14 +277,14 @@ export class Gnotif {
     const gen = ++this.#gen;
     /** @type {Promise<unknown>[]} */
     const pending = [];
-    if (this.#wanted) {
+    if (this.#wanted && this.#ws?.readyState === WebSocket.OPEN) {
       pending.push(new Promise((resolve, reject) => {
         this.#waiters.push({ gen, resolve: () => resolve(undefined), reject });
       }));
       this.#send();
     }
     pending.push(this.#find().then((sub) =>
-      sub ? this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins: this.#items(true) }) : null));
+      sub !== null ? this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins: this.#items(true) }) : null));
     await Promise.all(pending);
   }
 
@@ -316,7 +316,7 @@ export class Gnotif {
    * @returns {Promise<void>}
    */
   connect() {
-    if (this.#connecting) {
+    if (this.#connecting !== null) {
       return this.#connecting.promise;
     }
     if (this.#wanted) {
@@ -419,7 +419,7 @@ export class Gnotif {
     } catch (err) {
       // A browser refuses some URLs at once, such as ws: from an https:
       // page: the first connect fails, and a reconnect tries again later.
-      if (this.#connecting) {
+      if (this.#connecting !== null) {
         this.#stop(new GnotifError("network", err instanceof Error ? err.message : String(err)));
       } else {
         this.#onClose();
@@ -572,7 +572,7 @@ export class Gnotif {
       }
     } else {
       const e = new GnotifError("server", err);
-      if (this.#connecting || this.#reconnecting) {
+      if (this.#connecting !== null || this.#reconnecting) {
         // The set this connection opened with was refused, so it holds no
         // opt-ins: there is nothing to keep open.
         this.#fail(e);
@@ -602,7 +602,7 @@ export class Gnotif {
       this.#fail(new GnotifError("server", `The server closed the live connection with code ${code}.`));
       return;
     }
-    if (this.#connecting) {
+    if (this.#connecting !== null) {
       this.#stop(new GnotifError("network", "The live connection closed before the server answered."));
       return;
     }

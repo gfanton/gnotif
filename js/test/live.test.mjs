@@ -321,6 +321,22 @@ test("setOptins while reconnecting sends the latest set once", async (t) => {
   await Promise.all([p1, p2]);
 });
 
+// A reconnect the server keeps refusing must not hold setOptins: the set goes
+// out when a socket opens again.
+test("setOptins resolves while reconnecting, and the reopened socket sends the set", async (t) => {
+  stubLive(t, 0);
+  const g = await connected(t);
+  last().drop();
+  const outcome = await Promise.race([
+    g.setOptins(B).then(() => "settled"),
+    new Promise((resolve) => setImmediate(() => resolve("pending"))),
+  ]);
+  assert.equal(outcome, "settled");
+  t.mock.timers.tick(500);
+  last().open();
+  assert.deepEqual(last().optinsSent(), [B]);
+});
+
 test("one optins frame in flight", async (t) => {
   stubLive(t);
   const g = await connected(t, []);
