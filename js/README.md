@@ -93,12 +93,15 @@ It throws a `GnotifError` with code:
 
 ### `setOptins(optins)`
 
-Keeps `optins`, a list of `{ trigger, value }` where `value` is `""` for
-a trigger without a param, as the set both channels use. It sends the
-set to the live connection when one is open, and to the server for push
-when the browser holds a push subscription, and resolves once each has
-accepted it. With neither, it only keeps the set, for a later
-`enable()` or `connect()`. It throws a `GnotifError` with code `server`
+Keeps `optins`, a list of `{ trigger, value, push }` where `value` is
+`""` for a trigger without a param, as the set both channels use. `push:
+false` keeps an item off push, so the page hears it live only; push
+stays on when `push` is absent. It sends every item to the live
+connection when one is open, and the items that are not `push: false`
+to the server for push when the browser holds a push subscription, and
+resolves once each has accepted its part. With neither, it only keeps
+the set, for a later `enable()` or `connect()`. The server never sees
+`push`. It throws a `GnotifError` with code `server`
 when the server refuses the set: for push, status 400 for an opt-in
 that breaks a rule and 404 when the server does not know the
 subscription, which `enable()` registers again.
@@ -121,18 +124,49 @@ subscription, is not an error. It throws a `GnotifError` with code
 `inactive` when the browser holds no push subscription, and `server` on
 any other server error.
 
-## Live updates
+## Notifications on the page
 
-An open page can receive its notifications as they happen, with no
-permission prompt and no service worker:
+An open page receives its notifications through one handler, whether
+they arrive over the live connection or as a push that `sw.js` relays
+to the page. The handler runs once per notification, whichever channel
+delivers it first, and `source` says which: `"live"` or `"push"`. Live
+needs no permission prompt and no service worker. Register the handler
+first, set the opt-ins, connect, and only then read the state from the
+chain, so a notification that lands during the read is not lost:
 
 ```js
-const off = gnotif.on("notification", (n) => show(n));
+const off = gnotif.on("notification", (n) => refreshFromChain());
 gnotif.on("reconnect", () => refreshFromChain());
 
-await gnotif.setOptins(optins);
+await gnotif.setOptins([
+  { trigger: message.id, value: address },
+  { trigger: turn.id, value: address, push: false }, // the page only
+]);
 await gnotif.connect();
+await refreshFromChain();
 ```
+
+A notification is a hint, so the handler reads the chain again rather
+than trusting the notification's fields. A notification that lands while
+a read runs needs one more read, not one per notification. A page that
+keeps the height of what it shows can skip a notification whose
+`height` is not above it.
+
+An item with `push: false` is never registered for push, so the OS shows
+nothing for it. A push relayed to the page reaches the handler only for
+an item in the kept set, `push: false` or not.
+
+`disconnect()` stops live only. Relayed pushes keep reaching a handler
+until the function `on()` returns removes it.
+
+Limits:
+
+- An old copy of `sw.js` relays nothing. Copy it again after an
+  upgrade.
+- A push that was retried, or too large for the relay, reaches the OS
+  only.
+- Every open tab gets its own copy of a relayed push.
+- iOS home-screen apps may not receive the relay.
 
 ### `on(event, handler)`
 
@@ -143,7 +177,7 @@ throws a `TypeError`.
 
 | Event | The handler receives | When |
 |---|---|---|
-| `notification` | `trigger`, `value`, `title`, `body`, `link`, `height`, `tx`, `time` and `attrs` | a live notification arrives |
+| `notification` | `id`, `source`, `trigger`, `value`, `title`, `body`, `link`, `height`, `tx`, `time` and `attrs` | a notification arrives, live or by push |
 | `reconnecting` | nothing | the connection dropped and is retrying |
 | `reconnect` | nothing | it is back, with the set sent again |
 | `error` | a `GnotifError` | live updates stopped by themselves, or a live failure no promise waits on |
@@ -156,8 +190,8 @@ path `sw.js` is served from, `/` for a dapp at the root of its origin.
 block's time, in UTC, as RFC 3339. A frame without `time` reaches no
 handler, so this client needs a server that sends it.
 
-A notification is a hint: read the state the page shows from the chain.
-Nothing is replayed after a drop, so read it again on `reconnect`.
+Nothing is replayed after a drop, so read the state from the chain
+again on `reconnect`.
 
 ### `connect()`
 
@@ -215,7 +249,7 @@ to the server in place of the old, so the opt-ins carry over.
 ## Types
 
 Types ship with the package as `.d.ts` files, including the `Trigger`
-type that `triggers()` resolves, `Optin`, and the `LiveNotification`
+type that `triggers()` resolves, `Optin`, and the `GnotifNotification`
 that `notification` handlers receive.
 
 ## License

@@ -98,16 +98,21 @@ button.addEventListener("click", async () => {
 
 ### Live updates on the page
 
-An open page can also receive each notification as it happens, with no permission prompt and no service worker:
+An open page can also receive each notification as it happens, with no permission prompt and no service worker. One handler gets both the live ones and the pushes the service worker passes to the page, once each. Register it, set the opt-ins, connect, and only then read the state from the chain:
 
 ```js
-gnotif.on("notification", (n) => show(n));
-await gnotif.setOptins([{ trigger: message.id, value: address }]);
+gnotif.on("notification", (n) => refreshFromChain());
+await gnotif.setOptins([
+  { trigger: message.id, value: address },
+  { trigger: turn.id, value: address, push: false }, // the page only
+]);
 await gnotif.connect();
+await refreshFromChain();
 ```
 
-- `on("notification")` receives the notification's title, body and link, with the event's attributes and the block it is in. `show` is your page's own code.
-- `connect()` sends the set to the server, address included, so call it when the person asks for live updates. `disconnect()` closes the connection.
+- `on("notification")` receives the notification's title, body and link, with the event's attributes, the block it is in, and a `source` of `"live"` or `"push"`. A notification is a hint, so the handler reads the chain again. `refreshFromChain` is your page's own code.
+- `push: false` keeps an item off push: the page hears it live only, and the OS shows nothing for it. An item without `push` is pushed as before.
+- `connect()` sends the set to the server, address included, so call it when the person asks for live updates. `disconnect()` closes the live connection only; pushes still reach the handler until the function `on()` returns removes it.
 - After a drop the connection comes back by itself, firing `reconnecting` and then `reconnect`. Nothing sent in between is replayed, so read the page's state from the chain again on `reconnect`.
 - gnotif.xyz serves live updates. A gnotifd of your own serves them once you set `-stream-max` ([Running gnotifd](running-gnotifd.md#flags)).
 

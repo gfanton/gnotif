@@ -22,6 +22,8 @@
  * @typedef {object} Optin
  * @property {string} trigger trigger id
  * @property {string} value the param value, "" for a trigger without a param
+ * @property {boolean} [push] false keeps the item off push: the page hears
+ *   it live only. Push stays on when absent.
  */
 
 /**
@@ -257,7 +259,7 @@ export class Gnotif {
     const json = sub.toJSON();
     await this.#request("PUT", "/v1/subscription", json);
     if (this.#optins !== null) {
-      await this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins: this.#optins });
+      await this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins: this.#items(true) });
     }
     return json;
   }
@@ -265,7 +267,8 @@ export class Gnotif {
   /**
    * Keeps optins as the set every channel uses, and sends it to the live
    * connection when one is open, and to the server for push when this
-   * browser is subscribed. Resolves once each has accepted it.
+   * browser is subscribed, less the items with push: false. Resolves once
+   * each has accepted its part.
    * @param {Optin[]} optins replaces the previous set
    * @returns {Promise<void>}
    */
@@ -281,7 +284,7 @@ export class Gnotif {
       this.#send();
     }
     pending.push(this.#find().then((sub) =>
-      sub ? this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins }) : null));
+      sub ? this.#request("PUT", "/v1/subscription/optins", { endpoint: sub.endpoint, optins: this.#items(true) }) : null));
     await Promise.all(pending);
   }
 
@@ -467,7 +470,18 @@ export class Gnotif {
     this.#inFlight = true;
     this.#dirty = false;
     this.#sentGen = this.#gen;
-    ws.send(JSON.stringify({ type: "optins", optins: this.#optins ?? [] }));
+    ws.send(JSON.stringify({ type: "optins", optins: this.#items(false) }));
+  }
+
+  // #items returns the kept set as the server takes it, without the push key.
+  /**
+   * @param {boolean} pushOnly leave out the items with push: false
+   * @returns {{ trigger: string, value: string }[]}
+   */
+  #items(pushOnly) {
+    return (this.#optins ?? [])
+      .filter((o) => !pushOnly || o.push !== false)
+      .map(({ trigger, value }) => ({ trigger, value }));
   }
 
   /** @param {string} text */

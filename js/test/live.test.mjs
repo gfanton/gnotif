@@ -350,6 +350,15 @@ test("disconnect closes and stops reconnecting", async (t) => {
   assert.equal(events, 0);
 });
 
+test("the live set carries every item, without the push key", async (t) => {
+  stubLive(t);
+  await connected(t, [{ trigger: "0000001", value: "g1bob" }, { trigger: "0000002", value: "g1bob", push: false }]);
+  assert.deepEqual(last().optinsSent()[0], [
+    { trigger: "0000001", value: "g1bob" },
+    { trigger: "0000002", value: "g1bob" },
+  ]);
+});
+
 test("unknown frame types are ignored", async (t) => {
   stubLive(t);
   const g = await connected(t);
