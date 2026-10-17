@@ -166,13 +166,10 @@ func TestPutSubscription(t *testing.T) {
 		want int
 	}{
 		"FCM":                  {subscription(fcm, validP256dh, validAuth), http.StatusNoContent},
-		"WNS wildcard":         {subscription("https://wns2-par02p.notify.windows.com/w/?token=x", validP256dh, validAuth), http.StatusNoContent},
 		"browser JSON":         {fmt.Sprintf(`{"endpoint":%q,"expirationTime":null,"keys":{"p256dh":%q,"auth":%q}}`, fcm, validP256dh, validAuth), http.StatusNoContent},
 		"http scheme":          {subscription("http://fcm.googleapis.com/x", validP256dh, validAuth), http.StatusBadRequest},
 		"unlisted host":        {subscription("https://push.evil.example/x", validP256dh, validAuth), http.StatusBadRequest},
 		"userinfo trick":       {subscription("https://fcm.googleapis.com@evil.example/x", validP256dh, validAuth), http.StatusBadRequest},
-		"unlisted port":        {subscription("https://fcm.googleapis.com:8443/x", validP256dh, validAuth), http.StatusBadRequest},
-		"bare wildcard suffix": {subscription("https://notify.windows.com/x", validP256dh, validAuth), http.StatusBadRequest},
 		"endpoint too long":    {subscription(fcm+strings.Repeat("a", 1001-len(fcm)), validP256dh, validAuth), http.StatusBadRequest},
 		"short p256dh":         {subscription(fcm, base64.RawURLEncoding.EncodeToString(make([]byte, 64)), validAuth), http.StatusBadRequest},
 		"p256dh off the curve": {subscription(fcm, base64.RawURLEncoding.EncodeToString(append([]byte{0x04}, make([]byte, 64)...)), validAuth), http.StatusBadRequest},

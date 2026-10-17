@@ -100,22 +100,16 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	now := func() time.Time { return time.Now().UTC() }
-	wake := make(chan struct{}, 1)
-	queue := func(ctx context.Context, pushes []store.Push) {
-		pending := make([]store.Pending, len(pushes))
-		at := now()
-		for i, p := range pushes {
-			pending[i] = store.Pending{Push: p, NextAttempt: at}
-		}
-		if err := st.Queue(ctx, pending); err != nil {
-			cfg.Log.Error("drop pushes", "count", len(pushes), "err", err)
-			return
-		}
-		select {
-		case wake <- struct{}{}:
-		default:
-		}
-	}
+	sender := delivery.New(delivery.Config{
+		Store:     st,
+		Client:    cmp.Or(cfg.PushClient, delivery.NewClient()),
+		Keys:      cfg.VAPID,
+		Subject:   cfg.VAPIDSubject,
+		TTL:       pushTTL,
+		PushHosts: cfg.PushHosts,
+		Now:       now,
+		Log:       cfg.Log,
+	})
 	watcher := watch.New(watch.Config{
 		Source:      indexer.New(cfg.Indexer, cmp.Or(cfg.IndexerClient, &http.Client{Timeout: 30 * time.Second})),
 		Store:       st,
@@ -125,20 +119,10 @@ func Run(ctx context.Context, cfg Config) error {
 		MaxAge:      cfg.MaxAge,
 		MaxWindow:   maxWindow,
 		StoreEvery:  storeEvery,
-		Send:        queue,
+		Send:        sender.Send,
 		Now:         now,
 		Log:         cfg.Log,
 		Publish:     publish,
-	})
-	sender := delivery.New(delivery.Config{
-		Store:   st,
-		Client:  cmp.Or(cfg.PushClient, delivery.NewClient()),
-		Keys:    cfg.VAPID,
-		Subject: cfg.VAPIDSubject,
-		TTL:     pushTTL,
-		Wake:    wake,
-		Now:     now,
-		Log:     cfg.Log,
 	})
 
 	mux := http.NewServeMux()
@@ -158,10 +142,15 @@ func Run(ctx context.Context, cfg Config) error {
 
 	loopCtx, stop := context.WithCancel(ctx)
 	defer stop()
+	sendCtx, stopSending := context.WithCancel(context.WithoutCancel(ctx))
+	defer stopSending()
 	serveErr := make(chan error, len(servers))
 	var wg sync.WaitGroup
-	wg.Go(func() { watcher.Run(loopCtx) })
-	wg.Go(func() { sender.Run(loopCtx) })
+	wg.Go(func() {
+		watcher.Run(loopCtx)
+		stopSending()
+	})
+	wg.Go(func() { sender.Run(sendCtx) })
 	if publisher != nil {
 		wg.Go(func() { publisher.Run(loopCtx) })
 	}

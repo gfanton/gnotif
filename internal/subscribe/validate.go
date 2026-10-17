@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/gfanton/gnotif/internal/pushhost"
 )
 
 const (
@@ -16,9 +18,8 @@ const (
 	authSize    = 16
 )
 
-// checkEndpoint accepts an https URL on an allowlisted push service. An
-// entry "*.suffix" matches any host under suffix on the default port; any
-// other entry must equal the URL's host, port included.
+// checkEndpoint accepts an https URL on a push service of hosts, as
+// pushhost.Match reads them.
 func checkEndpoint(raw string, hosts []string) error {
 	if len(raw) > maxEndpoint {
 		return fmt.Errorf("endpoint longer than %d bytes", maxEndpoint)
@@ -30,18 +31,10 @@ func checkEndpoint(raw string, hosts []string) error {
 	if u.User != nil {
 		return errors.New("endpoint must not carry user information")
 	}
-	for _, entry := range hosts {
-		if suffix, ok := strings.CutPrefix(entry, "*."); ok {
-			if u.Port() == "" && strings.HasSuffix(strings.ToLower(u.Hostname()), "."+strings.ToLower(suffix)) {
-				return nil
-			}
-			continue
-		}
-		if strings.EqualFold(u.Host, entry) {
-			return nil
-		}
+	if _, ok := pushhost.Match(raw, hosts); !ok {
+		return fmt.Errorf("push service %s is not allowed", u.Host)
 	}
-	return fmt.Errorf("push service %s is not allowed", u.Host)
+	return nil
 }
 
 func checkKey(name, value string, size int) error {
