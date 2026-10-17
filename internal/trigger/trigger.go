@@ -3,16 +3,22 @@
 package trigger
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
 
 // Pair is one key and value, as in a realm event's attributes.
-type Pair struct{ Key, Value string }
+type Pair struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
 
 // Event is a GnoEvent from a successful transaction.
 type Event struct {
@@ -54,6 +60,46 @@ type Match struct {
 	Value        string
 	Notification Notification
 	Event        Event
+}
+
+// ID identifies the match by its transaction, event index, trigger and value.
+func (m Match) ID() string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		m.Event.TxHash, strconv.Itoa(m.Event.Index), m.TriggerID, m.Value,
+	}, "\x00")))
+	return hex.EncodeToString(sum[:16])
+}
+
+// BrowserNotification is the JSON form of a match that a browser receives.
+type BrowserNotification struct {
+	ID      string `json:"id"`
+	Trigger string `json:"trigger"`
+	Value   string `json:"value"`
+	Title   string `json:"title"`
+	Body    string `json:"body"`
+	Link    string `json:"link"`
+	Height  int64  `json:"height"`
+	Tx      string `json:"tx"`
+	Time    string `json:"time"`
+	Attrs   []Pair `json:"attrs"`
+}
+
+// ForBrowser returns the match in the form a browser receives.
+func (m Match) ForBrowser() BrowserNotification {
+	attrs := make([]Pair, len(m.Event.Attrs))
+	copy(attrs, m.Event.Attrs)
+	return BrowserNotification{
+		ID:      m.ID(),
+		Trigger: m.TriggerID,
+		Value:   m.Value,
+		Title:   m.Notification.Title,
+		Body:    m.Notification.Body,
+		Link:    m.Notification.Link,
+		Height:  m.Event.Height,
+		Tx:      m.Event.TxHash,
+		Time:    m.Event.Time.UTC().Format(time.RFC3339Nano),
+		Attrs:   attrs,
+	}
 }
 
 // Byte limits of a rendered notification. A longer link is replaced by "/".
