@@ -847,6 +847,9 @@ func TestUnmatchedEndpointStillSent(t *testing.T) {
 
 	h.sender.Send(context.Background(), []store.Push{p})
 	require.Eventually(t, func() bool { return h.push.count() == 1 }, 5*time.Second, 5*time.Millisecond)
+	h.sender.mu.Lock()
+	defer h.sender.mu.Unlock()
+	assert.Equal(t, []string{h.push.host()}, slices.Collect(maps.Keys(h.sender.services)))
 }
 
 func TestOutboxRowQueuedOnce(t *testing.T) {
