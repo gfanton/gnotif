@@ -1,6 +1,6 @@
 # Running gnotifd
 
-gnotifd is one binary that keeps its state in one SQLite file. It needs a tx-indexer for the chain, the package path of the gnotif registry, and a VAPID key pair to sign its pushes. It serves only the HTTP API under `/v1/` at its root ([HTTP API](http-api.md)); to serve it under a path, such as `/onyx/`, strip that path in front of gnotifd. Dapps serve their own pages.
+gnotifd is one binary that keeps its state in one SQLite file, or in a [remote store](#remote-store). It needs a tx-indexer for the chain, the package path of the gnotif registry, and a VAPID key pair to sign its pushes. It serves only the HTTP API under `/v1/` at its root ([HTTP API](http-api.md)); to serve it under a path, such as `/onyx/`, strip that path in front of gnotifd. Dapps serve their own pages.
 
 ## Install
 
@@ -49,7 +49,7 @@ gnotifd -indexer https://indexer.onyx.testnets.gno.land/graphql/query \
 
 `<contact>` is an email address or https URL where push services can reach you, such as `ops@example.org`.
 
-gnotifd listens on `127.0.0.1:8080` and writes `gnotif.db` in the current directory. It logs to standard error. Stopping it with Ctrl-C or SIGTERM loses no queued push and sends none twice.
+gnotifd listens on `127.0.0.1:8080` and writes `gnotif.db` in the current directory. It logs to standard error. Stopping it with Ctrl-C or SIGTERM writes the pushes it still holds in memory to the database before it exits; a hard kill loses them ([How gnotif works](how-it-works.md#delivery-outcomes)).
 
 Dapp pages call gnotifd from their own origins, and a page served over https cannot call a plain http URL on another host, so put gnotifd behind a reverse proxy that terminates TLS.
 
@@ -62,7 +62,7 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 | `-vapid-subject` | required | email address or https URL where push services can reach the operator |
 | `-start-height` | none | height to read from on the first start, at or before the registry's deploy |
 | `-listen` | `127.0.0.1:8080` | HTTP listen address |
-| `-db` | `gnotif.db` | SQLite database file |
+| `-db` | `gnotif.db` | SQLite database file, or the `http://` or `https://` URL of a [remote store](#remote-store) |
 | `-poll` | `5s` | indexer poll interval; must be positive |
 | `-max-age` | `10m` | oldest event that still sends a notification; must not be negative |
 | `-push-hosts` | the four hosts in [the allowlist](#the-push-service-allowlist) | comma-separated push service hosts |
@@ -101,15 +101,38 @@ An entry `*.suffix` matches any host under `suffix` on the default port. Any oth
 
 ## Storage and backups
 
-The database is one SQLite file in WAL mode: while gnotifd runs, `gnotif.db` sits next to `gnotif.db-wal` and `gnotif.db-shm`. Stop gnotifd before copying the database, and copy any `-wal` or `-shm` file left beside it.
+With a file, the database is one SQLite file in WAL mode: while gnotifd runs, `gnotif.db` sits next to `gnotif.db-wal` and `gnotif.db-shm`. Stop gnotifd before copying the database, and copy any `-wal` or `-shm` file left beside it.
 
-The subscriptions and opt-ins exist only in the database. To start a new database, name a new file with `-db` and give a `-start-height` at or before the registry's deploy; each browser then turns notifications on again from its dapp's page. Start a new database when:
+The subscriptions and opt-ins exist only in the database. To start a new database, name a new file or an empty remote store with `-db` and give a `-start-height` at or before the registry's deploy; each browser then turns notifications on again from its dapp's page. Start a new database when:
 
-- the database file is lost;
+- the database is lost;
 - gnotifd's `-registry` changes, to another registry or another version: the old triggers and opt-ins would stay, and an earlier version's removals would stop applying;
-- gnotifd refuses the file with `database was made by an older gnotifd`: an older release made it, before a change to the database's layout.
+- gnotifd refuses the database with `database was made by an older gnotifd`: an older release made it, before a change to the database's layout.
 
-gnotifd also refuses a file made by a newer release, with `database was made by a newer gnotifd`. Run the release that made it instead, since a new database drops every subscription. A refused file is left untouched.
+gnotifd also refuses a database made by a newer release, with `database was made by a newer gnotifd`. Run the release that made it instead, since a new database drops every subscription. A refused database is left untouched.
+
+## Remote store
+
+`-db` takes the `http://` or `https://` URL of a remote store in place of a file. The protocol below is the whole contract: any server that speaks it works.
+
+**Request.** gnotifd sends `POST` to the URL, with a JSON array of statements:
+
+```json
+[{"sql": "SELECT version FROM gnotifd_schema WHERE id = 1", "args": []},
+ {"sql": "DELETE FROM subscriptions WHERE endpoint = ?", "args": ["https://..."]}]
+```
+
+`sql` is one SQLite statement, with `?` marks for its `args`. An argument is `null`, a string or a number. A request holds at most 1,000 statements; gnotifd sends no more.
+
+**Answer.** `200` with a JSON array holding one `{"rows": [...], "changes": N}` per statement, in order. `rows` holds one object per row, keyed by column name, and `changes` counts the rows the statement inserted, updated or deleted, and is 0 for a `SELECT` or a schema change. A value is `null`, a string or a number; gnotifd reads a number without a fraction or exponent as an integer.
+
+**Atomic.** The statements of one request run in order as one transaction: all take effect, or none. The server enforces foreign keys, because gnotifd's tables delete their dependent rows with `ON DELETE CASCADE`.
+
+**Errors.** `400` answers a body that is not a JSON array of statements. `500` with `{"error": "<message>"}` answers a failing statement, and the request has no effect. Any other status fails the call.
+
+gnotifd waits at most 40 seconds for an answer.
+
+**Schema version.** A SQLite file holds the schema version in `PRAGMA user_version`. A remote store holds it in the `gnotifd_schema` table, with one row `id = 1`. gnotifd refuses a store that holds one of its tables but no version, with `database was made by an older gnotifd`. Tables gnotifd does not create do not count.
 
 ## Attach an external hub
 
