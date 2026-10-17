@@ -122,7 +122,7 @@ gnotifd also refuses a database made by a newer release, with `database was made
  {"sql": "DELETE FROM subscriptions WHERE endpoint = ?", "args": ["https://..."]}]
 ```
 
-`sql` is one SQLite statement, with `?` marks for its `args`. An argument is `null`, a string or a number. A request holds at most 1,000 statements; gnotifd sends no more.
+`sql` is one SQLite statement, with `?` marks for its `args`. An argument is `null`, a string or a number. gnotifd never sends more than 1,000 statements in one request, so a server need not accept more.
 
 **Answer.** `200` with a JSON array holding one `{"rows": [...], "changes": N}` per statement, in order. `rows` holds one object per row, keyed by column name, and `changes` counts the rows the statement inserted, updated or deleted, and is 0 for a `SELECT` or a schema change. A value is `null`, a string or a number; gnotifd reads a number without a fraction or exponent as an integer.
 
@@ -131,6 +131,8 @@ gnotifd also refuses a database made by a newer release, with `database was made
 **Errors.** `400` answers a body that is not a JSON array of statements. `500` with `{"error": "<message>"}` answers a failing statement, and the request has no effect. Any other status fails the call.
 
 gnotifd waits at most 40 seconds for an answer.
+
+**Access.** The endpoint runs every statement it receives, and gnotifd sends it no credentials. Anyone who can reach it can read, change or drop the subscriptions, keys and opt-ins. Make it reachable only by gnotifd, on a private address or behind network-level access control, and keep its URL private.
 
 **Schema version.** A SQLite file holds the schema version in `PRAGMA user_version`. A remote store holds it in the `gnotifd_schema` table, with one row `id = 1`. gnotifd refuses a store that holds one of its tables but no version, with `database was made by an older gnotifd`. Tables gnotifd does not create do not count.
 
