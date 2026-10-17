@@ -111,6 +111,6 @@ func TestNotificationFrame(t *testing.T) {
 	// A zone other than UTC: the frame still gives the time in UTC.
 	m.Event.Time = time.Date(2026, 10, 16, 23, 46, 8, 500_000_000, time.FixedZone("CEST", 2*60*60))
 	assert.Equal(t,
-		`{"type":"notification","trigger":"0000001","value":"g1bob","title":"Your turn","body":"Game 7, turn 1","link":"/?game=7","height":7,"tx":"tx1","time":"2026-10-16T21:46:08.5Z","attrs":[{"key":"game","value":"7"},{"key":"next","value":"g1bob"},{"key":"turn","value":"1"}]}`,
+		`{"type":"notification","id":"b8f1e52e04913c7b1e77d46c3a9bfa98","trigger":"0000001","value":"g1bob","title":"Your turn","body":"Game 7, turn 1","link":"/?game=7","height":7,"tx":"tx1","time":"2026-10-16T21:46:08.5Z","attrs":[{"key":"game","value":"7"},{"key":"next","value":"g1bob"},{"key":"turn","value":"1"}]}`,
 		string(NotificationFrame(m)))
 }

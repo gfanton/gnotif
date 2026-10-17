@@ -136,11 +136,13 @@ The ping is recognised by its exact text: the same JSON spaced differently is an
 For every match whose trigger and value are in its set, the connection receives:
 
 ```json
-{"type": "notification", "trigger": "0000001", "value": "g1...",
+{"type": "notification", "id": "...", "trigger": "0000001", "value": "g1...",
  "title": "Your turn", "body": "Game 0000001, turn 3", "link": "/?game=0000001",
  "height": 181221, "tx": "...", "time": "2026-10-16T21:46:08.5Z",
  "attrs": [{"key": "game", "value": "0000001"}, {"key": "next", "value": "g1..."}, {"key": "turn", "value": "3"}]}
 ```
+
+`id` identifies the match: a push for the same match carries the same `id`, so a client that hears both can keep one.
 
 `title`, `body` and `link` are those of the push for the same match. `attrs` lists the event's attributes in order. `height` and `tx` name the transaction that emitted the event, so a page can check it on chain. `time` is the block's time, in UTC, as RFC 3339.
 

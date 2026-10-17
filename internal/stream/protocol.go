@@ -11,7 +11,6 @@ import (
 	"errors"
 	"log/slog"
 	"slices"
-	"time"
 
 	"github.com/gfanton/gnotif/internal/optin"
 	"github.com/gfanton/gnotif/internal/trigger"
@@ -36,43 +35,13 @@ func Key(triggerID, value string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-type attrJSON struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-type notificationJSON struct {
-	Type    string     `json:"type"`
-	Trigger string     `json:"trigger"`
-	Value   string     `json:"value"`
-	Title   string     `json:"title"`
-	Body    string     `json:"body"`
-	Link    string     `json:"link"`
-	Height  int64      `json:"height"`
-	Tx      string     `json:"tx"`
-	Time    string     `json:"time"`
-	Attrs   []attrJSON `json:"attrs"`
-}
-
 // NotificationFrame is the frame a connection receives for m.
 func NotificationFrame(m trigger.Match) []byte {
-	attrs := make([]attrJSON, len(m.Event.Attrs))
-	for i, p := range m.Event.Attrs {
-		attrs[i] = attrJSON{Key: p.Key, Value: p.Value}
-	}
 	// Strings and integers only: Marshal cannot fail.
-	b, _ := json.Marshal(notificationJSON{
-		Type:    "notification",
-		Trigger: m.TriggerID,
-		Value:   m.Value,
-		Title:   m.Notification.Title,
-		Body:    m.Notification.Body,
-		Link:    m.Notification.Link,
-		Height:  m.Event.Height,
-		Tx:      m.Event.TxHash,
-		Time:    m.Event.Time.UTC().Format(time.RFC3339Nano),
-		Attrs:   attrs,
-	})
+	b, _ := json.Marshal(struct {
+		Type string `json:"type"`
+		trigger.BrowserNotification
+	}{"notification", m.ForBrowser()})
 	return b
 }
 
