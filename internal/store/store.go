@@ -57,6 +57,7 @@ type Optin struct{ TriggerID, Value string }
 // keeps one row.
 type Push struct {
 	SubscriptionID int64
+	Subscription   Subscription
 	TriggerID      string
 	TxHash         string
 	EventIndex     int
@@ -382,11 +383,8 @@ type Tx struct {
 
 // SetCursor stores the cursor.
 func (tx *Tx) SetCursor(c Cursor) error {
-	_, err := tx.tx.Exec(`
-		INSERT INTO cursor (id, height_done, bound, next_tx) VALUES (1, ?, ?, ?)
-		ON CONFLICT (id) DO UPDATE SET height_done = excluded.height_done, bound = excluded.bound, next_tx = excluded.next_tx`,
-		c.HeightDone, c.Bound, c.NextTx)
-	if err != nil {
+	st := CursorStatement(c)
+	if _, err := tx.tx.Exec(st.SQL, st.Args...); err != nil {
 		return fmt.Errorf("write cursor: %w", err)
 	}
 	return nil
@@ -395,15 +393,8 @@ func (tx *Tx) SetCursor(c Cursor) error {
 // PutTrigger stores t, updating the trigger with the same id in place so
 // its opt-ins survive.
 func (tx *Tx) PutTrigger(t trigger.Trigger) error {
-	_, err := tx.tx.Exec(`
-		INSERT INTO triggers (id, target, event, filter, param, title, body, link, declarer, verified)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (id) DO UPDATE SET
-			target = excluded.target, event = excluded.event, filter = excluded.filter,
-			param = excluded.param, title = excluded.title, body = excluded.body,
-			link = excluded.link, declarer = excluded.declarer, verified = excluded.verified`,
-		t.ID, t.Target, t.Event, trigger.FormatFilter(t.Filter), t.Param, t.Title, t.Body, t.Link, t.Declarer, t.Verified)
-	if err != nil {
+	st := PutTriggerStatement(t)
+	if _, err := tx.tx.Exec(st.SQL, st.Args...); err != nil {
 		return fmt.Errorf("put trigger %s: %w", t.ID, err)
 	}
 	return nil
@@ -411,7 +402,8 @@ func (tx *Tx) PutTrigger(t trigger.Trigger) error {
 
 // DeleteTrigger removes a trigger and its opt-ins.
 func (tx *Tx) DeleteTrigger(id string) error {
-	if _, err := tx.tx.Exec(`DELETE FROM triggers WHERE id = ?`, id); err != nil {
+	st := DeleteTriggerStatement(id)
+	if _, err := tx.tx.Exec(st.SQL, st.Args...); err != nil {
 		return fmt.Errorf("delete trigger %s: %w", id, err)
 	}
 	return nil
