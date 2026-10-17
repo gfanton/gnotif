@@ -27,12 +27,11 @@ var ErrSchemaVersion = errors.New("database was made by an older gnotifd")
 var ErrSchemaNewer = errors.New("database was made by a newer gnotifd")
 
 // MaxPerTarget is the most triggers one realm may have in each registry
-// version; TargetTriggers returns no more.
+// version; the trigger snapshot returns no more.
 const MaxPerTarget = 64
 
 // Store is the SQLite database. It is safe for concurrent use.
 type Store struct {
-	db *sql.DB
 	ex executor
 }
 
@@ -95,7 +94,7 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 		if err != nil {
 			return nil, fmt.Errorf("open %s: %w", dsn, err)
 		}
-		s.db, s.ex = db, local{db: db}
+		s.ex = local{db: db}
 	}
 	if err := s.migrate(ctx, dsn); err != nil {
 		s.Close()
@@ -166,62 +165,6 @@ func (s *Store) Cursor(ctx context.Context) (Cursor, bool, error) {
 	}
 	c.NextTx = int(nextTx)
 	return c, true, nil
-}
-
-// Update runs fn in one write transaction, committed when fn returns nil
-// and rolled back otherwise.
-func (s *Store) Update(ctx context.Context, fn func(*Tx) error) error {
-	return s.inTx(ctx, func(tx *sql.Tx) error { return fn(&Tx{tx: tx}) })
-}
-
-func (s *Store) inTx(ctx context.Context, fn func(*sql.Tx) error) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	if err := fn(tx); err != nil {
-		tx.Rollback()
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit: %w", err)
-	}
-	return nil
-}
-
-// TargetTriggers returns the triggers of one realm in id order, at most
-// MaxPerTarget.
-func (s *Store) TargetTriggers(ctx context.Context, target string) ([]trigger.Trigger, error) {
-	rows, err := s.db.QueryContext(ctx, selectTriggerColumns+` FROM triggers WHERE target = ? ORDER BY id LIMIT ?`, target, MaxPerTarget)
-	if err != nil {
-		return nil, fmt.Errorf("read triggers of %s: %w", target, err)
-	}
-	return scanTriggers(rows)
-}
-
-// TriggersByID returns the stored triggers among ids, keyed by id. Unknown
-// ids are absent.
-func (s *Store) TriggersByID(ctx context.Context, ids []string) (map[string]trigger.Trigger, error) {
-	out := make(map[string]trigger.Trigger, len(ids))
-	if len(ids) == 0 {
-		return out, nil
-	}
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
-	}
-	rows, err := s.db.QueryContext(ctx, selectTriggerColumns+` FROM triggers WHERE id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")+`)`, args...)
-	if err != nil {
-		return nil, fmt.Errorf("read triggers by id: %w", err)
-	}
-	found, err := scanTriggers(rows)
-	if err != nil {
-		return nil, err
-	}
-	for _, t := range found {
-		out[t.ID] = t
-	}
-	return out, nil
 }
 
 // PutSubscription stores sub, or replaces the keys of the subscription with
@@ -384,106 +327,4 @@ func (s *Store) Reschedule(ctx context.Context, id int64, at time.Time) error {
 	return nil
 }
 
-// Tx is a write transaction opened by Update. Its methods run under the
-// context Update was given.
-type Tx struct {
-	tx *sql.Tx
-}
-
-// SetCursor stores the cursor.
-func (tx *Tx) SetCursor(c Cursor) error {
-	st := CursorStatement(c)
-	if _, err := tx.tx.Exec(st.SQL, st.Args...); err != nil {
-		return fmt.Errorf("write cursor: %w", err)
-	}
-	return nil
-}
-
-// PutTrigger stores t, updating the trigger with the same id in place so
-// its opt-ins survive.
-func (tx *Tx) PutTrigger(t trigger.Trigger) error {
-	st := PutTriggerStatement(t)
-	if _, err := tx.tx.Exec(st.SQL, st.Args...); err != nil {
-		return fmt.Errorf("put trigger %s: %w", t.ID, err)
-	}
-	return nil
-}
-
-// DeleteTrigger removes a trigger and its opt-ins.
-func (tx *Tx) DeleteTrigger(id string) error {
-	st := DeleteTriggerStatement(id)
-	if _, err := tx.tx.Exec(st.SQL, st.Args...); err != nil {
-		return fmt.Errorf("delete trigger %s: %w", id, err)
-	}
-	return nil
-}
-
-// Matching returns the triggers on target for event, in id order.
-func (tx *Tx) Matching(target, event string) ([]trigger.Trigger, error) {
-	rows, err := tx.tx.Query(selectMatching, target, event)
-	if err != nil {
-		return nil, fmt.Errorf("read triggers matching %s %s: %w", target, event, err)
-	}
-	return scanTriggers(rows)
-}
-
-// Subscribers returns the subscriptions opted in to triggerID with value.
-func (tx *Tx) Subscribers(triggerID, value string) ([]int64, error) {
-	rows, err := tx.tx.Query(`SELECT subscription_id FROM optins WHERE trigger_id = ? AND value = ? ORDER BY subscription_id`, triggerID, value)
-	if err != nil {
-		return nil, fmt.Errorf("read subscribers: %w", err)
-	}
-	defer rows.Close()
-	var out []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan subscriber: %w", err)
-		}
-		out = append(out, id)
-	}
-	return out, rows.Err()
-}
-
-// Enqueue queues p, due at once. It reports false when p is already queued.
-func (tx *Tx) Enqueue(p Push) (bool, error) {
-	created := p.CreatedAt.UTC().UnixMilli()
-	res, err := tx.tx.Exec(`
-		INSERT OR IGNORE INTO outbox
-			(subscription_id, trigger_id, tx_hash, event_index, title, body, link, next_attempt_at, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.SubscriptionID, p.TriggerID, p.TxHash, p.EventIndex,
-		p.Notification.Title, p.Notification.Body, p.Notification.Link, created, created)
-	if err != nil {
-		return false, fmt.Errorf("enqueue push: %w", err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("enqueue push: %w", err)
-	}
-	return n == 1, nil
-}
-
-const (
-	selectTriggerColumns = `SELECT id, target, event, filter, param, title, body, link, declarer, verified`
-	selectMatching       = selectTriggerColumns + ` FROM triggers WHERE target = ? AND event = ? ORDER BY id`
-)
-
-func scanTriggers(rows *sql.Rows) ([]trigger.Trigger, error) {
-	defer rows.Close()
-	var out []trigger.Trigger
-	for rows.Next() {
-		var t trigger.Trigger
-		var filter string
-		if err := rows.Scan(&t.ID, &t.Target, &t.Event, &filter, &t.Param, &t.Title, &t.Body, &t.Link, &t.Declarer, &t.Verified); err != nil {
-			return nil, fmt.Errorf("scan trigger: %w", err)
-		}
-		pairs, err := trigger.ParseFilter(filter)
-		if err != nil {
-			return nil, fmt.Errorf("trigger %s: %w", t.ID, err)
-		}
-		t.Filter = pairs
-		out = append(out, t)
-	}
-	return out, rows.Err()
-}
+const selectTriggerColumns = `SELECT id, target, event, filter, param, title, body, link, declarer, verified`

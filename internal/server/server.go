@@ -64,28 +64,8 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 	defer st.Close()
-	if _, ok, err := st.Cursor(ctx); err != nil {
-		return err
-	} else if !ok && cfg.StartHeight < 1 {
-		return watch.ErrNoStartHeight
-	}
 
-	ln := cfg.Listener
-	if ln == nil {
-		if ln, err = net.Listen("tcp", cfg.Listen); err != nil {
-			return fmt.Errorf("listen on %s: %w", cfg.Listen, err)
-		}
-	}
-	hubLn := cfg.HubListener
-	if hubLn == nil && cfg.HubListen != "" {
-		if hubLn, err = net.Listen("tcp", cfg.HubListen); err != nil {
-			ln.Close()
-			return fmt.Errorf("listen on %s: %w", cfg.HubListen, err)
-		}
-	}
-
-	protocol := stream.Protocol{TriggersByID: st.TriggersByID, Log: cfg.Log}
-	hub := stream.NewHub(stream.HubConfig{Protocol: protocol, Max: cfg.StreamMax, Log: cfg.Log})
+	var hub *stream.Hub
 	var publisher *stream.Publisher
 	if cfg.Publish != "" {
 		publisher = stream.NewPublisher(stream.PublisherConfig{
@@ -125,9 +105,32 @@ func Run(ctx context.Context, cfg Config) error {
 		Publish:     publish,
 	})
 
+	// The snapshot must exist before a listener can ask it for a trigger.
+	if err := watcher.Load(ctx); err != nil {
+		return err
+	}
+
+	ln := cfg.Listener
+	if ln == nil {
+		if ln, err = net.Listen("tcp", cfg.Listen); err != nil {
+			return fmt.Errorf("listen on %s: %w", cfg.Listen, err)
+		}
+	}
+	hubLn := cfg.HubListener
+	if hubLn == nil && cfg.HubListen != "" {
+		if hubLn, err = net.Listen("tcp", cfg.HubListen); err != nil {
+			ln.Close()
+			return fmt.Errorf("listen on %s: %w", cfg.HubListen, err)
+		}
+	}
+
+	protocol := stream.Protocol{TriggersByID: watcher.TriggersByID, Log: cfg.Log}
+	hub = stream.NewHub(stream.HubConfig{Protocol: protocol, Max: cfg.StreamMax, Log: cfg.Log})
+
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", subscribe.NewHandler(subscribe.Config{
 		Store:     st,
+		Triggers:  watcher,
 		PublicKey: cfg.VAPID.Public,
 		PushHosts: cfg.PushHosts,
 		Stream:    hub,

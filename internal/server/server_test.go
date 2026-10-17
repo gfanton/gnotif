@@ -27,6 +27,7 @@ import (
 
 	"github.com/gfanton/gnotif/internal/delivery"
 	"github.com/gfanton/gnotif/internal/store"
+	"github.com/gfanton/gnotif/internal/store/storetest"
 	"github.com/gfanton/gnotif/internal/stream"
 	"github.com/gfanton/gnotif/internal/subscribe"
 	"github.com/gfanton/gnotif/internal/trigger"
@@ -323,4 +324,60 @@ func TestInvalidRegistry(t *testing.T) {
 	err := Run(context.Background(), cfg)
 	assert.ErrorIs(t, err, watch.ErrInvalidRegistry)
 	assert.NoFileExists(t, cfg.DB)
+}
+
+// Checking an opt-in reads the watcher's trigger snapshot, so it must keep
+// answering once the store cannot be reached.
+func TestOptinChecksWithoutStore(t *testing.T) {
+	const target = "gno.land/r/demo/game"
+	srv := storetest.NewServer(t)
+	ctx := context.Background()
+	st, err := store.Open(ctx, srv.URL)
+	require.NoError(t, err)
+	_, err = st.Exec(ctx, []store.Statement{store.PutTriggerStatement(trigger.Trigger{
+		ID: "0000001", Target: target, Event: "TurnPlayed", Param: "next",
+		Declarer: "g1alice", Title: "Your turn", Body: "Game {game}", Link: "/",
+	})})
+	require.NoError(t, err)
+	require.NoError(t, st.Close())
+
+	cfg := config(t, 1)
+	cfg.DB = srv.URL
+	hub, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	cfg.HubListener = hub
+	base, _ := runServer(t, cfg)
+	srv.Close()
+
+	req, err := http.NewRequest(http.MethodPut, base+"/v1/subscription/optins",
+		strings.NewReader(`{"endpoint":"https://fcm.googleapis.com/fcm/send/abc","optins":[{"trigger":"nope","value":""}]}`))
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	resp, body := get(t, base+"/v1/triggers?target="+target)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, body, `"id":"0000001"`)
+
+	resp, err = http.Post("http://"+hub.Addr().String()+"/message", "text/plain",
+		strings.NewReader(`{"type":"optins","optins":[{"trigger":"0000001","value":"g1bob"}]}`))
+	require.NoError(t, err)
+	raw, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	var answer struct{ Reply string }
+	require.NoError(t, json.Unmarshal(raw, &answer))
+	assert.JSONEq(t, `{"type":"optins"}`, answer.Reply)
+}
+
+func TestStartFailsWithUnreachableStore(t *testing.T) {
+	srv := storetest.NewServer(t)
+	cfg := config(t, 1)
+	cfg.DB = srv.URL
+	srv.Close()
+
+	assert.Error(t, Run(context.Background(), cfg))
 }
