@@ -2,7 +2,7 @@ import { Gnotif, GnotifError } from "./gnotif.js";
 import { connect, findAdena, sendEcho, shortAddress as short, walletLabel } from "./adena.mjs";
 import { gnokeyCommand } from "./echo-tx.mjs";
 import { chain, echo, gnoweb, gnotif as options } from "./config.js";
-import { canEnable, listenerMismatch, optinsFor } from "./optin.mjs";
+import { canEnable, listenerMismatch, optinsAtLoad, optinsFor } from "./optin.mjs";
 import { addressArea } from "./address-area.mjs";
 import { load, save } from "./settings.mjs";
 import { WAIT_MS, answeredSend, blockSummary, clockText, deliveredBody, details, logShown } from "./live-log.mjs";
@@ -440,6 +440,9 @@ try {
   await refresh();
   if (!on && saved?.push) {
     say("message", "This browser stopped receiving notifications. Turn them on again to resume.");
+  }
+  if (optinsAtLoad(on, trigger)) {
+    await setOptin();
   }
 } catch (err) {
   say("message", err.message, true);

@@ -33,6 +33,18 @@ export function canEnable(busy, trigger) {
 }
 
 /**
+ * optinsAtLoad reports whether the page sets its opt-ins as it loads: once
+ * push is on and the trigger has loaded, so the client keeps the pushes the
+ * service worker passes to the page, with live updates off too.
+ * @param {boolean} on whether this browser receives notifications
+ * @param {import("./gnotif.js").Trigger | null} trigger null until it loads
+ * @returns {boolean}
+ */
+export function optinsAtLoad(on, trigger) {
+  return on && trigger !== null;
+}
+
+/**
  * listenerMismatch returns the address this browser is opted in with when a
  * notification for caller misses it, or undefined when it reaches this browser
  * or the browser is not opted in.
