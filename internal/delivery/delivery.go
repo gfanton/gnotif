@@ -31,6 +31,7 @@ const (
 	checkPage   = 100
 	// memoryCap is the most pushes held in memory, queued or in flight, across
 	// every push service.
+	// ceiling: one shared cap; a hung push service under sustained load fills it and slows the others; upgrade: a cap per service
 	memoryCap = 10_000
 )
 
@@ -125,6 +126,8 @@ func (s *Sender) Send(ctx context.Context, pushes []store.Push) {
 	s.mu.Lock()
 	for _, p := range pushes {
 		if s.stopped || s.held >= memoryCap {
+			// A push spilled at the cap, like a retried one, can be sent after
+			// a later push to the same subscription; accepted under overload.
 			spill = append(spill, store.Pending{Push: p, NextAttempt: s.cfg.Now()})
 			continue
 		}
