@@ -84,6 +84,14 @@ func TestHandleInternalError(t *testing.T) {
 	assert.Equal(t, PongFrame, string(r.Frame))
 }
 
+func TestHandleLogsRefusedOptins(t *testing.T) {
+	var log bytes.Buffer
+	p := Protocol{TriggersByID: testLookup, Log: slog.New(slog.NewTextHandler(&log, nil))}
+	r := p.Handle(context.Background(), []byte(`{"type":"optins","optins":[{"trigger":"9999999","value":""}]}`))
+	assert.Equal(t, `{"type":"error","error":"unknown trigger \"9999999\""}`, string(r.Frame))
+	assert.Contains(t, log.String(), `level=INFO msg="live opt-ins refused" reason="unknown trigger \"9999999\"" optins=1`)
+}
+
 func TestKey(t *testing.T) {
 	k := Key("0000001", "g1bob")
 	assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]{64}$`), k)

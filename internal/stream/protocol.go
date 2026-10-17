@@ -107,6 +107,7 @@ func (p Protocol) Handle(ctx context.Context, frame []byte) Reply {
 	}
 	err := optin.Check(ctx, msg.Optins, p.TriggersByID)
 	if rule, ok := errors.AsType[optin.Error](err); ok {
+		p.Log.Info("live opt-ins refused", "reason", rule.Error(), "optins", len(msg.Optins))
 		return errorReply(rule.Error())
 	}
 	if err != nil {
