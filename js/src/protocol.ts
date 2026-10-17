@@ -3,6 +3,7 @@
 import * as v from "valibot";
 
 import type { GnotifNotification, Trigger } from "./gnotif.ts";
+import { parseJson, parsed } from "./push.ts";
 
 export type NotificationFields = Omit<GnotifNotification, "source">;
 
@@ -20,8 +21,6 @@ const TriggerSchema: v.GenericSchema<Trigger> = v.object({
 });
 
 const TriggersSchema = v.array(TriggerSchema);
-
-const VapidSchema = v.object({ publicKey: v.string() });
 
 const ErrorBodySchema = v.object({ error: v.optional(v.string()) });
 
@@ -51,17 +50,8 @@ export type Frame = v.InferOutput<typeof FrameSchema>;
 
 const RelaySchema = v.object({ type: v.literal("gnotif.notification"), notification: NotificationSchema });
 
-function parsed<T>(schema: v.GenericSchema<unknown, T>, data: unknown): T | undefined {
-  const result = v.safeParse(schema, data);
-  return result.success ? result.output : undefined;
-}
-
 export function parseTriggers(data: unknown): Trigger[] | undefined {
   return parsed(TriggersSchema, data);
-}
-
-export function parseVapidKey(data: unknown): string | undefined {
-  return parsed(VapidSchema, data)?.publicKey;
 }
 
 export function parseErrorMessage(data: unknown): string | undefined {
@@ -69,13 +59,7 @@ export function parseErrorMessage(data: unknown): string | undefined {
 }
 
 export function parseFrame(text: string): Frame | undefined {
-  let data: unknown;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-  return parsed(FrameSchema, data);
+  return parsed(FrameSchema, parseJson(text));
 }
 
 export function parseRelay(data: unknown): NotificationFields | undefined {

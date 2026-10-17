@@ -77,13 +77,16 @@ conformance: ## Check the live endpoint of GNOTIF_SERVER, opting into a trigger 
 	test -n "$(GNOTIF_SERVER)" && test -n "$(GNOTIF_TARGET)" || { echo "conformance: set GNOTIF_SERVER=<gnotif server URL> GNOTIF_TARGET=<realm path>" >&2; exit 1; }
 	GNOTIF_SERVER=$(GNOTIF_SERVER) GNOTIF_TARGET=$(GNOTIF_TARGET) node --test e2e/conformance/stream.test.mjs
 
-js/dist/gnotif.js: $(PNPM_STAMP) $(wildcard js/src/*.ts) js/scripts/build.ts
+js/dist/gnotif.js: $(PNPM_STAMP) $(wildcard js/src/*.ts js/src/sw/*.ts) js/scripts/build.ts
 	pnpm build
+
+# pnpm build writes both files.
+js/dist/sw.js: js/dist/gnotif.js
 
 demo/gnotif.js: js/dist/gnotif.js
 	cp $< $@
 
-demo/sw.js: js/src/sw.js
+demo/sw.js: js/dist/sw.js
 	cp $< $@
 
 demo: $(DEMO_JS) ## Serve the demo dapp on http://localhost:3000

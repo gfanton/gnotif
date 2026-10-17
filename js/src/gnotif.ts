@@ -3,14 +3,8 @@
 // both hear about.
 
 import { safeLink } from "./link.ts";
-import {
-  type NotificationFields,
-  parseErrorMessage,
-  parseFrame,
-  parseRelay,
-  parseTriggers,
-  parseVapidKey,
-} from "./protocol.ts";
+import { type NotificationFields, parseErrorMessage, parseFrame, parseRelay, parseTriggers } from "./protocol.ts";
+import { parseVapidKey } from "./push.ts";
 
 /** A trigger as GET /v1/triggers returns it. */
 export type Trigger = {

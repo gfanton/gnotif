@@ -7,12 +7,12 @@
     "node": ">=24"
   },
   "scripts": {
-    "check": "tsc -p js/tsconfig.json && tsc --noEmit -p js/tsconfig.sw.json && tsc -p js/test/tsconfig.json && tsc -p js/scripts/tsconfig.json",
+    "check": "tsc -p js/tsconfig.json && tsc -p js/src/sw/tsconfig.json && tsc -p js/test/tsconfig.json && tsc -p js/scripts/tsconfig.json",
     "lint": "oxlint --type-aware",
     "fmt": "prettier --write 'js/**/*.ts'",
     "fmt:check": "prettier --check 'js/**/*.ts'",
     "build": "pnpm -r build",
-    "test": "pnpm build && node --test 'js/test/*.test.ts' js/test/sw.test.mjs 'demo/*.test.mjs'"
+    "test": "pnpm build && node --test 'js/test/*.test.ts' 'demo/*.test.mjs'"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

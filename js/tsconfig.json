@@ -9,6 +9,7 @@
   "include": [
     "src/gnotif.ts",
     "src/protocol.ts",
-    "src/link.ts"
+    "src/link.ts",
+    "src/push.ts"
   ]
 }

@@ -1,5 +1,4 @@
-// Builds the package into dist/. Paths are relative to js/, where pnpm runs
-// the build script.
+// Builds the package into dist/.
 
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
@@ -8,13 +7,25 @@ import { join } from "node:path";
 
 import { build } from "esbuild";
 
-rmSync("dist", { recursive: true, force: true });
+const root = join(import.meta.dirname, "..");
+const dist = join(root, "dist");
+
+rmSync(dist, { recursive: true, force: true });
 
 await build({
-  entryPoints: ["src/gnotif.ts"],
-  outfile: "dist/gnotif.js",
+  entryPoints: [join(root, "src", "gnotif.ts")],
+  outfile: join(dist, "gnotif.js"),
   bundle: true,
   format: "esm",
+  target: "es2022",
+});
+
+// A dapp copies sw.js as a classic script, so it must hold no import or export.
+await build({
+  entryPoints: [join(root, "src", "sw", "sw.ts")],
+  outfile: join(dist, "sw.js"),
+  bundle: true,
+  format: "iife",
   target: "es2022",
 });
 
@@ -26,19 +37,19 @@ try {
     "tsc",
     [
       "-p",
-      "tsconfig.json",
+      join(root, "tsconfig.json"),
       "--noEmit",
       "false",
       "--declaration",
       "--emitDeclarationOnly",
       "--rootDir",
-      "src",
+      join(root, "src"),
       "--outDir",
       declarations,
     ],
     { stdio: "inherit" },
   );
-  copyFileSync(join(declarations, "gnotif.d.ts"), "dist/gnotif.d.ts");
+  copyFileSync(join(declarations, "gnotif.d.ts"), join(dist, "gnotif.d.ts"));
 } finally {
   rmSync(declarations, { recursive: true, force: true });
 }

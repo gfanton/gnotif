@@ -17,11 +17,10 @@
       "types": "./dist/gnotif.d.ts",
       "default": "./dist/gnotif.js"
     },
-    "./sw.js": "./src/sw.js"
+    "./sw.js": "./dist/sw.js"
   },
   "files": [
-    "dist",
-    "src/sw.js"
+    "dist"
   ],
   "scripts": {
     "build": "node scripts/build.ts"
