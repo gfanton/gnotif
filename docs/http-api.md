@@ -156,6 +156,17 @@ Frames follow chain order. Each is sent once, after gnotifd has processed its bl
 
 A server may close a connection at any time. The client reconnects and sends its set again.
 
+## Push payload
+
+A Web Push carries one JSON message in a single encrypted record, so it is at most 3,993 bytes. It has one of two forms:
+
+- The full form is the [notification frame](#notification-frames) without `type`: `id`, `trigger`, `value`, `title`, `body`, `link`, `height`, `tx`, `time` and `attrs`. A push uses it when the JSON fits.
+- The short form is `{"title": "...", "body": "...", "link": "..."}`. A push uses it when the full form does not fit. A link that would overflow the record becomes `/`.
+
+A push gnotifd sends straight after reading its match has the full form when it fits. A push that comes back from the outbox (retried, held past the memory cap, or written when gnotifd stopped) no longer knows its match, so it always has the short form.
+
+The service worker shows `title`, `body` and `link` from either form, and posts only the full form to the page.
+
 ## Errors
 
 An error answers JSON with a message:

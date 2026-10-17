@@ -1066,6 +1066,13 @@ func TestMatchSendsOnePushPerSubscriber(t *testing.T) {
 
 	res, err := h.store.Exec(ctx, []store.Statement{{SQL: `SELECT id FROM subscriptions WHERE endpoint = 'A'`}})
 	require.NoError(t, err)
+	require.Len(t, h.sent, 1)
+	match := h.sent[0].Match
+	require.NotNil(t, match)
+	assert.Equal(t, "g1bob", match.Value)
+	assert.Equal(t, int64(11), match.Event.Height)
+	assert.Equal(t, "txa", match.Event.TxHash)
+	h.sent[0].Match = nil
 	assert.Equal(t, []store.Push{{
 		SubscriptionID: res[0].Rows[0]["id"].(int64),
 		Subscription:   store.Subscription{Endpoint: "A", P256dh: "p", Auth: "a"},

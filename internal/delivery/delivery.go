@@ -20,7 +20,6 @@ import (
 
 	"github.com/gfanton/gnotif/internal/pushhost"
 	"github.com/gfanton/gnotif/internal/store"
-	"github.com/gfanton/gnotif/internal/trigger"
 )
 
 const (
@@ -330,7 +329,7 @@ func (s *Sender) deliver(ctx context.Context, it item) error {
 		s.cfg.Log.Warn("push dropped after a day unsent", "delivery", it.row, "attempts", it.attempts)
 		return s.forget(ctx, it)
 	}
-	payload, err := encodePayload(it.Notification)
+	payload, err := encodePayload(it.Push)
 	var resp *http.Response
 	if err == nil {
 		resp, err = webpush.SendNotificationWithContext(ctx, payload,
@@ -387,20 +386,32 @@ func (s *Sender) forget(ctx context.Context, it item) error {
 // padding delimiter.
 const maxPayload = int(webpush.MaxRecordSize) - 16 - 86 - 1
 
-// encodePayload returns n as the JSON the service worker reads, at most
-// maxPayload bytes. A link that would overflow becomes "/": title and body
-// fit even with every byte escaped.
-func encodePayload(n trigger.Notification) ([]byte, error) {
-	encode := func(link string) ([]byte, error) {
+// encodePayload returns p as the JSON the service worker reads, at most
+// maxPayload bytes. A push with a match carries the whole browser
+// notification when it fits. Otherwise it carries title, body and link, and
+// a link that would overflow becomes "/": title and body fit even with every
+// byte escaped.
+func encodePayload(p store.Push) ([]byte, error) {
+	marshal := func(v any) ([]byte, error) {
 		var buf bytes.Buffer
 		enc := json.NewEncoder(&buf)
 		enc.SetEscapeHTML(false)
-		err := enc.Encode(struct {
+		err := enc.Encode(v)
+		return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), err
+	}
+	if p.Match != nil {
+		b, err := marshal(p.Match.ForBrowser())
+		if err != nil || len(b) <= maxPayload {
+			return b, err
+		}
+	}
+	n := p.Notification
+	encode := func(link string) ([]byte, error) {
+		return marshal(struct {
 			Title string `json:"title"`
 			Body  string `json:"body"`
 			Link  string `json:"link"`
 		}{n.Title, n.Body, link})
-		return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), err
 	}
 	b, err := encode(n.Link)
 	if err != nil || len(b) <= maxPayload {

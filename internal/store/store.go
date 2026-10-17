@@ -62,7 +62,10 @@ type Push struct {
 	TxHash         string
 	EventIndex     int
 	Notification   trigger.Notification
-	CreatedAt      time.Time
+	// Match is the match the push is for. It is kept in memory only: the
+	// outbox does not store it, so it is nil once a push is read back.
+	Match     *trigger.Match
+	CreatedAt time.Time
 }
 
 // Delivery is a queued push joined with its subscription.

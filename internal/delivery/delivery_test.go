@@ -116,6 +116,13 @@ func (p *pushService) count() int {
 	return len(p.requests)
 }
 
+// lastBody is the body of the latest request.
+func (p *pushService) lastBody() []byte {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.requests[len(p.requests)-1].body
+}
+
 func (p *pushService) paths() []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -350,9 +357,17 @@ func (h *harness) titles(t *testing.T, p *pushService, endpoint string) []string
 	return out
 }
 
-// title decrypts an aes128gcm push body (RFC 8291) as b and returns its
-// notification's title.
+// title decrypts body as b and returns its notification's title.
 func (b browser) title(t *testing.T, body []byte) string {
+	t.Helper()
+	var n trigger.Notification
+	require.NoError(t, json.Unmarshal(b.payload(t, body), &n))
+	return n.Title
+}
+
+// payload decrypts an aes128gcm push body (RFC 8291) as b and returns the
+// JSON it carries.
+func (b browser) payload(t *testing.T, body []byte) []byte {
 	t.Helper()
 	require.Greater(t, len(body), 21)
 	salt, idLen := body[:16], int(body[20])
@@ -373,9 +388,7 @@ func (b browser) title(t *testing.T, body []byte) string {
 	require.NoError(t, err)
 	plain, err := gcm.Open(nil, nonce, sealed, nil)
 	require.NoError(t, err)
-	var n trigger.Notification
-	require.NoError(t, json.Unmarshal(plain[:bytes.LastIndexByte(plain, 2)], &n))
-	return n.Title
+	return plain[:bytes.LastIndexByte(plain, 2)]
 }
 
 // running is a sender's Run in progress.
@@ -699,27 +712,72 @@ func TestNetworkErrorLogOmitsEndpoint(t *testing.T) {
 }
 
 func TestEncodePayload(t *testing.T) {
+	m := trigger.Match{
+		TriggerID: "0000001", Value: "g1bob",
+		Notification: trigger.Notification{Title: "Your turn", Body: "Game 7, turn 1", Link: "/?game=7"},
+		Event: trigger.Event{TxHash: "tx1", Height: 7, Index: 7, Attrs: []trigger.Pair{{Key: "game", Value: "7"}},
+			Time: time.Date(2026, 10, 16, 23, 46, 8, 500_000_000, time.FixedZone("CEST", 2*60*60))},
+	}
+	big := m
+	big.Event.Attrs = []trigger.Pair{{Key: "msg", Value: strings.Repeat("a", 4000)}}
 	cases := map[string]struct {
-		n    trigger.Notification
+		p    store.Push
 		want string
 	}{
 		"markup stays raw": {
-			n:    trigger.Notification{Title: "A & B", Body: "<b>7</b>", Link: "/?a=1&b=2"},
+			p:    store.Push{Notification: trigger.Notification{Title: "A & B", Body: "<b>7</b>", Link: "/?a=1&b=2"}},
 			want: `{"title":"A & B","body":"<b>7</b>","link":"/?a=1&b=2"}`,
 		},
 		"oversized link becomes the root": {
-			n:    trigger.Notification{Title: "Your turn", Body: "Game 7", Link: "/" + strings.Repeat("\x01", 1000)},
+			p:    store.Push{Notification: trigger.Notification{Title: "Your turn", Body: "Game 7", Link: "/" + strings.Repeat("\x01", 1000)}},
 			want: `{"title":"Your turn","body":"Game 7","link":"/"}`,
+		},
+		"full form": {
+			p:    store.Push{Notification: m.Notification, Match: &m},
+			want: `{"id":"9e78b15baa134b158fd875890fe8691f","trigger":"0000001","value":"g1bob","title":"Your turn","body":"Game 7, turn 1","link":"/?game=7","height":7,"tx":"tx1","time":"2026-10-16T21:46:08.5Z","attrs":[{"key":"game","value":"7"}]}`,
+		},
+		"attributes past the record give the short form": {
+			p:    store.Push{Notification: big.Notification, Match: &big},
+			want: `{"title":"Your turn","body":"Game 7, turn 1","link":"/?game=7"}`,
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := encodePayload(tc.n)
+			got, err := encodePayload(tc.p)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, string(got))
 			assert.LessOrEqual(t, len(got), maxPayload)
 		})
 	}
+}
+
+// A push sent from memory carries its match to the browser.
+func TestPushFromMatchSendsFullPayload(t *testing.T) {
+	h := newHarness(t)
+	endpoint := h.push.srv.URL + "/push/full"
+	m := trigger.Match{TriggerID: "t1", Value: "g1bob", Event: trigger.Event{TxHash: "tx1", Height: 7}}
+	p := h.newPush(t, queued{endpoint: endpoint, created: now})
+	p.Match = &m
+
+	require.NoError(t, h.sender.deliver(context.Background(), item{Push: p}))
+	require.Equal(t, 1, h.push.count())
+	var got struct{ ID string }
+	require.NoError(t, json.Unmarshal(h.browsers[endpoint].payload(t, h.push.lastBody()), &got))
+	assert.Equal(t, m.ID(), got.ID)
+}
+
+// The outbox keeps no match, so a push sent from it has the short payload.
+func TestOutboxPushSendsShortPayload(t *testing.T) {
+	h := newHarness(t)
+	endpoint := h.push.srv.URL + "/push/short"
+	h.queue(t, endpoint, now, 0)
+
+	h.flush(t)
+	require.Equal(t, 1, h.push.count())
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(h.browsers[endpoint].payload(t, h.push.lastBody()), &got))
+	assert.NotContains(t, got, "id")
+	assert.Equal(t, "Your turn", got["title"])
 }
 
 // cancelAfterAccept cancels a context as soon as the push service has

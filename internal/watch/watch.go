@@ -317,6 +317,7 @@ func (b *windowBatch) pushes(res []store.Result, createdAt time.Time) ([]store.P
 				TxHash:         m.Event.TxHash,
 				EventIndex:     m.Event.Index,
 				Notification:   m.Notification,
+				Match:          &m,
 				CreatedAt:      createdAt,
 			})
 		}
