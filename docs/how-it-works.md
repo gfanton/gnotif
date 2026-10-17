@@ -65,7 +65,7 @@ gnotifd polls the indexer every `-poll` interval, 5 seconds by default.
 
 - It reads up to 1,000 blocks at a time, from where it stopped. One request returns every realm event in those blocks, and gnotifd matches the events to its triggers itself.
 - After a failure, it reads the same blocks again with a smaller window.
-- It reads the triggers from the database once, at start, and keeps them in memory. Matching an event and checking an opt-in make no database call. A direct edit of the triggers table shows after a restart.
+- It reads the triggers from the database at start, and again after a failed write, and keeps them in memory. Matching an event and checking an opt-in make no database call. A direct edit of the triggers table shows at the next of those reads.
 - A window of blocks that holds a registry event or a match is committed in one database call, together with the position. Any other window saves its position every 10 minutes, so a restart can read again what it read in the last 10 minutes.
 - It skips a single transaction too large to read, or too large to commit to a remote store, logs an error, and loses only that transaction's events ([Running gnotifd](running-gnotifd.md#the-indexer-and-the-start-height)).
 

@@ -120,14 +120,14 @@ The server has no route that reads opt-ins back. A page keeps the set it last se
 
 ### Client frames
 
-Each text frame gets exactly one reply.
+Each text frame of at most 8,192 bytes gets exactly one reply.
 
 | The client sends | The server replies |
 |---|---|
 | exactly `{"type":"ping"}` | exactly `{"type":"pong"}` |
 | `{"type": "optins", "optins": [{"trigger": "0000001", "value": "g1..."}]}` | `{"type": "optins"}`, or `{"type": "error", "error": "<message>"}` |
-| text that is not JSON | `{"type": "error", "error": "invalid JSON message"}` |
-| JSON with another `type`, or none | `{"type": "error", "error": "unknown message type"}` |
+| text that is not a JSON object, or whose `type` or `optins` has the wrong type | `{"type": "error", "error": "invalid JSON message"}` |
+| a JSON object with another `type`, or none | `{"type": "error", "error": "unknown message type"}` |
 
 The ping is recognised by its exact text: the same JSON spaced differently is an unknown message type. An `optins` frame replaces the connection's whole set. It follows the rules of [Set the opt-ins](#set-the-opt-ins), with the same messages, and a refused set leaves the previous one in place.
 
@@ -146,7 +146,7 @@ For every match whose trigger and value are in its set, the connection receives:
 
 `title`, `body` and `link` are those of the push for the same match. `attrs` lists the event's attributes in order. `height` and `tx` name the transaction that emitted the event, so a page can check it on chain. `time` is the block's time, in UTC, as RFC 3339.
 
-Frames follow chain order. Each is sent once, after gnotifd has processed its block, and nothing is stored: a connection receives nothing from the time it was closed.
+Frames follow chain order. Each is sent once, after gnotifd has processed its block, and nothing is stored or replayed: a client that was disconnected misses the frames sent meanwhile.
 
 ### Limits and closing
 

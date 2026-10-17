@@ -125,8 +125,8 @@ func (s *Sender) Send(ctx context.Context, pushes []store.Push) {
 	s.mu.Lock()
 	for _, p := range pushes {
 		if s.stopped || s.held >= memoryCap {
-			// A push spilled at the cap, like a retried one, can be sent after
-			// a later push to the same subscription; accepted under overload.
+			// ceiling: a push spilled at the cap, like a retried one, can be
+			// sent after a later push to the same subscription
 			spill = append(spill, store.Pending{Push: p, NextAttempt: s.cfg.Now()})
 			continue
 		}

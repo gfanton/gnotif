@@ -18,13 +18,14 @@ let adenaState = "pending";
 let wallet = "";
 let trigger = null;
 let on = false; // push is on
-let live = false; // live updates are on
+let live = false;
 
 function stored() {
   return load(localStorage);
 }
 
-// remember stores the address as typed, with changes over what is stored.
+// remember saves the typed address and changes, and keeps the rest of the
+// stored record.
 function remember(changes) {
   const s = stored() ?? { address: "", optins: [], live: false, push: false };
   save(localStorage, { ...s, address: address(), ...changes });

@@ -108,9 +108,8 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 }
 
 // migrate refuses a database made by another schema version and otherwise
-// applies the schema and records its version in one batch. Only the tables a
-// gnotifd creates count: the database may hold others, such as a replication
-// tool's.
+// applies the schema and records its version in one batch. Only the tables
+// gnotifd creates count: the database may hold others.
 func (s *Store) migrate(ctx context.Context, name string) error {
 	res, err := s.Exec(ctx, []Statement{{
 		SQL: `SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('cursor', 'triggers', 'subscriptions', 'optins', 'outbox', 'gnotifd_schema')`,
