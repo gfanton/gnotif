@@ -10,10 +10,12 @@ const RESUBSCRIBED = { endpoint: "E3", keys: { p256dh: "p3", auth: "a3" } };
 
 // load runs sw.js against fakes, registered with scope. The fake server
 // answers putStatus to PUT /v1/subscription and the key "PK" to
-// GET /v1/vapid.
+// GET /v1/vapid. Each window records what is posted to it in posted; a
+// window's own fields, such as a postMessage that throws, override the defaults.
 function load({ putStatus = 204, windows = [], scope = `${ORIGIN}/`, search = "?server=" + encodeURIComponent("https://gnotif.example") } = {}) {
   const handlers = {};
-  const calls = { show: [], open: [], fetch: [], subscribe: [] };
+  const calls = { show: [], open: [], fetch: [], subscribe: [], matchAll: [] };
+  const wins = windows.map((w) => ({ posted: [], postMessage(m) { this.posted.push(m); }, ...w }));
   const self = {
     location: new URL(`${scope}sw.js${search}`),
     registration: {
@@ -26,7 +28,13 @@ function load({ putStatus = 204, windows = [], scope = `${ORIGIN}/`, search = "?
         },
       },
     },
-    clients: { matchAll: async () => windows, openWindow: async (url) => calls.open.push(url) },
+    clients: {
+      matchAll: async (options) => {
+        calls.matchAll.push(options);
+        return wins;
+      },
+      openWindow: async (url) => calls.open.push(url),
+    },
     addEventListener: (type, fn) => { handlers[type] = fn; },
   };
   const fetch = async (url, init) => {
@@ -38,7 +46,7 @@ function load({ putStatus = 204, windows = [], scope = `${ORIGIN}/`, search = "?
   };
   const context = vm.createContext({ self, URL, JSON, console, fetch });
   vm.runInContext(readFileSync(new URL("../src/sw.js", import.meta.url), "utf8"), context);
-  return { context, handlers, calls };
+  return { context, handlers, calls, wins };
 }
 
 async function dispatch(handler, event) {
@@ -114,6 +122,37 @@ test("push sets no icon when the worker was registered without one", async () =>
   const { handlers, calls } = load();
   await dispatch(handlers.push, { data: null });
   assert.equal("icon" in calls.show[0][1], false);
+});
+
+test("a push with an id is shown, then posted to every window in scope", async () => {
+  const scope = `${ORIGIN}/app/`;
+  const { handlers, calls, wins } = load({
+    scope,
+    windows: [{ url: `${ORIGIN}/app/game` }, { url: `${ORIGIN}/other` }],
+  });
+  const payload = { id: "i1", trigger: "0000001", value: "g1bob", title: "Your turn", body: "Game 7", link: "/app/?game=7", height: 7, tx: "tx1", time: "2026-10-16T21:46:08.5Z", attrs: [] };
+  await dispatch(handlers.push, { data: { text: () => JSON.stringify(payload) } });
+  assert.equal(calls.show.length, 1);
+  assert.equal(calls.show[0][0], "Your turn");
+  assert.deepEqual({ ...calls.matchAll[0] }, { type: "window", includeUncontrolled: true });
+  assert.deepEqual(wins[0].posted.map((m) => ({ ...m })), [{ type: "gnotif.notification", notification: payload }]);
+  assert.deepEqual(wins[1].posted, []);
+});
+
+test("a short payload is shown and posted nowhere", async () => {
+  const { handlers, calls, wins } = load({ windows: [{ url: `${ORIGIN}/` }] });
+  await dispatch(handlers.push, { data: { text: () => JSON.stringify({ title: "Your turn", body: "Game 7", link: "/?game=7" }) } });
+  assert.equal(calls.show.length, 1);
+  assert.deepEqual(wins[0].posted, []);
+});
+
+test("a window whose postMessage throws does not stop the others or the notification", async () => {
+  const gone = { url: `${ORIGIN}/`, postMessage() { throw new Error("window closed"); } };
+  const { handlers, calls, wins } = load({ windows: [gone, { url: `${ORIGIN}/game` }] });
+  const payload = { id: "i1", title: "Your turn", body: "Game 7", link: "/?game=7" };
+  await dispatch(handlers.push, { data: { text: () => JSON.stringify(payload) } });
+  assert.equal(calls.show.length, 1);
+  assert.equal(wins[1].posted.length, 1);
 });
 
 test("notificationclick never leaves the worker's origin", async () => {
