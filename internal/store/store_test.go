@@ -448,3 +448,9 @@ func TestOpenRefusesNewerSchema(t *testing.T) {
 	require.NoError(t, check.QueryRow(`PRAGMA user_version`).Scan(&version))
 	assert.Equal(t, 3, version)
 }
+
+func TestColumnRefusesUnsupportedDestination(t *testing.T) {
+	var f float64
+	err := column(map[string]any{"x": 1.5}, "x", &f)
+	require.ErrorContains(t, err, "*float64")
+}

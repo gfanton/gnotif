@@ -294,7 +294,7 @@ func scanDelivery(r map[string]any) (Delivery, error) {
 }
 
 // column stores row[name] in dst, a *int64 or a *string, and fails when the
-// value has the other type.
+// value has the other type or dst is neither.
 func column(row map[string]any, name string, dst any) error {
 	switch dst := dst.(type) {
 	case *int64:
@@ -309,6 +309,8 @@ func column(row map[string]any, name string, dst any) error {
 			return fmt.Errorf("column %s: %T is not text", name, row[name])
 		}
 		*dst = v
+	default:
+		return fmt.Errorf("column %s: unsupported destination %T", name, dst)
 	}
 	return nil
 }
