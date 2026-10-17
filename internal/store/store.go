@@ -114,6 +114,9 @@ func (s *Store) migrate(ctx context.Context, name string) error {
 	if err != nil {
 		return fmt.Errorf("count tables: %w", err)
 	}
+	if len(res[0].Rows) == 0 {
+		return errors.New("count tables: no row in the answer")
+	}
 	var tables int64
 	if err := column(res[0].Rows[0], "n", &tables); err != nil {
 		return fmt.Errorf("count tables: %w", err)

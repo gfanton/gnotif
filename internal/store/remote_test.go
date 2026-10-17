@@ -107,6 +107,16 @@ func TestOpenRemoteRefusesTablesWithoutVersion(t *testing.T) {
 	require.ErrorIs(t, err, ErrSchemaVersion)
 }
 
+func TestOpenRemoteTableCountWithoutRow(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[{"rows":[],"changes":0}]`))
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := Open(context.Background(), srv.URL)
+	require.ErrorContains(t, err, "count tables")
+}
+
 func TestOpenRemoteUnreachable(t *testing.T) {
 	srv := storetest.NewServer(t)
 	srv.Close()
