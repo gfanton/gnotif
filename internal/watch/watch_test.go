@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,6 +24,7 @@ import (
 
 	"github.com/gfanton/gnotif/internal/indexer"
 	"github.com/gfanton/gnotif/internal/store"
+	"github.com/gfanton/gnotif/internal/store/storetest"
 	"github.com/gfanton/gnotif/internal/trigger"
 )
 
@@ -1066,6 +1069,71 @@ func TestFailedBatchChangesNothing(t *testing.T) {
 	assert.Equal(t, []string{"0000001", "0000002", "0000003"}, h.triggerIDs(t))
 	assert.Equal(t, store.Cursor{HeightDone: 12, Bound: 12}, h.cursor(t))
 	assert.Equal(t, []string{"Game 7, turn 1"}, h.bodies())
+}
+
+// A stop can land after a remote store committed a window's batch and before
+// its answer arrives. A restart never reads that window again, so the batch
+// must finish and its pushes and matches be handed over.
+func TestStopDuringRemoteBatchHandsWindowOver(t *testing.T) {
+	ctx := context.Background()
+	loopCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	var gaveUp atomic.Bool // the watcher abandoned the held batch
+	release := make(chan struct{})
+	answer := sync.OnceFunc(func() { close(release) })
+	upstream := storetest.NewServer(t)
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if !assert.NoError(t, err) {
+			return
+		}
+		resp, err := http.Post(upstream.URL, "application/json", bytes.NewReader(body))
+		if !assert.NoError(t, err) {
+			return
+		}
+		defer resp.Body.Close()
+		out, err := io.ReadAll(resp.Body)
+		if !assert.NoError(t, err) {
+			return
+		}
+		// Only the window's batch reads subscribers; it has committed upstream.
+		if bytes.Contains(body, []byte("FROM optins o JOIN subscriptions")) {
+			stop()
+			select {
+			case <-r.Context().Done():
+				gaveUp.Store(true)
+				return
+			case <-release:
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+		w.Write(out)
+	}))
+	t.Cleanup(proxy.Close)
+	// Close waits for the held answer.
+	t.Cleanup(answer)
+
+	h := newHarness(t, 1)
+	st, err := store.Open(ctx, proxy.URL)
+	require.NoError(t, err)
+	t.Cleanup(func() { st.Close() })
+	h.store, h.w.cfg.Store = st, st
+	h.putTrigger(t, "0000001", game)
+	h.optIn(t, "E", "0000001", "g1bob")
+	h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 11})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 11 })
+	h.fake.add(11, turn("7", "g1bob"))
+
+	ticked := make(chan error, 1)
+	go func() { ticked <- h.w.Tick(loopCtx) }()
+	require.Eventually(t, func() bool { return loopCtx.Err() != nil }, 5*time.Second, 5*time.Millisecond)
+	// A client that gives up on a cancelled request does so at once.
+	assert.Never(t, gaveUp.Load, 100*time.Millisecond, 5*time.Millisecond, "the watcher abandoned a committed batch")
+	answer()
+	require.NoError(t, <-ticked)
+	assert.Equal(t, store.Cursor{HeightDone: 11, Bound: 11}, h.cursor(t))
+	assert.Equal(t, []string{"Game 7, turn 1"}, h.bodies())
+	assert.Len(t, h.published, 1)
 }
 
 // A batch whose answer is lost may have applied. The stored cursor tells,

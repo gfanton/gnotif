@@ -259,7 +259,9 @@ func (w *Watcher) advance(ctx context.Context, next store.Cursor, events []trigg
 	}
 	var pushes []store.Push
 	if len(b.stmts) > 0 {
-		res, err := w.cfg.Store.Exec(ctx, b.stmts)
+		// A stop must not abandon a batch the store may already have
+		// committed: a restart never reads its window again.
+		res, err := w.cfg.Store.Exec(context.WithoutCancel(ctx), b.stmts)
 		if err == nil {
 			pushes, err = b.pushes(res, w.cfg.Now())
 		}
