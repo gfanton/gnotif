@@ -67,6 +67,38 @@ A trigger cannot be edited, and a realm declares its triggers once. To change th
 
 So a page never keeps a trigger id. It asks for the ids with `triggers(target)` each time it loads, and sends its opt-ins with the ids it gets.
 
+## Pause notifications
+
+The registry has no pause. A realm that may need one builds it into its own events: while it emits nothing, gnotif servers send nothing, and its triggers and opt-ins stay. Here is the [Getting started](getting-started.md) realm with a switch that only its deployer can flip:
+
+```go
+var (
+	admin address
+	muted bool
+)
+
+func init(cur realm) {
+	admin = cur.Previous().Address() // the address that deployed the realm
+	// ... declare the triggers ...
+}
+
+// SetMuted stops or resumes the realm's notifications.
+func SetMuted(cur realm, v bool) {
+	if cur.Previous().Address() != admin {
+		panic("only the deployer can mute")
+	}
+	muted = v
+}
+
+func Notify(cur realm, to address, msg string) {
+	if !muted {
+		chain.Emit("Message", "to", to.String(), "msg", msg)
+	}
+}
+```
+
+For a realm deployed without such a switch, the only way to stop its notifications is to [drop](#drop-a-trigger) its triggers, for good.
+
 ## Drop a trigger
 
 `Drop` removes triggers for good. The realm's namespace owner calls it directly, signed with its own key, such as with gnokey:
@@ -81,6 +113,8 @@ gnokey maketx call -pkgpath gno.land/r/nym-gfanton001/gnotif/v1 -func Drop \
 The first argument is the realm's path, and the second lists the ids to drop, separated by commas, such as `v1-0000007,v1-0000008`. Spaces around an id are ignored. The realm's [page on gnoweb](#see-the-triggers-on-gnoweb) lists its ids.
 
 Dropping a trigger deletes its opt-ins on every gnotif server. The realm's triggers stay set, even once all of them are dropped: only a new version of the realm can declare new ones.
+
+A drop cannot be undone. Check each id on the realm's page first, and add `-simulate only` to the command to try it without sending it: an id that is not active fails there.
 
 `Drop` drops nothing and panics when:
 
