@@ -33,15 +33,17 @@ export function canEnable(busy, trigger) {
 }
 
 /**
- * optinsAtLoad reports whether the page sets its opt-ins as it loads: once
- * push is on and the trigger has loaded, so the client keeps the pushes the
- * service worker passes to the page, with live updates off too.
+ * optinsAtLoad reports whether the page sets its opt-ins as it loads: when
+ * push is on, the trigger has loaded, and live updates do not resume, since
+ * resuming them sets the opt-ins. Without them the client drops the pushes
+ * the service worker passes to the page.
  * @param {boolean} on whether this browser receives notifications
+ * @param {boolean} resuming whether live updates resume at load
  * @param {import("./gnotif.js").Trigger | null} trigger null until it loads
  * @returns {boolean}
  */
-export function optinsAtLoad(on, trigger) {
-  return on && trigger !== null;
+export function optinsAtLoad(on, resuming, trigger) {
+  return on && !resuming && trigger !== null;
 }
 
 /**

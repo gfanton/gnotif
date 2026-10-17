@@ -441,7 +441,7 @@ try {
   if (!on && saved?.push) {
     say("message", "This browser stopped receiving notifications. Turn them on again to resume.");
   }
-  if (optinsAtLoad(on, trigger)) {
+  if (optinsAtLoad(on, saved?.live === true, trigger)) {
     await setOptin();
   }
 } catch (err) {

@@ -37,9 +37,13 @@ test("canEnable needs an idle page and a loaded trigger", () => {
 });
 
 test("optinsAtLoad sets the opt-ins as the page loads once push is on and the trigger has loaded", () => {
-  assert.equal(optinsAtLoad(true, trigger), true);
-  assert.equal(optinsAtLoad(false, trigger), false, "push off");
-  assert.equal(optinsAtLoad(true, null), false, "no trigger");
+  assert.equal(optinsAtLoad(true, false, trigger), true);
+  assert.equal(optinsAtLoad(false, false, trigger), false, "push off");
+  assert.equal(optinsAtLoad(true, false, null), false, "no trigger");
+});
+
+test("optinsAtLoad leaves the opt-ins to live updates that resume at load", () => {
+  assert.equal(optinsAtLoad(true, true, trigger), false);
 });
 
 test("listenerMismatch names the opted-in address when the sender is another", () => {
