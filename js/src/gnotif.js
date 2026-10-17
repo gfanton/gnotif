@@ -508,7 +508,7 @@ export class Gnotif {
         return;
       case "notification": {
         const n = browserNotification(frame, this.#scope(), "live");
-        if (n) {
+        if (n !== null) {
           this.#deliver(n);
         }
         return;
@@ -532,7 +532,7 @@ export class Gnotif {
       return;
     }
     const n = browserNotification(data.notification, this.#scope(), "push");
-    if (n && this.#optins?.some((o) => o.trigger === n.trigger && o.value === n.value)) {
+    if (n !== null && this.#optins?.some((o) => o.trigger === n.trigger && o.value === n.value)) {
       this.#deliver(n);
     }
   }

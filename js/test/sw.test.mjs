@@ -12,7 +12,7 @@ const RESUBSCRIBED = { endpoint: "E3", keys: { p256dh: "p3", auth: "a3" } };
 // answers putStatus to PUT /v1/subscription and the key "PK" to
 // GET /v1/vapid. Each window records what is posted to it in posted; a
 // window's own fields, such as a postMessage that throws, override the defaults.
-function load({ putStatus = 204, windows = [], scope = `${ORIGIN}/`, search = "?server=" + encodeURIComponent("https://gnotif.example") } = {}) {
+function load({ putStatus = 204, windows = [], matchAllError = null, scope = `${ORIGIN}/`, search = "?server=" + encodeURIComponent("https://gnotif.example") } = {}) {
   const handlers = {};
   const calls = { show: [], open: [], fetch: [], subscribe: [], matchAll: [] };
   const wins = windows.map((w) => ({ posted: [], postMessage(m) { this.posted.push(m); }, ...w }));
@@ -31,6 +31,9 @@ function load({ putStatus = 204, windows = [], scope = `${ORIGIN}/`, search = "?
     clients: {
       matchAll: async (options) => {
         calls.matchAll.push(options);
+        if (matchAllError !== null) {
+          throw matchAllError;
+        }
         return wins;
       },
       openWindow: async (url) => calls.open.push(url),
@@ -153,6 +156,13 @@ test("a window whose postMessage throws does not stop the others or the notifica
   await dispatch(handlers.push, { data: { text: () => JSON.stringify(payload) } });
   assert.equal(calls.show.length, 1);
   assert.equal(wins[1].posted.length, 1);
+});
+
+test("a push is shown and its waitUntil resolves when the windows cannot be listed", async () => {
+  const { handlers, calls } = load({ matchAllError: new Error("clients unavailable") });
+  const payload = { id: "i1", title: "Your turn", body: "Game 7", link: "/?game=7" };
+  await dispatch(handlers.push, { data: { text: () => JSON.stringify(payload) } });
+  assert.equal(calls.show.length, 1);
 });
 
 test("notificationclick never leaves the worker's origin", async () => {

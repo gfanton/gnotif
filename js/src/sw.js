@@ -36,8 +36,7 @@ function relayable(text) {
   return null;
 }
 
-// inScope reports whether a window belongs to the worker's scope. Clicks
-// focus such windows, and pushes are relayed to them.
+// inScope reports whether a window's URL lies under the worker's scope.
 /**
  * @param {WindowClient} client
  * @returns {boolean}
@@ -102,7 +101,8 @@ sw.addEventListener("push", (event) => {
   if (icon !== null) {
     options.icon = icon;
   }
-  event.waitUntil(Promise.all([sw.registration.showNotification(p.title, options), relayToWindows(text)]));
+  // The relay is best-effort: its failure must not fail the push.
+  event.waitUntil(Promise.all([sw.registration.showNotification(p.title, options), relayToWindows(text).catch(() => {})]));
 });
 
 sw.addEventListener("notificationclick", (event) => {
