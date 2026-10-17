@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { answeredSend, blockSummary, clockText, deliveredBody, details, waitText } from "./live-log.mjs";
+import { answeredSend, blockSummary, clockText, deliveredBody, details, logShown, waitText } from "./live-log.mjs";
 
 test("an arrival answers the oldest send waiting for its body", () => {
   const waiting = [{ body: "Hello" }, { body: "Bye" }, { body: "Hello" }];
@@ -72,6 +72,13 @@ test("the details say a push delivered the notification", () => {
   assert.deepEqual(details({ ...echoed, source: "push" }, iso).filter(([label]) => label === "Delivered by"), [
     ["Delivered by", "push"],
   ]);
+});
+
+test("the log shows while live updates are on, and with them off once a push lists a row", () => {
+  assert.equal(logShown(true, 0), true);
+  assert.equal(logShown(true, 2), true);
+  assert.equal(logShown(false, 1), true);
+  assert.equal(logShown(false, 0), false);
 });
 
 test("the wait reads in whole seconds", () => {

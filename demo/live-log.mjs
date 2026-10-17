@@ -81,6 +81,17 @@ export function details(n, format) {
 }
 
 /**
+ * logShown reports whether the arrivals log shows: while live updates are on,
+ * and while it lists a row, which a push brings with live updates off.
+ * @param {boolean} live whether live updates are on
+ * @param {number} rows the rows the log lists
+ * @returns {boolean}
+ */
+export function logShown(live, rows) {
+  return live || rows > 0;
+}
+
+/**
  * waitText words the wait from a send to its arrival in whole seconds, or as
  * within a second under 1 s.
  * @param {number} ms milliseconds from the send to the arrival
