@@ -44,6 +44,9 @@ func (r *remote) close() error {
 }
 
 func (r *remote) exec(ctx context.Context, stmts []Statement) ([]Result, error) {
+	if len(stmts) > MaxStatements {
+		return nil, fmt.Errorf("%d statements: %w", len(stmts), ErrBatchTooLarge)
+	}
 	wire := make([]wireStatement, len(stmts))
 	for i, st := range stmts {
 		wire[i] = wireStatement{SQL: st.SQL, Args: st.Args}

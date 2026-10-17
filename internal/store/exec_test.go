@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/gfanton/gnotif/internal/store/storetest"
 )
 
 func TestExecReturnsRowsAndChanges(t *testing.T) {
@@ -41,24 +43,41 @@ func TestExecIsAtomic(t *testing.T) {
 	})
 }
 
-func TestExecRefusesOverMaxStatements(t *testing.T) {
-	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
-		s := fresh(t)
-		ctx := context.Background()
-		_, err := s.Exec(ctx, []Statement{{SQL: `CREATE TABLE x (id INTEGER PRIMARY KEY)`}})
-		require.NoError(t, err)
+// inserts returns n statements that each insert a row into x.
+func inserts(n int) []Statement {
+	stmts := make([]Statement, n)
+	for i := range stmts {
+		stmts[i] = Statement{SQL: `INSERT INTO x (id) VALUES (?)`, Args: []any{i}}
+	}
+	return stmts
+}
 
-		stmts := make([]Statement, MaxStatements+1)
-		for i := range stmts {
-			stmts[i] = Statement{SQL: `INSERT INTO x (id) VALUES (?)`, Args: []any{i}}
-		}
-		_, err = s.Exec(ctx, stmts)
-		require.ErrorIs(t, err, ErrBatchTooLarge)
+func TestRemoteExecRefusesOverMaxStatements(t *testing.T) {
+	s := open(t, storetest.NewServer(t).URL)
+	ctx := context.Background()
+	_, err := s.Exec(ctx, []Statement{{SQL: `CREATE TABLE x (id INTEGER PRIMARY KEY)`}})
+	require.NoError(t, err)
 
-		results, err := s.Exec(ctx, []Statement{{SQL: `SELECT count(*) AS n FROM x`}})
-		require.NoError(t, err)
-		require.Equal(t, int64(0), results[0].Rows[0]["n"])
-	})
+	_, err = s.Exec(ctx, inserts(MaxStatements+1))
+	require.ErrorIs(t, err, ErrBatchTooLarge)
+
+	results, err := s.Exec(ctx, []Statement{{SQL: `SELECT count(*) AS n FROM x`}})
+	require.NoError(t, err)
+	require.Equal(t, int64(0), results[0].Rows[0]["n"])
+}
+
+func TestLocalExecRunsOverMaxStatements(t *testing.T) {
+	s := fresh(t)
+	ctx := context.Background()
+	_, err := s.Exec(ctx, []Statement{{SQL: `CREATE TABLE x (id INTEGER PRIMARY KEY)`}})
+	require.NoError(t, err)
+
+	_, err = s.Exec(ctx, inserts(MaxStatements+1))
+	require.NoError(t, err)
+
+	results, err := s.Exec(ctx, []Statement{{SQL: `SELECT count(*) AS n FROM x`}})
+	require.NoError(t, err)
+	require.Equal(t, int64(MaxStatements+1), results[0].Rows[0]["n"])
 }
 
 func TestExecChangesOnlyCountsRowWrites(t *testing.T) {

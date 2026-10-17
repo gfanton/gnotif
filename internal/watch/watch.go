@@ -128,8 +128,8 @@ func (w *Watcher) Run(ctx context.Context) error {
 }
 
 // Tick processes one window. A failed tick halves the next window, since the
-// indexer refuses a query that returns too many transactions and the store a
-// batch of too many statements, and a successful one doubles it, up to
+// indexer refuses a query that returns too many transactions and a remote
+// store a batch of too many statements, and a successful one doubles it, up to
 // MaxWindow. A window of one block too large to read or to commit whole is
 // read one transaction at a time.
 func (w *Watcher) Tick(ctx context.Context) error {

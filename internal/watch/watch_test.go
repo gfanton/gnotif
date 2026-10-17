@@ -329,6 +329,16 @@ func (h *harness) faulty() *faultyStore {
 	return f
 }
 
+// remote moves the harness onto a new, empty remote store, the backend that
+// refuses a batch over store.MaxStatements.
+func (h *harness) remote(t *testing.T) {
+	t.Helper()
+	st, err := store.Open(context.Background(), storetest.NewServer(t).URL)
+	require.NoError(t, err)
+	t.Cleanup(func() { st.Close() })
+	h.store, h.w.cfg.Store = st, st
+}
+
 func (h *harness) exec(t *testing.T, stmts ...store.Statement) {
 	t.Helper()
 	_, err := h.store.Exec(context.Background(), stmts)
@@ -1220,6 +1230,7 @@ func TestLostAnswerNotProcessedTwice(t *testing.T) {
 
 func TestOversizedWindowReadPerTransaction(t *testing.T) {
 	h := newHarness(t, 1)
+	h.remote(t)
 	h.putTrigger(t, "0000001", game)
 	h.optIn(t, "E", "0000001", "g1bob")
 	h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 11})
@@ -1238,6 +1249,7 @@ func TestOversizedWindowReadPerTransaction(t *testing.T) {
 
 func TestOversizedTransactionSkipped(t *testing.T) {
 	h := newHarness(t, 1)
+	h.remote(t)
 	h.putTrigger(t, "0000001", game)
 	h.optIn(t, "E", "0000001", "g1bob")
 	h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 11})
@@ -1249,6 +1261,24 @@ func TestOversizedTransactionSkipped(t *testing.T) {
 	assert.Equal(t, store.Cursor{HeightDone: 11, Bound: 11}, h.cursor(t))
 	assert.Empty(t, h.sent)
 	assert.Empty(t, h.published)
+}
+
+// A SQLite file has no statement cap, so a transaction with more matches
+// than a remote store takes in one batch is delivered whole.
+func TestLargeTransactionDeliveredOnSQLite(t *testing.T) {
+	h := newHarness(t, 1)
+	h.putTrigger(t, "0000001", game)
+	h.optIn(t, "E", "0000001", "g1bob")
+	h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 11})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 11 })
+	h.fake.add(11, slices.Repeat([]fakeEvent{turn("7", "g1bob")}, store.MaxStatements+1)...)
+	h.tick(t)
+
+	assert.NotContains(t, h.log.String(), "skip oversized transaction")
+	assert.Equal(t, store.Cursor{HeightDone: 11, Bound: 11}, h.cursor(t))
+	assert.Len(t, h.sent, store.MaxStatements+1)
+	require.Len(t, h.published, 1)
+	assert.Len(t, h.published[0], store.MaxStatements+1)
 }
 
 func TestSnapshotFollowsRegistryAcrossWindows(t *testing.T) {

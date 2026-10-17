@@ -84,7 +84,7 @@ While it catches up, gnotifd skips realm events older than `-max-age`, so a rest
 
 When the indexer reports a height below what gnotifd already stored, gnotifd logs `indexer behind stored bound` on every poll until the indexer catches up, and waits for it. That happens when the indexer re-syncs from scratch, or when several indexers answer behind one URL.
 
-When the indexer's answer for a single transaction is too large to read, gnotifd skips that transaction and logs `skip oversized transaction` as an error, with its height, index and hash. That transaction's events are lost, and every other transaction is read. When the lost events declared or removed a trigger, gnotifd's triggers no longer match the registry's.
+When the indexer's answer for a single transaction is too large to read, or, with a [remote store](#remote-store), the transaction takes more than 1,000 statements to commit, about one per event that matches a trigger, gnotifd skips that transaction and logs `skip oversized transaction` as an error, with its height, index and hash. That transaction's events are lost, and every other transaction is read. When the lost events declared or removed a trigger, gnotifd's triggers no longer match the registry's.
 
 ## The push service allowlist
 

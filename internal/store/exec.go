@@ -3,13 +3,13 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 )
 
-// MaxStatements is the most statements one Exec call accepts.
+// MaxStatements is the most statements one Exec call to a remote store
+// accepts. A SQLite file takes any number.
 const MaxStatements = 1000
 
-// ErrBatchTooLarge reports an Exec call over MaxStatements.
+// ErrBatchTooLarge reports an Exec call to a remote store over MaxStatements.
 var ErrBatchTooLarge = errors.New("store: batch over MaxStatements")
 
 // Statement is one SQL statement with its positional arguments.
@@ -43,8 +43,5 @@ type executor interface {
 // Exec runs stmts in order as one atomic batch and returns one Result per
 // statement. A failing statement rolls the whole batch back.
 func (s *Store) Exec(ctx context.Context, stmts []Statement) ([]Result, error) {
-	if len(stmts) > MaxStatements {
-		return nil, fmt.Errorf("%d statements: %w", len(stmts), ErrBatchTooLarge)
-	}
 	return s.ex.exec(ctx, stmts)
 }
