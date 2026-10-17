@@ -115,6 +115,29 @@ func TestQueueSplitsLargeLists(t *testing.T) {
 	})
 }
 
+// A subscription removed after the watcher read it must not cost the other
+// pushes written in the same batch.
+func TestQueueSkipsRemovedSubscription(t *testing.T) {
+	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
+		ctx := context.Background()
+		s := fresh(t)
+		live := queueFixture(t, s)
+		subscribe(t, s, "E2", "K2")
+		var removed int64
+		res := exec(t, s, Statement{`SELECT id FROM subscriptions WHERE endpoint = 'E2'`, nil})
+		require.NoError(t, column(res[0].Rows[0], "id", &removed))
+		require.NoError(t, s.DeleteSubscription(ctx, "E2"))
+
+		require.NoError(t, s.Queue(ctx, []Pending{
+			{Push: push(removed, "h1"), NextAttempt: now},
+			{Push: push(live, "h2"), NextAttempt: now},
+		}))
+
+		res = exec(t, s, Statement{SQL: `SELECT subscription_id, tx_hash FROM outbox`})
+		assert.Equal(t, []map[string]any{{"subscription_id": live, "tx_hash": "h2"}}, res[0].Rows)
+	})
+}
+
 func TestTriggersLoadsAllInOrder(t *testing.T) {
 	eachBackend(t, func(t *testing.T, fresh func(*testing.T) *Store) {
 		ctx := context.Background()

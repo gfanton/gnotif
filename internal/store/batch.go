@@ -115,20 +115,23 @@ type Pending struct {
 	NextAttempt time.Time
 }
 
-// Queue writes pending to the outbox, skipping pushes already queued. It
-// runs in batches of MaxStatements, so a failure part way leaves the
-// earlier batches written; queueing the same list again completes it.
+// Queue writes pending to the outbox, skipping pushes already queued and
+// pushes whose subscription is gone. It runs in batches of MaxStatements,
+// so a failure part way leaves the earlier batches written; queueing the
+// same list again completes it.
 func (s *Store) Queue(ctx context.Context, pending []Pending) error {
 	for chunk := range slices.Chunk(pending, MaxStatements) {
 		stmts := make([]Statement, len(chunk))
 		for i, p := range chunk {
+			// OR IGNORE does not cover a foreign key, so the select finds the
+			// subscription or writes nothing.
 			stmts[i] = Statement{`
 				INSERT OR IGNORE INTO outbox
 					(subscription_id, trigger_id, tx_hash, event_index, title, body, link, attempts, next_attempt_at, created_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				[]any{p.SubscriptionID, p.TriggerID, p.TxHash, p.EventIndex,
+				SELECT id, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM subscriptions WHERE id = ?`,
+				[]any{p.TriggerID, p.TxHash, p.EventIndex,
 					p.Notification.Title, p.Notification.Body, p.Notification.Link,
-					p.Attempts, p.NextAttempt.UTC().UnixMilli(), p.CreatedAt.UTC().UnixMilli()}}
+					p.Attempts, p.NextAttempt.UTC().UnixMilli(), p.CreatedAt.UTC().UnixMilli(), p.SubscriptionID}}
 		}
 		if _, err := s.Exec(ctx, stmts); err != nil {
 			return fmt.Errorf("queue pushes: %w", err)
