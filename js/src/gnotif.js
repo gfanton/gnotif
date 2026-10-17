@@ -25,8 +25,10 @@
  */
 
 /**
- * A notification as the live connection delivers it.
- * @typedef {object} LiveNotification
+ * A notification as either channel delivers it.
+ * @typedef {object} GnotifNotification
+ * @property {string} id identifies the match; both channels carry the same one
+ * @property {"live" | "push"} source the channel that delivered it first
  * @property {string} trigger trigger id
  * @property {string} value the opted-in param value, "" for none
  * @property {string} title
@@ -41,7 +43,7 @@
 /**
  * What each event's handler receives.
  * @typedef {object} GnotifEvents
- * @property {LiveNotification} notification a live notification arrived
+ * @property {GnotifNotification} notification a notification arrived, live or by push
  * @property {undefined} reconnecting the live connection dropped and is retrying
  * @property {undefined} reconnect it is back; notifications in between were missed
  * @property {GnotifError} error a live failure no promise waits on
@@ -52,6 +54,7 @@ const PING_INTERVAL = 30_000;
 const PONG_TIMEOUT = 10_000;
 const BACKOFF_MIN = 1_000;
 const BACKOFF_MAX = 30_000;
+const DELIVERED_MAX = 256;
 
 /**
  * @param {unknown} v
@@ -89,18 +92,19 @@ function safeLink(link, scope) {
 }
 
 /**
- * @param {Record<string, unknown>} f a decoded notification frame
+ * @param {Record<string, unknown>} f a decoded notification frame or relayed push
  * @param {string} scope the service worker's scope
- * @returns {LiveNotification | null} null when a field is missing or mistyped
+ * @param {"live" | "push"} source
+ * @returns {GnotifNotification | null} null when a field is missing or mistyped
  */
-function liveNotification(f, scope) {
-  const { trigger, value, title, body, link, height, tx, time, attrs } = f;
-  if (typeof trigger !== "string" || typeof value !== "string" || typeof title !== "string" ||
+function browserNotification(f, scope, source) {
+  const { id, trigger, value, title, body, link, height, tx, time, attrs } = f;
+  if (typeof id !== "string" || typeof trigger !== "string" || typeof value !== "string" || typeof title !== "string" ||
     typeof body !== "string" || typeof link !== "string" || typeof height !== "number" ||
     typeof tx !== "string" || typeof time !== "string" || !Array.isArray(attrs) || !attrs.every(isAttr)) {
     return null;
   }
-  return { trigger, value, title, body, link: safeLink(link, scope), height, tx, time, attrs };
+  return { id, source, trigger, value, title, body, link: safeLink(link, scope), height, tx, time, attrs };
 }
 
 export class GnotifError extends Error {
@@ -151,6 +155,8 @@ export class Gnotif {
   #optins = null;
   /** @type {{ [K in keyof GnotifEvents]: Set<(arg: GnotifEvents[K]) => void> }} */
   #handlers = { notification: new Set(), reconnecting: new Set(), reconnect: new Set(), error: new Set() };
+  /** @type {Set<string>} the last DELIVERED_MAX delivered ids, oldest first */
+  #delivered = new Set();
 
   // ---- Live connection state
   /** @type {WebSocket | null} */
@@ -196,6 +202,7 @@ export class Gnotif {
     this.#server = server.replace(/\/$/, "");
     this.#serviceWorker = serviceWorker;
     this.#icon = icon;
+    globalThis.navigator?.serviceWorker?.addEventListener?.("message", (e) => this.#onRelay(e.data));
   }
 
   /** @returns {string | undefined} the network named at construction */
@@ -486,11 +493,9 @@ export class Gnotif {
         this.#onReply(typeof frame.error === "string" ? frame.error : "gnotif server refused the opt-ins");
         return;
       case "notification": {
-        // register() without a scope option scopes the worker to its URL's directory.
-        const scope = new URL("./", new URL(this.#serviceWorker, location.href)).href;
-        const n = liveNotification(frame, scope);
+        const n = browserNotification(frame, this.#scope(), "live");
         if (n) {
-          this.#emit("notification", n);
+          this.#deliver(n);
         }
         return;
       }
@@ -499,6 +504,39 @@ export class Gnotif {
         // does not know.
         return;
     }
+  }
+
+  // register() without a scope option scopes the worker to its URL's directory.
+  /** @returns {string} the service worker's scope */
+  #scope() {
+    return new URL("./", new URL(this.#serviceWorker, location.href)).href;
+  }
+
+  /** @param {unknown} data a message the service worker posted to this page */
+  #onRelay(data) {
+    if (!isRecord(data) || data.type !== "gnotif.notification" || !isRecord(data.notification)) {
+      return;
+    }
+    const n = browserNotification(data.notification, this.#scope(), "push");
+    if (n && this.#optins?.some((o) => o.trigger === n.trigger && o.value === n.value)) {
+      this.#deliver(n);
+    }
+  }
+
+  // #deliver emits n unless its id was among the last DELIVERED_MAX delivered.
+  /** @param {GnotifNotification} n */
+  #deliver(n) {
+    if (this.#delivered.has(n.id)) {
+      return;
+    }
+    this.#delivered.add(n.id);
+    if (this.#delivered.size > DELIVERED_MAX) {
+      for (const oldest of this.#delivered) {
+        this.#delivered.delete(oldest);
+        break;
+      }
+    }
+    this.#emit("notification", n);
   }
 
   /** @param {string | null} err the server's refusal, null when it accepted */
