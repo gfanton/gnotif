@@ -61,8 +61,8 @@ export function blockSummary(height, wait) {
 /**
  * details lists what an arrival carries besides its block, as label and value
  * pairs: the block's time as format writes it, the transaction, the channel
- * that delivered it, the trigger with its opted-in value, the event's attributes and the link. A time that
- * does not parse is left out.
+ * that delivered it, the trigger with its opted-in value, the event's
+ * attributes and the link. A time that does not parse is left out.
  * @param {import("./gnotif.js").GnotifNotification} n
  * @param {(at: Date) => string} format
  * @returns {[string, string][]}

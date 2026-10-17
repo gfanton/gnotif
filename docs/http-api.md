@@ -142,7 +142,7 @@ For every match whose trigger and value are in its set, the connection receives:
  "attrs": [{"key": "game", "value": "0000001"}, {"key": "next", "value": "g1..."}, {"key": "turn", "value": "3"}]}
 ```
 
-`id` identifies the match: a push in the full form for the same match carries the same `id`, so a client that hears both can keep one.
+`id` identifies the match: a push in the [full form](#push-payload) for the same match carries the same `id`, so a client that hears both can keep one.
 
 `title`, `body` and `link` are those of the push for the same match. `attrs` lists the event's attributes in order. `height` and `tx` name the transaction that emitted the event, so a page can check it on chain. `time` is the block's time, in UTC, as RFC 3339.
 
@@ -163,7 +163,7 @@ A Web Push carries one JSON message in a single encrypted record, so it is at mo
 - The full form is the [notification frame](#notification-frames) without `type`: `id`, `trigger`, `value`, `title`, `body`, `link`, `height`, `tx`, `time` and `attrs`. A push uses it when the JSON fits.
 - The short form is `{"title": "...", "body": "...", "link": "..."}`. A push uses it when the full form does not fit. A link that would overflow the record becomes `/`.
 
-A push gnotifd sends straight after reading its match has the full form when it fits. A push that comes back from the outbox (retried, held past the memory cap, or written when gnotifd stopped) no longer knows its match, so it always has the short form.
+A push gnotifd sends straight after reading its match has the full form when it fits. A push that comes back from the outbox (retried, held past the memory cap, or written when gnotifd stopped) does not hold its match, so it always has the short form.
 
 The service worker shows `title`, `body` and `link` from either form, and posts only the full form to the page.
 

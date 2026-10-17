@@ -76,11 +76,10 @@ keeping an id. It rejects with a `TypeError`, before any request, when
 ### `enable()`
 
 Asks for notification permission, subscribes the browser, and registers
-it with the server, with the items of the opt-ins `setOptins` kept
-that are not `push: false`, if it was called.
-It resolves the subscription as `PushSubscriptionJSON`. Call it from a
-user gesture such as a click, or the browser may refuse or hide the
-permission prompt.
+it with the server. If `setOptins` was called, it sends the kept items
+that are not `push: false`. It resolves the subscription as
+`PushSubscriptionJSON`. Call it from a user gesture such as a click, or
+the browser may refuse or hide the permission prompt.
 
 It throws a `GnotifError` with code:
 
@@ -94,18 +93,18 @@ It throws a `GnotifError` with code:
 
 ### `setOptins(optins)`
 
-Keeps `optins`, a list of `{ trigger, value, push }` where `value` is
-`""` for a trigger without a param, as the set both channels use. `push:
-false` keeps an item off push, so the page hears it live only; push
-stays on when `push` is absent. It sends every item to the live
+Keeps `optins`, a list of `{ trigger, value, push }`, as the set both
+channels use. `value` is `""` for a trigger without a param.
+`push: false` keeps an item off push, so the page hears it live only;
+push stays on when `push` is absent. It sends every item to the live
 connection when one is open, and the items that are not `push: false`
-to the server for push when the browser holds a push subscription, and
+to the server for push when the browser holds a push subscription. It
 resolves once each has accepted its part. With neither, it only keeps
 the set, for a later `enable()` or `connect()`. The server never sees
-`push`. It throws a `GnotifError` with code `server`
-when the server refuses the set: for push, status 400 for an opt-in
-that breaks a rule and 404 when the server does not know the
-subscription, which `enable()` registers again.
+`push`. It throws a `GnotifError` with code `server` when the server
+refuses the set: for push, status 400 for an opt-in that breaks a rule
+and 404 when the server does not know the subscription, which
+`enable()` registers again.
 
 The server cannot read opt-ins back, so keep the set you last sent.
 

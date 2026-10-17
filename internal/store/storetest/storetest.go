@@ -28,8 +28,8 @@ type result struct {
 
 // NewServer starts a server for a new, empty database in t.TempDir(), closed
 // when the test ends. As the protocol requires, it enforces foreign keys and
-// runs each request as one transaction. It answers 400 to a malformed body and 500 with
-// {"error": message} to a failing statement.
+// runs each request as one transaction. It answers 400 to a malformed body
+// and 500 with {"error": message} to a failing statement.
 func NewServer(t testing.TB) *httptest.Server {
 	t.Helper()
 	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "remote.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")

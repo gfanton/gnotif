@@ -128,9 +128,7 @@ gnotifd also refuses a database made by a newer release, with `database was made
 
 **Atomic.** The statements of one request run in order as one transaction: all take effect, or none. The server enforces foreign keys, because gnotifd's tables delete their dependent rows with `ON DELETE CASCADE`.
 
-**Errors.** `400` answers a body that is not a JSON array of statements. `500` with `{"error": "<message>"}` answers a failing statement, and the request has no effect. Any other status fails the call.
-
-gnotifd waits at most 40 seconds for an answer.
+**Errors.** `400` answers a body that is not a JSON array of statements. `500` with `{"error": "<message>"}` answers a failing statement, and the request has no effect. Any other status fails the call, and so does no answer within 40 seconds.
 
 **Access.** The endpoint runs every statement it receives, and gnotifd sends it no credentials. Anyone who can reach it can read, change or drop the subscriptions, keys and opt-ins. Make it reachable only by gnotifd, on a private address or behind network-level access control, and keep its URL private.
 
@@ -138,7 +136,7 @@ gnotifd waits at most 40 seconds for an answer.
 
 ## Attach an external hub
 
-gnotifd holds live connections itself once `-stream-max` allows them; at its default of 0 it refuses them all. A deployment can hold them in an external hub instead, such as one that keeps idle connections at no cost, and leave `-stream-max` at 0. gnotifd still builds every frame a client receives, so clients see no difference. Two flags connect the hub, and gnotifd refuses one without the other:
+gnotifd holds live connections itself once `-stream-max` allows them; at its default of 0 it refuses them all. A deployment can instead hold them in an external hub, a separate service, and leave `-stream-max` at 0. gnotifd still builds every frame a client receives, so clients see no difference. Two flags connect the hub, and gnotifd refuses one without the other:
 
 - `-hub-listen <addr>` opens a second listener with one route, `POST /message`. The hub posts each text frame a client sends, at most 8,192 bytes, and receives `{"reply": "<frame>", "keys": ["<key>", "..."]}`. It sends `reply` to the client as is. `keys` is present when the frame replaced the connection's set, and lists that set. Keep this listener off the public network.
 - `-publish <url>` posts each processed window's matches to the hub as `[{"key": "<key>", "frame": "<frame>"}]`, in chain order, and the hub sends each `frame` to the connections whose keys include `key`. With `GNOTIF_PUBLISH_TOKEN` set, each request carries `Authorization: Bearer <token>`. A request that fails or takes over 5 seconds is logged and dropped, and so is a batch that arrives while 64 wait.

@@ -167,7 +167,7 @@ func runServer(t *testing.T, cfg Config) (base string, stop func() error) {
 	return base, stop
 }
 
-// Every write is a file the database's replica keeps and a restore reads, so
+// Each cursor store is a round trip to a remote store and a row written, so
 // gnotifd must not store its cursor on every poll of a quiet chain.
 func TestQuietChainKeepsStoredCursor(t *testing.T) {
 	cfg := config(t, 1)

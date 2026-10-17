@@ -27,7 +27,7 @@ var ErrSchemaVersion = errors.New("database was made by an older gnotifd")
 var ErrSchemaNewer = errors.New("database was made by a newer gnotifd")
 
 // MaxPerTarget is the most triggers one realm may have in each registry
-// version; the trigger snapshot returns no more.
+// version.
 const MaxPerTarget = 64
 
 // Store is gnotifd's database: a SQLite file or a remote store. It is safe
@@ -257,7 +257,7 @@ const selectDue = `
 	LIMIT ?`
 
 // Due returns at most limit queued pushes whose next attempt is at or
-// before now, in due order from the first after after.
+// before now, in due order, starting past the key after.
 func (s *Store) Due(ctx context.Context, now time.Time, after DueKey, limit int) ([]Delivery, error) {
 	res, err := s.Exec(ctx, []Statement{{selectDue, []any{now.UTC().UnixMilli(), after.At.UTC().UnixMilli(), after.ID, limit}}})
 	if err != nil {

@@ -155,7 +155,7 @@ func (s *Sender) hold(it item) {
 }
 
 // serviceOf names the routine that sends to endpoint: its allowlist entry, or
-// its host when the allowlist no longer has it.
+// its host when no entry matches it.
 func (s *Sender) serviceOf(endpoint string) string {
 	if entry, ok := pushhost.Match(endpoint, s.cfg.PushHosts); ok {
 		return entry
@@ -174,11 +174,10 @@ func signal(ch chan<- struct{}) {
 	}
 }
 
-// Run starts each push service's routine on its first push, and hands the
-// outbox's due pushes to the routines at once and every second. When ctx
-// ends, it waits for each routine's send in flight, writes the pushes still
-// queued to the outbox, and returns. A push read from the outbox keeps its
-// row and is not written again.
+// Run starts each push service's routine on its first push and hands the
+// outbox's due pushes to the routines at start and every second. When ctx
+// ends it waits for the sends in flight and writes the pushes still queued
+// to the outbox, except one read from it, which keeps its row.
 func (s *Sender) Run(ctx context.Context) error {
 	var routines sync.WaitGroup
 	ticker := time.NewTicker(checkEvery)
@@ -252,12 +251,11 @@ func (s *Sender) next(ctx context.Context, svc *service) (item, bool) {
 	return item{}, false
 }
 
-// check hands one page of the outbox's due pushes to their routines: at most
-// checkPage, and no more than memory has room for. A page starts after the
-// last row the previous one read, and the reads start over after a short
-// page, so rows held by a stalled service cannot keep the others out of
-// reach. A row already held stays with the routine holding it, and a row
-// settled while Due ran is skipped. Only one check runs at a time.
+// check hands one page of due outbox pushes to their routines, at most
+// checkPage and no more than memory has room for. Pages follow on from the
+// last row read and start over after a short one, so rows a stalled service
+// holds cannot hide the rest. A held row stays with its routine, a row
+// settled during Due is skipped, and only one check runs at a time.
 func (s *Sender) check(ctx context.Context) {
 	s.mu.Lock()
 	clear(s.settled)

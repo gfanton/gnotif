@@ -246,9 +246,9 @@ func (w *Watcher) readBlock(ctx context.Context, cur store.Cursor) error {
 	return err
 }
 
-// advance processes events and moves the cursor to next in one batch, which
-// stores the cursor with a window that has registry events or matches, and
-// otherwise once the stored one is StoreEvery old. Only a committed window
+// advance processes events and moves the cursor to next in one batch. The
+// batch stores the cursor with a window that has registry events or matches,
+// and otherwise once the stored one is StoreEvery old. Only a committed window
 // reaches the snapshot, Send and Publish. It returns the number of stale
 // events skipped.
 func (w *Watcher) advance(ctx context.Context, next store.Cursor, events []trigger.Event, blockTimes map[int64]time.Time) (int, error) {
@@ -266,7 +266,7 @@ func (w *Watcher) advance(ctx context.Context, next store.Cursor, events []trigg
 			pushes, err = b.pushes(res, w.cfg.Now())
 		}
 		if err != nil {
-			// Exec refuses an oversized batch before running any of it.
+			// An oversized batch ran nothing, so the loaded state holds.
 			if !errors.Is(err, store.ErrBatchTooLarge) {
 				w.loaded = false
 			}

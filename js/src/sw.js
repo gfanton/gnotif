@@ -36,7 +36,6 @@ function relayable(text) {
   return null;
 }
 
-// inScope reports whether a window's URL lies under the worker's scope.
 /**
  * @param {WindowClient} client
  * @returns {boolean}
@@ -45,8 +44,7 @@ function inScope(client) {
   return client.url.startsWith(sw.registration.scope);
 }
 
-// relayToWindows posts a full payload to each window in scope. A window
-// that refuses the message does not stop the others.
+// relayToWindows posts a full payload to each window in scope.
 /**
  * @param {string} text push payload
  * @returns {Promise<void>}

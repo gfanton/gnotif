@@ -79,7 +79,7 @@ The sender gives each push to the routine of its push service: one per `-push-ho
 
 At start and every second, the sender reads the outbox's pushes whose next attempt is due, oldest first, 100 at a time, and gives them to the routines while memory has room.
 
-A push carries `{"title", "body", "link"}` as JSON, encrypted for the subscription and signed with the VAPID key. Push services keep it for up to 24 hours while the browser is offline. When the link would make the message larger than one encrypted record holds, the link becomes `/`.
+A push carries one JSON message, encrypted for the subscription and signed with the VAPID key: the whole notification when it fits one encrypted record, and `{"title", "body", "link"}` otherwise, with `/` as the link when the link would overflow the record ([HTTP API](http-api.md#push-payload)). Push services keep it for up to 24 hours while the browser is offline.
 
 | Outcome | gnotifd |
 |---|---|
