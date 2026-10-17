@@ -5,7 +5,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -213,10 +215,10 @@ type harness struct {
 	fake      *fakeIndexer
 	store     *store.Store
 	path      string // the database file
-	wake      chan struct{}
 	w         *Watcher
 	log       *bytes.Buffer
 	published [][]trigger.Match
+	sent      []store.Push
 	clock     time.Time // the watcher's Now
 }
 
@@ -232,6 +234,8 @@ func mustRegistry(t *testing.T, path string) Registry {
 	return r
 }
 
+// newHarnessFor returns a harness whose watcher loads, on its first tick,
+// the cursor and triggers the test stored before it.
 func newHarnessFor(t *testing.T, startHeight int64, registryPath string) *harness {
 	t.Helper()
 	fake := &fakeIndexer{times: map[int64]time.Time{}, windowErrs: map[indexer.Window]string{}, txErrs: map[txAt]string{}, lagging: map[txAt]bool{}}
@@ -241,9 +245,8 @@ func newHarnessFor(t *testing.T, startHeight int64, registryPath string) *harnes
 	st, err := store.Open(context.Background(), path)
 	require.NoError(t, err)
 	t.Cleanup(func() { st.Close() })
-	wake := make(chan struct{}, 1)
 	var log bytes.Buffer
-	h := &harness{fake: fake, store: st, path: path, wake: wake, log: &log, clock: now}
+	h := &harness{fake: fake, store: st, path: path, log: &log, clock: now}
 	h.w = New(Config{
 		Source:      indexer.New(srv.URL, srv.Client()),
 		Store:       st,
@@ -252,7 +255,7 @@ func newHarnessFor(t *testing.T, startHeight int64, registryPath string) *harnes
 		Poll:        10 * time.Millisecond,
 		MaxAge:      10 * time.Minute,
 		MaxWindow:   1000,
-		Wake:        wake,
+		Send:        func(_ context.Context, ps []store.Push) { h.sent = append(h.sent, ps...) },
 		Now:         func() time.Time { return h.clock },
 		Log:         slog.New(slog.NewTextHandler(&log, nil)),
 		Publish:     func(ms []trigger.Match) { h.published = append(h.published, ms) },
@@ -260,9 +263,56 @@ func newHarnessFor(t *testing.T, startHeight int64, registryPath string) *harnes
 	return h
 }
 
+// restart replaces the watcher with a new one on the same config, which
+// loads the stored cursor and triggers on its first tick.
+func (h *harness) restart() { h.w = New(h.w.cfg) }
+
+// fault is how a faultyStore's Exec fails.
+type fault int
+
+const (
+	noFault    fault = iota
+	failBefore       // fails without applying the batch
+	failAfter        // applies the batch, then fails as a lost answer does
+)
+
+var errFault = errors.New("store fault")
+
+// faultyStore is the harness's store with an Exec that fails as fault says.
+type faultyStore struct {
+	*store.Store
+	fault fault
+}
+
+func (f *faultyStore) Exec(ctx context.Context, stmts []store.Statement) ([]store.Result, error) {
+	switch f.fault {
+	case failBefore:
+		return nil, errFault
+	case failAfter:
+		if _, err := f.Store.Exec(ctx, stmts); err != nil {
+			return nil, err
+		}
+		return nil, errFault
+	}
+	return f.Store.Exec(ctx, stmts)
+}
+
+// faulty puts a faultyStore between the watcher and the store.
+func (h *harness) faulty() *faultyStore {
+	f := &faultyStore{Store: h.store}
+	h.w.cfg.Store = f
+	return f
+}
+
+func (h *harness) exec(t *testing.T, stmts ...store.Statement) {
+	t.Helper()
+	_, err := h.store.Exec(context.Background(), stmts)
+	require.NoError(t, err)
+}
+
 func (h *harness) setCursor(t *testing.T, c store.Cursor) {
 	t.Helper()
-	require.NoError(t, h.store.Update(context.Background(), func(tx *store.Tx) error { return tx.SetCursor(c) }))
+	h.exec(t, store.CursorStatement(c))
 }
 
 func (h *harness) cursor(t *testing.T) store.Cursor {
@@ -280,11 +330,9 @@ func (h *harness) tick(t *testing.T) {
 
 func (h *harness) putTrigger(t *testing.T, id, target string) {
 	t.Helper()
-	require.NoError(t, h.store.Update(context.Background(), func(tx *store.Tx) error {
-		return tx.PutTrigger(trigger.Trigger{
-			ID: id, Target: target, Event: "TurnPlayed", Param: "next", Declarer: "g1alice",
-			Title: "Your turn", Body: "Game {game}, turn {turn}", Link: "/?game={game}",
-		})
+	h.exec(t, store.PutTriggerStatement(trigger.Trigger{
+		ID: id, Target: target, Event: "TurnPlayed", Param: "next", Declarer: "g1alice",
+		Title: "Your turn", Body: "Game {game}, turn {turn}", Link: "/?game={game}",
 	}))
 }
 
@@ -295,31 +343,33 @@ func (h *harness) optIn(t *testing.T, endpoint, triggerID, value string) {
 	require.NoError(t, h.store.ReplaceOptins(ctx, endpoint, []store.Optin{{TriggerID: triggerID, Value: value}}))
 }
 
-func (h *harness) due(t *testing.T) []store.Delivery {
-	t.Helper()
-	d, err := h.store.Due(context.Background(), now.Add(time.Hour), 100)
-	require.NoError(t, err)
-	return d
-}
-
-// bodies returns the bodies of the queued pushes, in the order they were queued.
-func (h *harness) bodies(t *testing.T) []string {
-	t.Helper()
+// bodies returns the bodies of the sent pushes, in the order they were sent.
+func (h *harness) bodies() []string {
 	var out []string
-	for _, d := range h.due(t) {
-		out = append(out, d.Notification.Body)
+	for _, p := range h.sent {
+		out = append(out, p.Notification.Body)
 	}
 	return out
 }
 
+// triggerIDs returns the ids of the triggers on game the watcher holds,
+// after checking that the store holds the same.
 func (h *harness) triggerIDs(t *testing.T) []string {
 	t.Helper()
-	ts, err := h.store.TargetTriggers(context.Background(), game)
+	ctx := context.Background()
+	held, err := h.w.TargetTriggers(ctx, game)
 	require.NoError(t, err)
-	var ids []string
-	for _, tr := range ts {
-		ids = append(ids, tr.ID)
+	stored, err := h.store.Triggers(ctx)
+	require.NoError(t, err)
+	var storedIDs []string
+	for _, tr := range stored {
+		if tr.Target == game {
+			storedIDs = append(storedIDs, tr.ID)
+		}
 	}
+	slices.Sort(storedIDs)
+	ids := triggerIDs(held)
+	require.Equal(t, storedIDs, ids, "the watcher's triggers differ from the stored ones")
 	return ids
 }
 
@@ -401,15 +451,9 @@ func TestDeclareThenNotify(t *testing.T) {
 	h.fake.add(7, turn("7", "g1bob"), turn("8", "g1alice"))
 	h.tick(t)
 
-	due := h.due(t)
-	require.Len(t, due, 1)
-	assert.Equal(t, "E", due[0].Subscription.Endpoint)
-	assert.Equal(t, trigger.Notification{Title: "Your turn", Body: "Game 7, turn 1", Link: "/?game=7"}, due[0].Notification)
-	select {
-	case <-h.wake:
-	default:
-		t.Fatal("no wake signal after queueing a push")
-	}
+	require.Len(t, h.sent, 1)
+	assert.Equal(t, "E", h.sent[0].Subscription.Endpoint)
+	assert.Equal(t, trigger.Notification{Title: "Your turn", Body: "Game 7, turn 1", Link: "/?game=7"}, h.sent[0].Notification)
 }
 
 func TestRemovedTriggerStopsMatching(t *testing.T) {
@@ -421,11 +465,13 @@ func TestRemovedTriggerStopsMatching(t *testing.T) {
 	h.fake.add(10, fakeEvent{pkg: registry, typ: "TriggerRemoved", attrs: []trigger.Pair{{Key: "id", Value: "0000001"}}})
 	h.fake.add(11, turn("7", "g1bob"))
 	h.tick(t)
-	assert.Empty(t, h.due(t))
+	assert.Empty(t, h.sent)
 	assert.Empty(t, h.triggerIDs(t))
 }
 
-func TestReplayIsHarmless(t *testing.T) {
+// Nothing stored deduplicates a push sent from memory, so a window read
+// again, as after a hard death, sends its pushes again.
+func TestReplaySendsAgain(t *testing.T) {
 	h := newHarness(t, 1)
 	h.putTrigger(t, "0000001", game)
 	h.optIn(t, "E", "0000001", "g1bob")
@@ -433,11 +479,13 @@ func TestReplayIsHarmless(t *testing.T) {
 	h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
 	h.fake.add(11, turn("7", "g1bob"))
 	h.tick(t)
-	require.Len(t, h.due(t), 1)
+	require.Len(t, h.sent, 1)
 
 	h.setCursor(t, store.Cursor{HeightDone: 9, Bound: 12})
+	h.restart()
 	h.tick(t)
-	assert.Len(t, h.due(t), 1)
+	assert.Equal(t, []store.Push{h.sent[0], h.sent[0]}, h.sent)
+	assert.Equal(t, store.Cursor{HeightDone: 12, Bound: 12}, h.cursor(t))
 }
 
 // Every write is a file the database's replica keeps and a restore reads, so
@@ -508,7 +556,7 @@ func TestRestartRereadsOnlyQuietWindows(t *testing.T) {
 		require.NoError(t, restarted.Tick(context.Background()))
 	}
 	assert.Empty(t, h.published)
-	assert.Len(t, h.due(t), 1)
+	assert.Len(t, h.sent, 1)
 	assert.Equal(t, []indexer.Window{{From: 20, To: 25}, {From: 20, To: 25}}, h.fake.recorded()[2:])
 }
 
@@ -536,7 +584,7 @@ func TestOldEventsSkipped(t *testing.T) {
 	})
 	h.fake.add(11, turn("7", "g1bob"))
 	h.tick(t)
-	assert.Empty(t, h.due(t))
+	assert.Empty(t, h.sent)
 	assert.Equal(t, int64(12), h.cursor(t).HeightDone)
 	// A chain that makes no empty blocks stamps an event with the previous
 	// block's time, so a skip must be visible to the operator.
@@ -574,12 +622,13 @@ func TestRolledBackWindowPublishesNothing(t *testing.T) {
 	db, err := sql.Open("sqlite", "file:"+h.path)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	_, err = db.Exec(`DROP TABLE outbox`) // Enqueue now fails inside the window's transaction
+	_, err = db.Exec(`DROP TABLE optins`) // the window's subscriber read fails inside its batch
 	require.NoError(t, err)
 
 	h.fake.add(7, turn("7", "g1bob"))
 	require.Error(t, h.w.Tick(context.Background()))
 	assert.Empty(t, h.published)
+	assert.Empty(t, h.sent)
 }
 
 func TestCatchUpWindowCapped(t *testing.T) {
@@ -641,13 +690,14 @@ func TestIndexerBehindBound(t *testing.T) {
 	h.tick(t)
 	h.tick(t)
 	assert.Equal(t, int64(12), h.cursor(t).HeightDone)
-	assert.Len(t, h.due(t), 1)
+	assert.Len(t, h.sent, 1)
 
 	// An indexer that re-synced from scratch stays below height_done for
 	// several ticks, and every one of them must warn.
 	const warning = `msg="indexer behind stored bound"`
 	h.log.Reset()
 	h.setCursor(t, store.Cursor{HeightDone: 100, Bound: 120})
+	h.restart()
 	h.fake.set(func(f *fakeIndexer) { f.latest = 5 })
 	for i := 1; i <= 3; i++ {
 		h.tick(t)
@@ -724,14 +774,14 @@ func TestMatchingPerEvent(t *testing.T) {
 			h := newHarness(t, 1)
 			for _, tr := range triggers {
 				tr.Title, tr.Body, tr.Link, tr.Declarer, tr.Verified = "T", tr.ID, "/", "g1alice", true
-				require.NoError(t, h.store.Update(context.Background(), func(tx *store.Tx) error { return tx.PutTrigger(tr) }))
+				h.exec(t, store.PutTriggerStatement(tr))
 				h.optIn(t, "E-"+tr.ID, tr.ID, "")
 			}
 			h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 11})
 			h.fake.set(func(f *fakeIndexer) { f.latest = 11 })
 			h.fake.add(11, tc.event)
 			h.tick(t)
-			assert.ElementsMatch(t, tc.want, h.bodies(t))
+			assert.ElementsMatch(t, tc.want, h.bodies())
 			assert.Equal(t, int64(11), h.cursor(t).HeightDone)
 		})
 	}
@@ -781,7 +831,7 @@ func TestSkipsOversizedTransaction(t *testing.T) {
 	h.fake.set(func(f *fakeIndexer) { f.txErrs[txAt{height: 11, index: 1}] = maxElements })
 	h.tick(t)
 
-	assert.Equal(t, []string{"Game 7, turn 1", "Game 9, turn 1"}, h.bodies(t))
+	assert.Equal(t, []string{"Game 7, turn 1", "Game 9, turn 1"}, h.bodies())
 	assert.Equal(t, []txAt{{11, 0}, {11, 1}, {11, 2}}, h.fake.fetchedTxs())
 	assert.Equal(t, 1, strings.Count(h.log.String(), "level=ERROR"))
 	assert.Contains(t, h.log.String(), `level=ERROR msg="skip oversized transaction" height=11 index=1 tx=txb`)
@@ -846,7 +896,7 @@ func TestResumesInsideBlock(t *testing.T) {
 
 	assert.Equal(t, []txAt{{11, 2}, {11, 3}}, h.fake.fetchedTxs())
 	assert.Empty(t, h.fake.recorded())
-	assert.Equal(t, []string{"Game 3, turn 1", "Game 4, turn 1"}, h.bodies(t))
+	assert.Equal(t, []string{"Game 3, turn 1", "Game 4, turn 1"}, h.bodies())
 	assert.Equal(t, store.Cursor{HeightDone: 11, Bound: 12}, h.cursor(t))
 
 	h.tick(t)
@@ -874,11 +924,11 @@ func TestTransientNeverSkips(t *testing.T) {
 			h.fake.set(tc.fault)
 			require.ErrorIs(t, h.w.Tick(context.Background()), indexer.ErrQuery)
 			assert.Equal(t, store.Cursor{HeightDone: 10, Bound: 11, NextTx: 1}, h.cursor(t))
-			assert.Equal(t, []string{"Game 7, turn 1"}, h.bodies(t))
+			assert.Equal(t, []string{"Game 7, turn 1"}, h.bodies())
 
 			h.fake.set(tc.heal)
 			h.tick(t)
-			assert.Equal(t, []string{"Game 7, turn 1", "Game 8, turn 1", "Game 9, turn 1"}, h.bodies(t))
+			assert.Equal(t, []string{"Game 7, turn 1", "Game 8, turn 1", "Game 9, turn 1"}, h.bodies())
 			assert.Equal(t, []txAt{{11, 0}, {11, 1}, {11, 1}, {11, 2}}, h.fake.fetchedTxs())
 			assert.Equal(t, store.Cursor{HeightDone: 11, Bound: 11}, h.cursor(t))
 			assert.NotContains(t, h.log.String(), "level=ERROR")
@@ -898,7 +948,7 @@ func TestLaterVersionDeclares(t *testing.T) {
 	h.optIn(t, "E1", "v1-0000001", "g1bob")
 	h.fake.add(7, turn("1", "g1bob"))
 	h.tick(t)
-	assert.Len(t, h.due(t), 2)
+	assert.Len(t, h.sent, 2)
 }
 
 func TestVersionCannotTakeOverID(t *testing.T) {
@@ -915,12 +965,16 @@ func TestVersionCannotTakeOverID(t *testing.T) {
 	h.fake.add(7, hijack, turn("1", "g1bob"))
 	h.tick(t)
 
-	ts, err := h.store.TargetTriggers(context.Background(), game)
+	stored, err := h.store.Triggers(context.Background())
 	require.NoError(t, err)
-	require.Len(t, ts, 1)
-	assert.Equal(t, "Your turn", ts[0].Title)
+	held, err := h.w.TargetTriggers(context.Background(), game)
+	require.NoError(t, err)
+	for _, ts := range [][]trigger.Trigger{stored, held} {
+		require.Len(t, ts, 1)
+		assert.Equal(t, "Your turn", ts[0].Title)
+	}
 	assert.Contains(t, h.log.String(), "skip registry event")
-	assert.Equal(t, []string{"Game 1, turn 1"}, h.bodies(t))
+	assert.Equal(t, []string{"Game 1, turn 1"}, h.bodies())
 }
 
 func TestVersionCannotRemoveOtherVersion(t *testing.T) {
@@ -934,7 +988,7 @@ func TestVersionCannotRemoveOtherVersion(t *testing.T) {
 	h.fake.add(7, removedBy(registryV1, "0000001"), turn("1", "g1bob"))
 	h.tick(t)
 	assert.Equal(t, []string{"0000001"}, h.triggerIDs(t))
-	assert.Len(t, h.due(t), 1)
+	assert.Len(t, h.sent, 1)
 }
 
 func TestOlderVersionNotFollowed(t *testing.T) {
@@ -944,4 +998,159 @@ func TestOlderVersionNotFollowed(t *testing.T) {
 	h.fake.add(3, declaredBy(registry, "0000001", game), declaredBy(registryV1, "v1-0000001", game))
 	h.tick(t)
 	assert.Equal(t, []string{"v1-0000001"}, h.triggerIDs(t))
+}
+
+func TestMatchSendsOnePushPerSubscriber(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t, 1)
+	h.putTrigger(t, "0000001", game)
+	h.optIn(t, "A", "0000001", "g1bob")
+	h.optIn(t, "B", "0000001", "g1bob")
+	require.NoError(t, h.store.ReplaceOptins(ctx, "B", nil))
+	h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 11})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 11 })
+	h.fake.add(11, turn("6", "g1alice"), turn("7", "g1bob"))
+	h.tick(t)
+
+	res, err := h.store.Exec(ctx, []store.Statement{{SQL: `SELECT id FROM subscriptions WHERE endpoint = 'A'`}})
+	require.NoError(t, err)
+	assert.Equal(t, []store.Push{{
+		SubscriptionID: res[0].Rows[0]["id"].(int64),
+		Subscription:   store.Subscription{Endpoint: "A", P256dh: "p", Auth: "a"},
+		TriggerID:      "0000001",
+		TxHash:         "txa",
+		EventIndex:     1,
+		Notification:   trigger.Notification{Title: "Your turn", Body: "Game 7, turn 1", Link: "/?game=7"},
+		CreatedAt:      now,
+	}}, h.sent)
+}
+
+// The batch reads a match's subscribers before a later removal of its
+// trigger deletes their opt-ins.
+func TestMatchThenRemovalInOneWindowSends(t *testing.T) {
+	h := newHarness(t, 1)
+	h.putTrigger(t, "0000001", game)
+	h.optIn(t, "E", "0000001", "g1bob")
+	h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 12})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
+	h.fake.add(11, turn("7", "g1bob"))
+	h.fake.add(12, removedBy(registry, "0000001"))
+	h.tick(t)
+
+	assert.Equal(t, []indexer.Window{{From: 10, To: 12}}, h.fake.recorded())
+	assert.Equal(t, []string{"Game 7, turn 1"}, h.bodies())
+	assert.Empty(t, h.triggerIDs(t))
+}
+
+func TestFailedBatchChangesNothing(t *testing.T) {
+	h := newHarness(t, 1)
+	faults := h.faulty()
+	h.putTrigger(t, "0000001", game)
+	h.optIn(t, "E", "0000001", "g1bob")
+	h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 12})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
+	h.fake.add(11, turn("7", "g1bob"))
+	h.fake.add(12, declared("0000002", game))
+
+	faults.fault = failBefore
+	require.ErrorIs(t, h.w.Tick(context.Background()), errFault)
+	assert.Equal(t, []string{"0000001"}, h.triggerIDs(t))
+	assert.Equal(t, store.Cursor{HeightDone: 10, Bound: 12}, h.cursor(t))
+	assert.Empty(t, h.sent)
+	assert.Empty(t, h.published)
+
+	// Only a reload reads a trigger stored after the watcher's first load.
+	h.putTrigger(t, "0000003", game)
+	faults.fault = noFault
+	h.tick(t)
+	assert.Equal(t, []string{"0000001", "0000002", "0000003"}, h.triggerIDs(t))
+	assert.Equal(t, store.Cursor{HeightDone: 12, Bound: 12}, h.cursor(t))
+	assert.Equal(t, []string{"Game 7, turn 1"}, h.bodies())
+}
+
+// A batch whose answer is lost may have applied. The stored cursor tells,
+// and a window that applied is not read again: its pushes are lost, never
+// sent twice.
+func TestLostAnswerNotProcessedTwice(t *testing.T) {
+	h := newHarness(t, 1)
+	faults := h.faulty()
+	h.putTrigger(t, "0000001", game)
+	h.optIn(t, "E", "0000001", "g1bob")
+	h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 12})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
+	h.fake.add(11, turn("7", "g1bob"))
+	h.fake.add(12, declared("0000002", game))
+
+	faults.fault = failAfter
+	require.ErrorIs(t, h.w.Tick(context.Background()), errFault)
+	faults.fault = noFault
+	h.fake.set(func(f *fakeIndexer) { f.latest = 14 })
+	h.tick(t)
+	h.tick(t)
+
+	assert.Equal(t, []indexer.Window{{From: 10, To: 12}, {From: 12, To: 14}}, h.fake.recorded())
+	assert.Empty(t, h.sent)
+	assert.Empty(t, h.published)
+	assert.Equal(t, []string{"0000001", "0000002"}, h.triggerIDs(t), "the reload reads the applied declaration")
+}
+
+func TestOversizedWindowReadPerTransaction(t *testing.T) {
+	h := newHarness(t, 1)
+	h.putTrigger(t, "0000001", game)
+	h.optIn(t, "E", "0000001", "g1bob")
+	h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 11})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 11 })
+	turns := slices.Repeat([]fakeEvent{turn("7", "g1bob")}, 600)
+	h.fake.add(11, turns...)
+	h.fake.add(11, turns...)
+	h.tick(t)
+
+	assert.Equal(t, []txAt{{11, 0}, {11, 1}}, h.fake.fetchedTxs())
+	require.Len(t, h.sent, 1200)
+	assert.Equal(t, "txa", h.sent[599].TxHash)
+	assert.Equal(t, "txb", h.sent[600].TxHash)
+	assert.Equal(t, store.Cursor{HeightDone: 11, Bound: 11}, h.cursor(t))
+}
+
+func TestOversizedTransactionSkipped(t *testing.T) {
+	h := newHarness(t, 1)
+	h.putTrigger(t, "0000001", game)
+	h.optIn(t, "E", "0000001", "g1bob")
+	h.setCursor(t, store.Cursor{HeightDone: 10, Bound: 11})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 11 })
+	h.fake.add(11, slices.Repeat([]fakeEvent{turn("7", "g1bob")}, store.MaxStatements+1)...)
+	h.tick(t)
+
+	assert.Contains(t, h.log.String(), `level=ERROR msg="skip oversized transaction" height=11 index=0 tx=txa`)
+	assert.Equal(t, store.Cursor{HeightDone: 11, Bound: 11}, h.cursor(t))
+	assert.Empty(t, h.sent)
+	assert.Empty(t, h.published)
+}
+
+func TestSnapshotFollowsRegistryAcrossWindows(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t, 1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 10 })
+	h.fake.add(3, declared("0000001", game))
+	h.fake.add(9, removedBy(registry, "0000001"))
+	ids := []string{"0000001"}
+	held := func(w *Watcher) []string {
+		byID, err := w.TriggersByID(ctx, ids)
+		require.NoError(t, err)
+		return slices.Sorted(maps.Keys(byID))
+	}
+	loaded := func() []string {
+		w := New(h.w.cfg)
+		require.NoError(t, w.Load(ctx))
+		return held(w)
+	}
+
+	h.tick(t)
+	assert.Equal(t, ids, held(h.w))
+	assert.Equal(t, ids, loaded())
+
+	h.tick(t)
+	assert.Empty(t, held(h.w))
+	assert.Empty(t, loaded())
 }

@@ -3,6 +3,9 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/ecdh"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -26,6 +29,7 @@ import (
 	"github.com/gfanton/gnotif/internal/store"
 	"github.com/gfanton/gnotif/internal/stream"
 	"github.com/gfanton/gnotif/internal/subscribe"
+	"github.com/gfanton/gnotif/internal/trigger"
 	"github.com/gfanton/gnotif/internal/watch"
 )
 
@@ -190,6 +194,59 @@ func TestQuietChainKeepsStoredCursor(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	assert.Equal(t, store.Cursor{HeightDone: 0, Bound: 1}, cur, "the cursor stored by the first poll")
+}
+
+func TestMatchReachesPushService(t *testing.T) {
+	var pushes atomic.Int32
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		pushes.Add(1)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(service.Close)
+
+	cfg := config(t, 1)
+	ctx := context.Background()
+	st, err := store.Open(ctx, cfg.DB)
+	require.NoError(t, err)
+	key, err := ecdh.P256().GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	auth := make([]byte, 16)
+	rand.Read(auth)
+	sub := store.Subscription{
+		Endpoint: service.URL + "/push",
+		P256dh:   base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()),
+		Auth:     base64.RawURLEncoding.EncodeToString(auth),
+	}
+	_, err = st.Exec(ctx, []store.Statement{
+		store.PutTriggerStatement(trigger.Trigger{
+			ID: "0000001", Target: "gno.land/r/demo/game", Event: "TurnPlayed", Param: "next",
+			Declarer: "g1alice", Title: "Your turn", Body: "Game {game}", Link: "/",
+		}),
+		store.CursorStatement(store.Cursor{HeightDone: 10, Bound: 11}),
+	})
+	require.NoError(t, err)
+	require.NoError(t, st.PutSubscription(ctx, sub))
+	require.NoError(t, st.ReplaceOptins(ctx, sub.Endpoint, []store.Optin{{TriggerID: "0000001", Value: "g1bob"}}))
+	require.NoError(t, st.Close())
+
+	idx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+			"latestBlockHeight": 11,
+			"getBlocks":         []any{map[string]any{"height": 11, "time": time.Now().UTC().Format(time.RFC3339Nano)}},
+			"getTransactions": []any{map[string]any{
+				"hash": "txa", "block_height": 11, "index": 0,
+				"response": map[string]any{"events": []any{map[string]any{
+					"__typename": "GnoEvent", "type": "TurnPlayed", "pkg_path": "gno.land/r/demo/game",
+					"attrs": []any{map[string]any{"key": "game", "value": "7"}, map[string]any{"key": "next", "value": "g1bob"}},
+				}}},
+			}},
+		}})
+	}))
+	t.Cleanup(idx.Close)
+	cfg.Indexer = idx.URL
+	runServer(t, cfg)
+
+	require.Eventually(t, func() bool { return pushes.Load() == 1 }, 5*time.Second, 20*time.Millisecond)
 }
 
 func TestServesLiveStream(t *testing.T) {

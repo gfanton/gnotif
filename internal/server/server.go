@@ -101,6 +101,21 @@ func Run(ctx context.Context, cfg Config) error {
 
 	now := func() time.Time { return time.Now().UTC() }
 	wake := make(chan struct{}, 1)
+	queue := func(ctx context.Context, pushes []store.Push) {
+		pending := make([]store.Pending, len(pushes))
+		at := now()
+		for i, p := range pushes {
+			pending[i] = store.Pending{Push: p, NextAttempt: at}
+		}
+		if err := st.Queue(ctx, pending); err != nil {
+			cfg.Log.Error("drop pushes", "count", len(pushes), "err", err)
+			return
+		}
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
+	}
 	watcher := watch.New(watch.Config{
 		Source:      indexer.New(cfg.Indexer, cmp.Or(cfg.IndexerClient, &http.Client{Timeout: 30 * time.Second})),
 		Store:       st,
@@ -110,7 +125,7 @@ func Run(ctx context.Context, cfg Config) error {
 		MaxAge:      cfg.MaxAge,
 		MaxWindow:   maxWindow,
 		StoreEvery:  storeEvery,
-		Wake:        wake,
+		Send:        queue,
 		Now:         now,
 		Log:         cfg.Log,
 		Publish:     publish,
