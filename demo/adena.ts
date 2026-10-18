@@ -81,6 +81,16 @@ function parsed<T>(schema: v.GenericSchema<unknown, T>, data: unknown): T {
   return result.output;
 }
 
+/** failure is the AdenaError for a failed answer, with its message for the visitor. */
+function failure(a: Answer, chain: { name: string }): AdenaError {
+  const details = v.safeParse(FailureSchema, a.data);
+  const error = details.success ? details.output.error.replace(/\.+$/, "") : "";
+  const reason = error !== "" ? `: ${error}` : "";
+  const known = messages(chain, reason)[a.type];
+  const description = a.message === "" ? "." : `: ${a.message}`;
+  return new AdenaError(a.type, known ?? `Adena answered ${a.type}${description}`);
+}
+
 /**
  * check returns the answer when Adena reports success, or one of the
  * accepted failure types, and throws an AdenaError otherwise.
@@ -91,12 +101,7 @@ function check(answer: unknown, chain: { name: string }, accepted: string[] = []
   if (a.status === "success" || accepted.includes(a.type)) {
     return a;
   }
-  const failure = v.safeParse(FailureSchema, a.data);
-  const error = failure.success ? failure.output.error.replace(/\.+$/, "") : "";
-  const reason = error !== "" ? `: ${error}` : "";
-  const known = messages(chain, reason)[a.type];
-  const description = a.message === "" ? "." : `: ${a.message}`;
-  throw new AdenaError(a.type, known ?? `Adena answered ${a.type}${description}`);
+  throw failure(a, chain);
 }
 
 /**
@@ -188,7 +193,7 @@ export async function sendEcho(
     }),
   );
   if (sent.type !== "TRANSACTION_SUCCESS") {
-    check({ ...sent, status: "failure" }, chain);
+    throw failure(sent, chain);
   }
   const data = v.safeParse(SentSchema, sent.data);
   return { caller, hash: data.success ? data.output.hash : undefined };
