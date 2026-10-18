@@ -2,17 +2,7 @@ import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 
 import { Gnotif, GnotifError, base64UrlToBytes, sameKey } from "../src/gnotif.ts";
-
-const SERVER = "https://gnotif.example";
-
-function stubGlobal(name: string, value: unknown): () => void {
-  const previous = Object.getOwnPropertyDescriptor(globalThis, name);
-  Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
-  return () => {
-    if (previous !== undefined) Object.defineProperty(globalThis, name, previous);
-    else Reflect.deleteProperty(globalThis, name);
-  };
-}
+import { SERVER, stubGlobal } from "./fakes.ts";
 
 type Answer = { ok: boolean; status: number; json: () => Promise<unknown> };
 

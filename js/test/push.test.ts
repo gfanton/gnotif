@@ -11,7 +11,7 @@ test("parsePayload returns the fields of a valid payload", () => {
 });
 
 test("parsePayload falls back on malformed payloads", () => {
-  for (const text of ["not json", '{"body":"x"}', '{"title":5}']) {
+  for (const text of ["not json", '{"body":"x"}', '{"title":5}', '{"title":"","body":"x","link":"/"}']) {
     assert.deepEqual({ ...parsePayload(text) }, FALLBACK, text);
   }
 });
