@@ -62,3 +62,18 @@ export function listenerMismatch(
   }
   return saved.address;
 }
+
+/** Sending needs an active delivery channel opted into this address and trigger. */
+export function canSend(
+  trigger: Trigger | null,
+  address: string,
+  receiving: boolean,
+  optins: Settings["optins"],
+): boolean {
+  return (
+    receiving &&
+    trigger !== null &&
+    isAddress(address) &&
+    optins.some((optin) => optin.trigger === trigger.id && optin.value === address)
+  );
+}

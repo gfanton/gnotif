@@ -1,9 +1,12 @@
 {{define "title"}}gnotif · Web Push for gno.land dapps{{end}}
 {{define "url"}}{{.Site.SiteURL}}/{{end}}
 {{define "content"}}
-<section class="hero intro">
+<section class="hero">
+  <div class="radio-waves" aria-hidden="true"><span></span><span></span></div>
   <div class="hero-inner">
+  <p class="eyebrow">Web Push for gno.land dapps</p>
   <h1><span class="l1">Realm event in.</span> <span class="l2">Browser notification out.</span></h1>
+  <p class="hero-description">Keep your users in the loop, even with the tab closed. Turn realm events into browser notifications with a small client and an on-chain trigger.</p>
   <div class="signal" aria-label="A realm event becoming a browser notification">
     <div class="stage">
       {{range $i, $s := .Scenes}}<div class="scene{{if eq $i 0}} active{{end}}">
@@ -22,7 +25,7 @@
       </div>
       {{end}}
     </div>
-    <ol class="scene-dots" aria-hidden="true">{{range $i, $s := .Scenes}}<li{{if eq $i 0}} class="on"{{end}}></li>{{end}}</ol>
+    <div class="scene-controls" role="group" aria-label="Notification examples">{{range $i, $s := .Scenes}}<button type="button" data-scene="{{$i}}" aria-pressed="{{if eq $i 0}}true{{else}}false{{end}}">{{$s.Event}}</button>{{end}}<button type="button" class="cycle-toggle" aria-label="Pause automatic examples">Pause ⏸</button></div>
   </div>
   <div class="hero-actions">
     <p class="actions">
@@ -32,17 +35,21 @@
     <a class="hero-more" href="#how">How it works ↓</a>
   </div>
   </div>
-  <a class="scroll-hint" href="#how" aria-label="Scroll to how it works"><svg width="18" height="28" viewBox="0 0 18 28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v22M2 17l7 7 7-7"/></svg></a>
+
 </section>
 
-<section class="flow-section" id="how">
-  <h2>How it works</h2>
-  <p class="lede">gnotif sends browser notifications when your realm emits an event, even when the page that asked for them is closed. A trigger in the gnotif registry says who an event notifies. The public server at {{.Site.ServerURL}} watches the testnet and sends the push, so there is no notification server to run.</p>
-  <ol class="flow">
-    {{range .Flow}}<li class="node{{if .Dashed}} dashed{{end}}"><b>{{.Name}}</b><span>{{.Note}}</span></li>
-    {{end}}
+<section class="flow-section" id="how" tabindex="-1" aria-labelledby="how-title">
+  <h2 id="how-title">How it works</h2>
+  <p class="lede">Your realm emits an event. gnotif finds the matching trigger and sends a push to the browser that opted in.</p>
+  <ol class="simple-flow">
+    <li><span class="eyebrow">01 / Emit</span><h3>Something happens on chain</h3><p>A message, a new turn, an update. Your realm emits an event.</p></li>
+    <li><span class="eyebrow">02 / Match</span><h3>A trigger picks the recipient</h3><p>A trigger in the gnotif registry says which event to watch and who to notify.</p></li>
+    <li><span class="eyebrow">03 / Notify</span><h3>The browser gets the push</h3><p>Your dapp’s service worker shows it, even when the tab is closed.</p></li>
   </ol>
-  <p class="flow-note">The page calls gnotifd only to subscribe and to set its opt-ins. The notification travels through the browser's push service and is shown by the service worker the dapp serves from its own origin.</p>
+  <details class="architecture"><summary>Explore the delivery path</summary>
+    <ol class="flow">{{range .Flow}}<li class="node{{if .Dashed}} dashed{{end}}"><b>{{.Name}}</b><span>{{.Note}}</span></li>{{end}}</ol>
+    <p class="flow-note">The public server at {{.Site.ServerURL}} watches the testnet, so there is no notification server to run. The notification travels through the browser’s push service to the service worker on your dapp’s origin.</p>
+  </details>
 </section>
 
 <section class="steps">
@@ -70,57 +77,108 @@
 </section>
 
 <script>
-(function () {
-  var hero = document.querySelector('.hero');
-  var stage = hero.querySelector('.stage');
-  var scenes = stage.querySelectorAll('.scene');
-  var dots = document.querySelectorAll('.scene-dots li');
-  var hint = document.querySelector('.scroll-hint');
+(() => {
+  const hero = document.querySelector('.hero');
+  const waves = [...hero.querySelectorAll('.radio-waves span')];
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  hero.querySelector('.hero-more').addEventListener('click', event => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    const section = document.getElementById('how');
+    history.pushState(null, '', '#how');
+    section.scrollIntoView({ behavior: reducedMotion.matches ? 'instant' : 'smooth', block: 'start' });
+    section.focus({ preventScroll: true });
+  });
+  let animations = [];
 
-  // The stage holds the height of the tallest example, so the page never
-  // moves when the examples change.
-  function size() {
-    var max = 0;
-    scenes.forEach(function (sc) { max = Math.max(max, sc.offsetHeight); });
-    stage.style.minHeight = max + 'px';
-    var dot = stage.querySelector('.scene.active .sig-dot').getBoundingClientRect();
-    var box = hero.getBoundingClientRect();
-    hero.style.setProperty('--echo-x', (dot.left + dot.width / 2 - box.left) + 'px');
-    hero.style.setProperty('--echo-y', (dot.top + dot.height / 2 - box.top) + 'px');
+  function stopSignal() {
+    animations.forEach(animation => animation.cancel());
+    animations = [];
   }
-  size();
-  addEventListener('resize', size);
 
-  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // The ring leaves the dot when it lights. The stylesheet holds that time in
-  // seconds, and it is shorter on narrow screens.
-  function lightsAt() {
-    var css = getComputedStyle(hero);
-    return (parseFloat(css.getPropertyValue('--intro')) + parseFloat(css.getPropertyValue('--t-light'))) * 1000;
+  function playSignal() {
+    stopSignal();
+    if (reducedMotion.matches || document.hidden) return;
+    const scene = hero.querySelector('.scene.active');
+    const dot = scene.querySelector('.sig-dot');
+    const narrow = matchMedia('(max-width: 900px)').matches;
+    animations.push(scene.querySelector('.sig-line').animate([
+      { clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }
+    ], { duration: 650, easing: 'steps(32, end)' }));
+    animations.push(scene.querySelector('.sig-pulse').animate([
+      { opacity: 0, offset: 0 },
+      { opacity: 1, offset: 0.1 },
+      { opacity: 1, offset: 0.85 },
+      { opacity: 0, offset: 1 }
+    ].map((frame, i) => ({ ...frame, [narrow ? 'top' : 'left']: ['0%', '5%', '45%', '50%'][i] })),
+    { duration: 500, delay: 500 }));
+    const toast = hero.querySelector('.scene.active .toast');
+    const bounds = hero.getBoundingClientRect();
+    const source = dot.getBoundingClientRect();
+    const x = source.left + source.width / 2 - bounds.left;
+    const y = source.top + source.height / 2 - bounds.top;
+    // Reach the farthest hero corner, with no ring leaking into the next section.
+    const diameter = 2 * Math.hypot(Math.max(x, bounds.width - x), Math.max(y, bounds.height - y));
+    waves.forEach((wave, index) => {
+      wave.style.left = x + 'px';
+      wave.style.top = y + 'px';
+      animations.push(wave.animate([
+        { width: '48px', height: '48px', opacity: 0 },
+        { opacity: index ? 0.28 : 0.6, offset: 0.06 },
+        { opacity: index ? 0.12 : 0.25, offset: 0.45 },
+        { width: diameter + 'px', height: diameter + 'px', opacity: 0 }
+      ], { duration: 3600, delay: 900 + index * 450, easing: 'cubic-bezier(0.16, 0.45, 0.35, 1)' }));
+    });
+    animations.push(dot.animate([
+      { boxShadow: '0 0 0 0 transparent' },
+      { boxShadow: '0 0 24px 4px var(--color-indicator-echo)', offset: 0.25 },
+      { boxShadow: '0 0 0 0 transparent' }
+    ], { duration: 1000, delay: 850 }));
+    animations.push(toast.animate([
+      { opacity: 0, transform: 'translateY(6px)', borderColor: 'var(--color-line)' },
+      { opacity: 1, transform: 'translateY(0)', borderColor: 'var(--color-indicator-echo)', offset: 0.25 },
+      { opacity: 1, transform: 'translateY(0)', borderColor: 'var(--color-line)' }
+    ], { duration: 1200, delay: 1000, fill: 'backwards' }));
   }
-  function echo() {
-    if (reduced) return;
-    setTimeout(function () { size(); hero.classList.add('echo'); }, lightsAt());
+
+  const scenes = [...document.querySelectorAll('.scene')];
+  const controls = [...document.querySelectorAll('[data-scene]')];
+  const toggle = hero.querySelector('.cycle-toggle');
+  let current = 0;
+  let timer;
+  let paused = false;
+
+  function schedule() {
+    clearTimeout(timer);
+    toggle.hidden = reducedMotion.matches;
+    if (paused || reducedMotion.matches || document.hidden) return;
+    timer = setTimeout(() => select((current + 1) % scenes.length), 7000);
   }
-  hero.addEventListener('animationend', function (e) { if (e.animationName === 'echo') hero.classList.remove('echo'); });
-  echo();
-  if (hint) {
-    setTimeout(function () { hint.classList.add('show'); }, reduced ? 0 : 5500);
-    addEventListener('scroll', function () { if (scrollY > 40) hint.classList.add('gone'); }, { passive: true });
+
+  function select(index) {
+    current = index;
+    scenes.forEach((scene, i) => {
+      scene.classList.toggle('active', i === index);
+      scene.setAttribute('aria-hidden', String(i !== index));
+      controls[i].setAttribute('aria-pressed', String(i === index));
+    });
+    playSignal();
+    schedule();
   }
-  if (scenes.length < 2 || reduced) return;
-  var i = 0;
-  setInterval(function () {
-    var old = scenes[i];
-    old.classList.add('leaving'); dots[i].classList.remove('on');
-    setTimeout(function () {
-      old.classList.remove('active', 'leaving');
-      hero.classList.remove('intro');
-      i = (i + 1) % scenes.length;
-      scenes[i].classList.add('active'); dots[i].classList.add('on');
-      size(); echo();
-    }, 380);
-  }, 5600);
+
+  controls.forEach((button, index) => button.addEventListener('click', () => select(index)));
+  toggle.addEventListener('click', () => {
+    paused = !paused;
+    toggle.textContent = paused ? 'Play ▷' : 'Pause ⏸';
+    toggle.setAttribute('aria-label', paused ? 'Play automatic examples' : 'Pause automatic examples');
+    schedule();
+  });
+  scenes.forEach((scene, i) => scene.setAttribute('aria-hidden', String(i !== 0)));
+  playSignal();
+  schedule();
+  addEventListener('resize', stopSignal);
+  reducedMotion.addEventListener('change', () => { stopSignal(); schedule(); });
+  document.addEventListener('visibilitychange', () => { stopSignal(); schedule(); });
 })();
 </script>
 {{end}}

@@ -20,236 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
-<style>
-/* Signal, as gnotif.xyz's style.css defines it: matte near-black canvas, mono display, one amber indicator. */
-:root {
-  color-scheme: dark;
-  --color-canvas: oklch(0.17 0.008 70);
-  --color-surface: oklch(0.21 0.009 70);
-  --color-surface-raised: oklch(0.26 0.01 70);
-  --color-text: oklch(0.94 0.008 80);
-  --color-text-muted: oklch(0.66 0.012 75);
-  --color-line: oklch(0.30 0.01 70);
-  --color-indicator: oklch(0.78 0.16 70);
-  --color-on-indicator: oklch(0.17 0.01 70);
-  --color-error: oklch(0.78 0.12 30);
-
-  --font-display: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.5rem;
-  --text-display: clamp(2rem, 1.2rem + 3vw, 3.25rem);
-
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-12: 3rem;
-  --space-16: 4rem;
-
-  --gutter: clamp(1rem, 4vw, 3rem);
-  --measure: 68ch;
-  --page: 46rem;
-  --radius: 4px;
-  --radius-float: 8px;
-  --shadow-float: 0 12px 32px oklch(0 0 0 / 0.35);
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --color-canvas: oklch(0.985 0.005 85);
-    --color-surface: oklch(0.955 0.008 85);
-    --color-surface-raised: oklch(1 0 0);
-    --color-text: oklch(0.2 0.012 70);
-    --color-text-muted: oklch(0.45 0.014 70);
-    --color-line: oklch(0.87 0.01 80);
-    --color-indicator: oklch(0.64 0.16 62);
-    --color-on-indicator: oklch(0.15 0.01 62);
-    --color-error: oklch(0.5 0.17 30);
-  }
-}
-
-/* ---- Base */
-* { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0;
-  background: var(--color-canvas);
-  color: var(--color-text);
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  line-height: 1.55;
-}
-h1, h2 { font-family: var(--font-display); font-weight: 500; line-height: 1.15; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
-h1 { font-size: var(--text-display); }
-h2 { font-size: var(--text-xl); }
-p { margin: 0; text-wrap: pretty; }
-a { color: inherit; text-decoration-color: var(--color-text-muted); text-underline-offset: 0.2em; }
-a:hover { text-decoration-color: var(--color-indicator); }
-:focus-visible { outline: 2px solid var(--color-indicator); outline-offset: 2px; }
-code, pre { font-family: var(--font-display); font-size: 0.92em; }
-[hidden] { display: none !important; }
-
-.skip { position: absolute; left: -999px; top: var(--space-4); padding: var(--space-2) var(--space-3); background: var(--color-surface-raised); border-radius: var(--radius); }
-.skip:focus { left: var(--space-4); }
-
-.eyebrow { font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
-.indicator { display: inline-block; width: 0.55em; height: 0.55em; border-radius: 50%; background: var(--color-indicator); vertical-align: 0.05em; }
-.mono { font-family: var(--font-display); overflow-wrap: anywhere; }
-
-/* ---- Wordmark, nav and footer */
-.wordmark { font-family: var(--font-display); font-weight: 500; font-size: 1.625rem; letter-spacing: -0.03em; text-decoration: none; display: inline-block; line-height: 1; white-space: nowrap; }
-.wordmark.small { font-size: 1rem; }
-.wordmark .i { position: relative; display: inline-block; }
-.wordmark .dot { position: absolute; left: 50%; top: 0.08em; width: 0.17em; height: 0.17em; border-radius: 50%; background: var(--color-indicator); transform: translateX(-50%); }
-.wordmark .dot::after { content: ""; position: absolute; inset: -0.35em; border-radius: 50%; border: 0.05em solid var(--color-indicator); opacity: 0; animation: ping 2.4s ease-out infinite; }
-@keyframes ping { 0% { transform: scale(0.3); opacity: 0.9; } 70%, 100% { transform: scale(1.4); opacity: 0; } }
-
-.nav, .footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--gutter); }
-.nav { border-bottom: 1px solid var(--color-line); }
-.brand { display: flex; align-items: center; gap: var(--space-3); margin: 0; }
-.tag { font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); padding: 0.1em var(--space-2); border: 1px solid var(--color-line); border-radius: var(--radius); line-height: 1.6; }
-.nav nav, .footer nav { display: flex; align-items: center; gap: var(--space-6); flex-wrap: wrap; }
-.nav nav a { font-family: var(--font-display); font-size: var(--text-sm); letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; color: var(--color-text-muted); }
-.nav nav a:hover { color: var(--color-text); }
-.footer { flex-wrap: wrap; border-top: 1px solid var(--color-line); margin-top: var(--space-16); color: var(--color-text-muted); font-size: var(--text-sm); }
-.footer nav a { text-decoration: none; }
-.footer nav a:hover { color: var(--color-text); }
-.footer .mono { font-size: var(--text-xs); }
-
-/* The chain line: the one fact every visitor reads before acting. */
-.chain { padding: var(--space-3) var(--gutter); border-bottom: 1px solid var(--color-line); font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); }
-.chain b { font-weight: 500; color: var(--color-text); }
-.chain code { font-size: inherit; }
-
-/* ---- Buttons and fields */
-.button { display: inline-block; font-family: var(--font-display); font-size: var(--text-sm); line-height: 1.55; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); background: transparent; color: inherit; text-decoration: none; cursor: pointer; }
-.button:hover { border-color: var(--color-text-muted); }
-.button.primary { background: var(--color-indicator); color: var(--color-on-indicator); border-color: var(--color-indicator); font-weight: 500; }
-.button.primary:hover { filter: brightness(1.08); }
-.button:disabled { opacity: 0.55; cursor: not-allowed; }
-.button.small { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); letter-spacing: 0.06em; text-transform: uppercase; }
-.button .indicator { margin-right: var(--space-2); }
-
-.field { display: flex; flex-direction: column; gap: var(--space-2); }
-.field label { font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); }
-.field label.check { display: flex; align-items: center; gap: var(--space-2); color: var(--color-text); cursor: pointer; }
-.check input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--color-indicator); }
-.row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
-.row input { flex: 1 1 16rem; min-width: 0; }
-input[type="text"] { font: inherit; font-size: var(--text-base); line-height: 1.55; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-canvas); color: var(--color-text); }
-input[type="text"].mono { font-family: var(--font-display); font-size: var(--text-sm); }
-input::placeholder { color: var(--color-text-muted); opacity: 1; }
-input:hover { border-color: var(--color-text-muted); }
-input[readonly] { background: var(--color-surface); color: var(--color-text-muted); cursor: default; }
-input[readonly]:hover { border-color: var(--color-line); }
-
-/* The connected wallet, in the input's place */
-.wallet { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-surface); font-family: var(--font-display); font-size: var(--text-sm); min-width: 0; }
-.wallet > span { flex: 1; min-width: 0; }
-.wallet .indicator { flex: none; }
-.hint { font-size: var(--text-sm); color: var(--color-text-muted); max-width: var(--measure); }
-.actions { display: flex; gap: var(--space-3); flex-wrap: wrap; }
-
-/* ---- Page */
-.page { max-width: var(--page); margin-inline: auto; padding: var(--space-12) var(--gutter) 0; display: flex; flex-direction: column; gap: var(--space-12); }
-.intro { display: flex; flex-direction: column; gap: var(--space-4); }
-.lede { color: var(--color-text-muted); font-size: var(--text-lg); max-width: var(--measure); }
-
-.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.step { display: flex; flex-direction: column; gap: var(--space-6); padding-block: var(--space-12); border-top: 1px solid var(--color-line); }
-.step-head { display: flex; flex-direction: column; gap: var(--space-2); }
-
-/* The state line: the dot lights only while this browser can receive. */
-.state { display: flex; align-items: baseline; gap: var(--space-3); font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); }
-.state .indicator { flex: none; width: 0.6rem; height: 0.6rem; background: var(--color-line); align-self: center; }
-.state.on .indicator { background: var(--color-indicator); }
-.state.on { color: var(--color-text); }
-
-.status { font-size: var(--text-sm); color: var(--color-text-muted); max-width: var(--measure); }
-.status:empty { display: none; }
-.status.error { color: var(--color-error); }
-.status .mono { font-size: var(--text-xs); }
-
-/* ---- Live arrivals */
-.arrivals { display: flex; flex-direction: column; gap: var(--space-2); }
-.arrivals ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-line); border-radius: var(--radius); overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-3); }
-.arrivals ol:empty { display: none; }
-.arrivals ol:not(:empty) + .hint { display: none; }
-.arrival { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); line-height: 1.35; }
-.arrival:not(.pending, .late) { box-shadow: inset 2px 0 var(--color-indicator); animation: arrive 1.6s ease-out; }
-.arrival:is(.pending, .late) { outline: 1px dashed var(--color-text-muted); outline-offset: calc(-1 * var(--space-1)); }
-.arrival.late { outline-color: var(--color-error); }
-.arrival:is(.pending, .late) b { color: var(--color-text-muted); font-weight: 500; }
-.arrival + .arrival { border-top: 1px solid var(--color-line); }
-.arrival time { grid-row: span 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
-.arrival b { font-weight: 600; }
-.arrival span { color: var(--color-text-muted); overflow-wrap: anywhere; }
-.arrival :is(small, .meta) { grid-column: 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
-.arrival small:empty { display: none; }
-.arrival .meta summary { width: fit-content; cursor: pointer; }
-.arrival .meta summary:hover { color: var(--color-text); }
-.arrival .meta dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 var(--space-1); }
-.arrival .meta dd { margin: 0; color: var(--color-text); overflow-wrap: anywhere; }
-.arrival.late small { color: var(--color-error); }
-.arrival time .indicator { position: relative; margin-right: var(--space-2); background: var(--color-text-muted); }
-.pending time .indicator::after { content: ""; position: absolute; inset: -0.35em; border-radius: 50%; border: 1px solid var(--color-text-muted); opacity: 0; animation: ping 2.4s ease-out infinite; }
-@keyframes arrive { from { background: color-mix(in oklch, var(--color-indicator) 22%, transparent); } }
-
-/* ---- The notification, previewed */
-.preview { display: flex; flex-direction: column; gap: var(--space-3); }
-.preview .eyebrow { letter-spacing: 0.06em; }
-.toast { width: 100%; max-width: 24rem; display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); align-items: start; padding: var(--space-3) var(--space-4); background: var(--color-surface-raised); border: 1px solid var(--color-line); border-radius: var(--radius-float); box-shadow: var(--shadow-float); font-family: var(--font-body); font-size: var(--text-sm); line-height: 1.35; }
-.toast-icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: var(--radius); background: var(--color-canvas); }
-.toast-icon .indicator { width: 0.7rem; height: 0.7rem; }
-.toast-text { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
-.toast-text b { font-weight: 600; }
-.toast-text span, .toast-text small { color: var(--color-text-muted); overflow-wrap: anywhere; }
-.toast-text small { font-size: var(--text-xs); }
-
-/* ---- The gnokey command */
-.code { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius); min-width: 0; }
-.code-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); border-bottom: 1px solid var(--color-line); font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
-.code pre { margin: 0; padding: var(--space-3) var(--space-4); font-size: var(--text-sm); line-height: 1.6; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
-
-/* ---- The code behind a step, collapsed until asked for */
-.reveal summary { width: fit-content; cursor: pointer; font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); }
-.reveal summary:hover { color: var(--color-text); }
-.reveal[open] summary { margin-bottom: var(--space-3); }
-.reveal pre { white-space: pre; overflow-wrap: normal; }
-/* Token colors from the github-dark and github chroma styles gnotif.xyz uses. */
-.reveal :is(.k, .kd, .kr, .kt) { color: #ff7b72; }
-.reveal .nf { color: #d2a8ff; font-weight: 600; }
-.reveal :is(.s, .s2) { color: #a5d6ff; }
-.reveal .o { color: #ff7b72; font-weight: 600; }
-@media (prefers-color-scheme: light) {
-  .reveal :is(.k, .kd, .kr, .kt) { color: #cf222e; }
-  .reveal .nf { color: #6639ba; font-weight: inherit; }
-  .reveal :is(.s, .s2) { color: #0a3069; }
-  .reveal .o { color: #0550ae; font-weight: inherit; }
-  .reveal :is(.nx, .p) { color: #1f2328; }
-}
-
-@media (max-width: 600px) {
-  .nav nav a:not(:first-child) { display: none; }
-  .actions .button { width: 100%; text-align: center; }
-  .row { flex-direction: column; }
-  .row input { flex: none; }
-}
-
-/* Reduced motion: nothing moves. Last, so it wins over every animation above. */
-@media (prefers-reduced-motion: reduce) {
-  .wordmark .dot::after { animation: none; }
-  .arrival:not(.pending, .late), .pending time .indicator::after { animation: none; }
-}
-</style>
+<link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -267,12 +38,13 @@ input[readonly]:hover { border-color: var(--color-line); }
 
 <main id="main" class="page">
   <div class="intro">
+    <p class="eyebrow">The echo playground</p>
     <h1>Send yourself a notification.</h1>
-    <p class="lede">Turn on notifications for your gno.land address, then call the echo realm with a message. It comes back to this browser as a push notification, even with the tab closed.</p>
+    <p class="lede">One message, one on-chain event, one browser notification. Set up this browser, then send yourself a message through the echo realm.</p>
   </div>
 
   <ol class="steps">
-    <li class="step">
+    <li class="step setup-step">
       <div class="step-head">
         <p class="eyebrow">Step 1 of 2</p>
         <h2>Turn on notifications</h2>
@@ -295,7 +67,7 @@ input[readonly]:hover { border-color: var(--color-line); }
         <button type="button" class="button primary" id="enable" disabled>Turn on notifications</button>
         <button type="button" class="button" id="disable" hidden>Turn off</button>
       </div>
-      <p class="state" id="state"><i class="indicator" aria-hidden="true"></i><span id="state-text">Checking…</span></p>
+      <p class="state" id="state"><i class="indicator" aria-hidden="true"></i><span id="state-text">Checking this browser…</span></p>
       <div class="field">
         <label class="check" for="live"><input type="checkbox" id="live" aria-describedby="live-hint"> Live updates on this page</label>
         <p class="hint" id="live-hint">Keeps a connection to the gnotif server open while this page is open, and sends it your address. Messages then show here as they arrive, with no permission prompt.</p>
@@ -331,14 +103,14 @@ input[readonly]:hover { border-color: var(--color-line); }
       </details>
     </li>
 
-    <li class="step">
+    <li class="step compose-step">
       <div class="step-head">
         <p class="eyebrow">Step 2 of 2</p>
         <h2>Send yourself a message</h2>
       </div>
       <div class="field">
         <label for="msg">Message</label>
-        <input type="text" id="msg" placeholder="Hello, me" autocomplete="off" maxlength="200">
+        <input type="text" id="msg" value="Hello, me" placeholder="Write a message" autocomplete="off" maxlength="200">
       </div>
       <div class="preview">
         <span class="eyebrow">notification · this browser</span>
@@ -347,15 +119,19 @@ input[readonly]:hover { border-color: var(--color-line); }
           <div class="toast-text"><b id="toast-title">Echo</b><span id="toast-body"></span><small><span id="toast-host"></span> · a few seconds after the call</small></div>
         </div>
       </div>
-      <div class="actions" id="send-row" hidden>
-        <button type="button" class="button" id="send">Send with Adena</button>
+      <div class="actions send-action">
+        <button type="button" class="button" id="send" disabled aria-describedby="send-hint">Send with Adena</button>
+        <p class="hint" id="send-hint" role="status">Set your address in step 1 to continue.</p>
       </div>
       <p class="status" id="mismatch"></p>
+      <details class="cli reveal" id="cli"><summary id="cli-label">Send with gnokey</summary>
       <div class="code">
-        <div class="code-head"><span>sh · gnokey</span><button type="button" class="button small" id="copy">Copy</button></div>
+        <div class="code-head"><span>sh · gnokey</span><button type="button" class="button small" id="copy" disabled aria-describedby="copy-hint">Copy</button></div>
+        <p class="hint action-hint" id="copy-hint">Set your address in step 1 to continue.</p>
         <pre><code id="command"></code></pre>
       </div>
       <p class="hint">Run it with the key of the address in step 1. The notification goes to whoever sends.</p>
+      </details>
       <p class="status" id="sent" role="status" aria-live="polite"></p>
       <details class="reveal">
         <summary>See the code</summary>

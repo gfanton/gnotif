@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canEnable, listenerMismatch, optinsAtLoad, optinsFor } from "./optin.ts";
+import { canSend, canEnable, listenerMismatch, optinsAtLoad, optinsFor } from "./optin.ts";
 
 const trigger = {
   id: "7",
@@ -56,4 +56,16 @@ test("listenerMismatch is undefined when this browser listens for the sender or 
   assert.equal(listenerMismatch(address, true, { address }), undefined, "same address");
   assert.equal(listenerMismatch(address, false, { address: other }), undefined, "notifications off");
   assert.equal(listenerMismatch(address, true, null), undefined, "nothing stored");
+});
+
+test("sending requires a valid address and its active opt-in, through push or live", () => {
+  const optins = [{ trigger: trigger.id, value: address }];
+  assert.equal(canSend(trigger, address, true, optins), true);
+  assert.equal(canSend(trigger, address, false, optins), false);
+  assert.equal(canSend(null, address, true, optins), false);
+  assert.equal(canSend(trigger, "", true, optins), false);
+  assert.equal(canSend(trigger, "g1nope", true, optins), false);
+  assert.equal(canSend(trigger, other, true, optins), false);
+  assert.equal(canSend(trigger, address, true, []), false);
+  assert.equal(canSend(trigger, address, true, [{ trigger: "another", value: address }]), false);
 });

@@ -2,7 +2,8 @@ import { Gnotif, GnotifError, type GnotifNotification, type Trigger } from "gnot
 import { type Adena, connect, findAdena, sendEcho, shortAddress as short, walletLabel } from "./adena.ts";
 import { gnokeyCommand } from "./echo-tx.ts";
 import { configFor } from "./config.ts";
-import { canEnable, listenerMismatch, optinsAtLoad, optinsFor } from "./optin.ts";
+import { isAddress } from "./address.ts";
+import { canSend, canEnable, listenerMismatch, optinsAtLoad, optinsFor } from "./optin.ts";
 import { addressArea } from "./address-area.ts";
 import { type Settings, load, save } from "./settings.ts";
 import { WAIT_MS, answeredSend, blockSummary, clockText, deliveredBody, details, logShown } from "./live-log.ts";
@@ -29,6 +30,7 @@ let wallet = "";
 let trigger: Trigger | null = null;
 let on = false; // push is on
 let live = false;
+let working = false;
 
 function stored(): Settings | null {
   return load(localStorage);
@@ -48,7 +50,7 @@ function address(): string {
 function message(): string {
   const msg = el("msg", HTMLInputElement);
   const typed = msg.value.trim();
-  return typed !== "" ? typed : msg.placeholder;
+  return typed !== "" ? typed : "Hello, me";
 }
 
 function say(id: string, text: string, isError = false): void {
@@ -78,6 +80,7 @@ async function setOptin(): Promise<void> {
   const optins = optin();
   await gnotif.setOptins(optins);
   remember({ optins });
+  setPrimary();
 }
 
 function setLiveState(text: string, connected = false): void {
@@ -96,6 +99,7 @@ async function startLive(): Promise<void> {
   live = true;
   setLiveState("Live updates on", true);
   renderLog();
+  setPrimary();
 }
 
 function stopLive(): void {
@@ -109,6 +113,7 @@ function stopLive(): void {
   waiting.length = 0;
   el("arrivals-list", HTMLOListElement).replaceChildren();
   renderLog();
+  setPrimary();
 }
 
 const ARRIVALS_KEPT = 5;
@@ -225,11 +230,33 @@ function pointToLog(): void {
   el("sent", HTMLElement).replaceChildren("Sent. ", link);
 }
 
+function readyToSend(): boolean {
+  return canSend(trigger, address(), on || live, stored()?.optins ?? []);
+}
+
 // One amber button at a time: the next action in the flow.
 function setPrimary(): void {
-  el("enable", HTMLButtonElement).classList.toggle("primary", !on);
-  el("send", HTMLButtonElement).classList.toggle("primary", on && adena !== undefined);
-  el("copy", HTMLButtonElement).classList.toggle("primary", on && adena === undefined);
+  const ready = readyToSend();
+  el("enable", HTMLButtonElement).classList.toggle("primary", !on && !live);
+  el("send", HTMLButtonElement).classList.toggle("primary", ready && adena !== undefined);
+  el("copy", HTMLButtonElement).classList.toggle("primary", ready && adena === undefined);
+  for (const id of ["send", "copy"]) {
+    el(id, HTMLButtonElement).disabled = working || !ready || (id === "send" && adena === undefined);
+  }
+  for (const id of ["send-hint", "copy-hint"]) {
+    const hint = el(id, HTMLElement);
+    hint.hidden = ready && (id === "copy-hint" || adena !== undefined);
+    const text = !isAddress(address())
+      ? "Set your address in step 1 to continue."
+      : !ready
+        ? "Turn on notifications or live updates for this address in step 1 to continue."
+        : adenaState === "pending"
+          ? "Checking for Adena…"
+          : "Install Adena to send from this page, or use gnokey below.";
+    if (hint.textContent !== text) {
+      hint.textContent = text;
+    }
+  }
 }
 
 async function refresh(): Promise<void> {
@@ -264,13 +291,16 @@ function renderAddress(): void {
   el("get-adena", HTMLElement).hidden = !area.getAdena;
   el("address-hint", HTMLElement).hidden = area.locked;
   el("locked-hint", HTMLElement).hidden = !area.locked;
+  setPrimary();
 }
 
 function busy(state: boolean): void {
-  for (const id of ["disable", "connect", "disconnect", "send"]) {
+  working = state;
+  for (const id of ["disable", "connect", "disconnect"]) {
     el(id, HTMLButtonElement).disabled = state;
   }
   el("enable", HTMLButtonElement).disabled = !canEnable(state, trigger);
+  setPrimary();
 }
 
 function noteMismatch(caller: string): void {
@@ -333,7 +363,6 @@ async function turnOff(): Promise<void> {
 el("disable", HTMLButtonElement).addEventListener("click", () => void turnOff());
 
 async function connectAdena(): Promise<void> {
-  // The button shows only once findAdena has found the wallet.
   if (adena === undefined) {
     return;
   }
@@ -346,6 +375,7 @@ async function connectAdena(): Promise<void> {
     el("address", HTMLInputElement).value = wallet;
     say("message", `Adena connected as ${short(wallet)}.`);
     say("mismatch", "");
+    await changeAddress();
   } catch (err) {
     say("message", messageOf(err), true);
   }
@@ -363,8 +393,7 @@ el("disconnect", HTMLButtonElement).addEventListener("click", () => {
 });
 
 async function send(): Promise<void> {
-  // The button shows only once findAdena has found the wallet.
-  if (adena === undefined) {
+  if (adena === undefined || working || !readyToSend()) {
     return;
   }
   if (el("msg", HTMLInputElement).value.trim() === "") {
@@ -388,7 +417,7 @@ async function send(): Promise<void> {
       say(
         "sent",
         on
-          ? `Sent. The notification arrives in a few seconds.${hash === undefined || hash === "" ? "" : ` Transaction ${hash}.`}`
+          ? `Transaction submitted. Allow a few seconds for the push.${hash === undefined || hash === "" ? "" : ` Transaction ${hash}.`}`
           : "Sent, but notifications are off in this browser. Turn them on in step 1 to get the next one.",
       );
     }
@@ -402,6 +431,7 @@ async function send(): Promise<void> {
 el("send", HTMLButtonElement).addEventListener("click", () => void send());
 
 async function copyCommand(): Promise<void> {
+  if (working || !readyToSend()) return;
   try {
     await navigator.clipboard.writeText(el("command", HTMLElement).textContent);
     el("copy", HTMLButtonElement).textContent = "Copied";
@@ -454,8 +484,10 @@ async function changeAddress(): Promise<void> {
   } catch (err) {
     say("message", errorText(err), true);
   }
+  setPrimary();
 }
 
+el("address", HTMLInputElement).addEventListener("input", setPrimary);
 el("address", HTMLInputElement).addEventListener("change", () => void changeAddress());
 
 gnotif.on("notification", addArrival);
@@ -473,11 +505,13 @@ el("code-realm", HTMLElement).textContent = echo;
 void findAdena(globalThis).then((found) => {
   adena = found;
   adenaState = found === undefined ? "absent" : "found";
-  el("send-row", HTMLElement).hidden = found === undefined;
+  el("cli", HTMLDetailsElement).open = found === undefined;
+  el("cli-label", HTMLElement).textContent = found === undefined ? "Send with gnokey" : "Use gnokey instead";
   renderAddress();
   setPrimary();
 });
 renderMessage();
+setPrimary();
 
 const saved = stored();
 if (saved !== null) {
