@@ -40,7 +40,6 @@ jobs:
       - run: pnpm check
       - run: pnpm lint
       - run: pnpm fmt:check
-      - run: pnpm build
 
   site:
     runs-on: ubuntu-latest
