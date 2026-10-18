@@ -1,6 +1,6 @@
 // The notice MIT asks every copy of Valibot's code to carry; the bundles inline it.
 // Its text is Valibot's LICENSE.md, without the "MIT License" heading.
-export const valibotNotice = `Valibot 1.5.0 (MIT), bundled in this file.
+export const valibotNotice = `Valibot (MIT), bundled in this file.
 
 Copyright (c) Fabian Hiller
 
