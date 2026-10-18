@@ -250,3 +250,9 @@ input[readonly]:hover { border-color: var(--color-line); }
 
 .step, .step > *, .reveal { min-width: 0; }
 .cli pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Keep setup guidance next to the action it unlocks. */
+.send-action { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+.cli .action-hint { margin: 0; padding: var(--space-3) var(--space-4) 0; }
+.compose-step .button:disabled { color: var(--color-text-muted); background: var(--color-surface); border-color: var(--color-line); opacity: 0.65; }
+.compose-step .button:disabled:hover { border-color: var(--color-line); }
