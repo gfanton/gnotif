@@ -222,6 +222,14 @@ test("enable rejects a malformed VAPID answer", async (t) => {
   await assert.rejects(g.enable(), (err) => err instanceof GnotifError && err.code === "server");
 });
 
+for (const publicKey of ["", "!!", "A"]) {
+  test(`enable rejects the VAPID key ${JSON.stringify(publicKey)}, which is not base64url`, async (t) => {
+    stubEnable(t, { publicKey });
+    const g = new Gnotif({ server: SERVER, serviceWorker: "/sw.js" });
+    await assert.rejects(g.enable(), (err) => err instanceof GnotifError && err.code === "server");
+  });
+}
+
 const BOB = { trigger: "0000001", value: "g1bob" };
 const BOB_PAGE_ONLY = { trigger: "0000002", value: "g1bob", push: false };
 

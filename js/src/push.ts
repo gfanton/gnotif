@@ -4,7 +4,10 @@
 
 import * as v from "valibot";
 
-const VapidSchema = v.object({ publicKey: v.string() });
+// Unpadded base64url: a length of 1 more than a multiple of 4 encodes no bytes.
+const BASE64URL = /^(?:[\w-]{4})*[\w-]{2,4}$/;
+
+const VapidSchema = v.object({ publicKey: v.pipe(v.string(), v.regex(BASE64URL)) });
 
 const PayloadSchema = v.object({ title: v.pipe(v.string(), v.nonEmpty()), body: v.string(), link: v.string() });
 
