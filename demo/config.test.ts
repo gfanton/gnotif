@@ -29,5 +29,5 @@ test("the build refuses an unknown DEMO_NETWORK", () => {
 test("an empty DEMO_NETWORK builds the local config", () => {
   const r = build("");
   assert.equal(r.status, 0, r.stderr);
-  assert.match(readFileSync(new URL("./dist/app.js", import.meta.url), "utf8"), /http:\/\/localhost:8080/);
+  assert.match(readFileSync(new URL("./dist/app.js", import.meta.url), "utf8"), /configFor\("local"\)/);
 });
