@@ -27,13 +27,15 @@ var steps = [3]step{
 	{
 		Label: "Declare",
 		Title: "Declare a trigger in the registry",
-		Text:  "The realm declares the trigger itself, in <code>init</code>, so the deploy declares it and the registry marks it verified.",
+		Text:  "The realm declares its triggers once, in <code>init</code>, so the deploy declares them and the registry marks them verified.",
 		Lang:  "go",
 		Code: `import "` + registryPath + `"
 
 func init(cur realm) {
-	gnotif.Declare(cross(cur), cur.PkgPath(), "Message", "", "to",
-		"New message", "{msg}", "/")
+	me := cur.Sub(gnotif.Subpath)
+	gnotif.Declare(cross(me), gnotif.Trigger{
+		Event: "Message", Param: "to", Title: "New message", Body: "{msg}", Link: "/",
+	})
 }`,
 		DocsHref: "/docs/getting-started/#2-declare-the-trigger",
 	},

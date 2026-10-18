@@ -1013,6 +1013,36 @@ func TestLaterVersionDeclares(t *testing.T) {
 	assert.Len(t, h.sent, 2)
 }
 
+func TestDeclaredWithApproverApplies(t *testing.T) {
+	h := newHarness(t, 1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+	e := declaredBy(registryV1, "v1-0000001", game)
+	e.attrs = append(e.attrs, trigger.Pair{Key: "approver", Value: "g1alice"})
+	h.fake.add(3, e)
+	h.tick(t)
+	require.Equal(t, []string{"v1-0000001"}, h.triggerIDs(t))
+
+	h.optIn(t, "E1", "v1-0000001", "g1bob")
+	h.fake.add(7, turn("1", "g1bob"))
+	h.tick(t)
+	assert.Len(t, h.sent, 1)
+}
+
+func TestUnknownRegistryEventLogged(t *testing.T) {
+	h := newHarness(t, 1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+	disabled := fakeEvent{pkg: registryV1, typ: "TargetDisabled", attrs: []trigger.Pair{{Key: "target", Value: game}}}
+	h.fake.add(3, declaredBy(registryV1, "v1-0000001", game), disabled)
+	h.tick(t)
+
+	assert.Equal(t, []string{"v1-0000001"}, h.triggerIDs(t))
+	assert.Contains(t, h.log.String(), `level=ERROR msg="skip registry event"`)
+	assert.Contains(t, h.log.String(), "unknown event type TargetDisabled")
+	assert.Equal(t, int64(5), h.cursor(t).HeightDone)
+}
+
 func TestVersionCannotTakeOverID(t *testing.T) {
 	h := newHarness(t, 1)
 	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})

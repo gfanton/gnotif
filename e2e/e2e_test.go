@@ -164,10 +164,11 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 		return true
 	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed the verified pingpong trigger")
 
-	// The registry refuses a declaration from anyone but the target realm.
-	out, err := s.tryCallPackage("devtest", registryPath, "Declare", pingpongPath, "TurnPlayed", "", "", "Spoof", "spoofed", "/")
+	// The registry refuses a declaration from anyone but a realm's gnotif
+	// identity. MsgCall cannot pass a Trigger, so the call passes none.
+	out, err := s.tryCallPackage("devtest", registryPath, "Declare")
 	require.Error(t, err)
-	assert.Contains(t, out, "caller is not the target")
+	assert.Contains(t, out, "call with this realm's gnotif identity")
 
 	key, err := ecdh.P256().GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -261,6 +262,14 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 	conformance.Env = append(os.Environ(), "GNOTIF_SERVER="+base, "GNOTIF_TARGET="+pingpongPath)
 	report, err := conformance.CombinedOutput()
 	require.NoError(t, err, "conformance suite:\n%s", report)
+
+	// devtest owns every namespace on gnodev, which does not enforce them.
+	// The drop comes last: the conformance suite opts into this trigger.
+	s.callPackage("devtest", registryPath, "Drop", pingpongPath, triggerID)
+	require.Eventually(t, func() bool {
+		ids, err := listed()
+		return err == nil && len(ids) == 0
+	}, 30*time.Second, 250*time.Millisecond, "gnotifd still lists the dropped pingpong trigger")
 }
 
 type listedTrigger struct {
@@ -298,17 +307,17 @@ func TestRegistryVersions(t *testing.T) {
 	s := newStack(t)
 	const (
 		pingpongV1 = "gno.land/r/dev/pingpong/v1"
-		registryV1 = "gno.land/r/dev/gnotif/v1"
 		registryV2 = "gno.land/r/dev/gnotif/v2"
+		registryV3 = "gno.land/r/dev/gnotif/v3"
 	)
-	s.addpkg("devtest", filepath.Join(s.root, "gno", "r", "gnotif", "v0"), registryV1,
-		"lastID.Next().String()", `"v1-" + lastID.Next().String()`,
-		registryPath, registryV1)
+	s.addpkg("devtest", filepath.Join(s.root, "gno", "r", "gnotif", "v1"), registryV2,
+		`"v1-"`, `"v2-"`,
+		registryPath, registryV2)
 	s.addpkg("devtest", filepath.Join(s.root, "demo", "gno.land", "r", "pingpong", "v0"), pingpongV1,
-		registryPath, registryV1,
+		registryPath, registryV2,
 		pingpongPath, pingpongV1)
-	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "gnotif-v2"), registryV2)
-	s.callPackage("devtest", registryV2, "Spoof", pingpongPath)
+	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "gnotif-v3"), registryV3)
+	s.callPackage("devtest", registryV3, "Spoof", pingpongPath)
 
 	base, rec := startGnotifd(t, s)
 
@@ -316,14 +325,14 @@ func TestRegistryVersions(t *testing.T) {
 		v0, err0 := listTriggers(base, pingpongPath)
 		v1, err1 := listTriggers(base, pingpongV1)
 		return err0 == nil && err1 == nil &&
-			slices.Equal(v0, []listedTrigger{{ID: "0000001", Title: "Your turn"}}) &&
-			len(v1) == 1 && v1[0].ID == "v1-0000001"
+			slices.Equal(v0, []listedTrigger{{ID: "v1-0000001", Title: "Your turn"}}) &&
+			len(v1) == 1 && v1[0].ID == "v2-0000001"
 	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed both pingpong triggers")
 
 	player2 := s.addrs["player2"]
 	for _, c := range []struct{ endpoint, trigger string }{
-		{rec.server.URL + "/push/v0", "0000001"},
 		{rec.server.URL + "/push/v1", "v1-0000001"},
+		{rec.server.URL + "/push/v2", "v2-0000001"},
 	} {
 		key, err := ecdh.P256().GenerateKey(rand.Reader)
 		require.NoError(t, err)
@@ -351,14 +360,14 @@ func TestRegistryVersions(t *testing.T) {
 	require.Eventually(t, func() bool {
 		paths := rec.paths()
 		slices.Sort(paths)
-		return slices.Equal(paths, []string{"/push/v0", "/push/v1"})
+		return slices.Equal(paths, []string{"/push/v1", "/push/v2"})
 	}, 30*time.Second, 100*time.Millisecond, "expected one push per registry, got %v", rec.paths())
 	assert.Never(t, func() bool { return rec.count() > 2 }, 3*time.Second, 100*time.Millisecond)
 
-	// The v2 realm's events carry v0's id, and gnotifd ignored them.
+	// The v3 realm's events carry v1's id, and gnotifd ignored them.
 	v0, err := listTriggers(base, pingpongPath)
 	require.NoError(t, err)
-	assert.Equal(t, []listedTrigger{{ID: "0000001", Title: "Your turn"}}, v0)
+	assert.Equal(t, []listedTrigger{{ID: "v1-0000001", Title: "Your turn"}}, v0)
 }
 
 func put(t *testing.T, url string, body any) {

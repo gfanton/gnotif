@@ -1,60 +1,176 @@
 # Triggers
 
-A trigger tells gnotif servers which event of a realm to watch, who hears about it, and what the notification says. Triggers live in the gnotif registry realm, `gno.land/r/nym-gfanton001/gnotif/v0`, the one gnotif.xyz reads.
+A trigger tells gnotif servers which event of a realm to watch, who hears about it, and what the notification says. Triggers live in the gnotif registry realm, `gno.land/r/nym-gfanton001/gnotif/v1`, the one gnotif.xyz reads.
 
-## Declare a trigger
+## Declare your triggers
 
-The registry has two functions:
-
-```go
-func Declare(cur realm, target, event, filter, param, title, body, link string) string
-func Remove(cur realm, id string)
-```
-
-`Declare` stores a trigger and returns its id. Ids count up from `0000001` in v0, and begin with `v<N>-` in version N of the registry. `Remove` deletes a trigger, and only the address that declared it may call it.
-
-A realm declares its triggers in its `init` function, as [Getting started](getting-started.md#2-declare-the-trigger) shows:
+A realm declares all its triggers in one call, from its `init` function:
 
 ```go
+import gnotif "gno.land/r/nym-gfanton001/gnotif/v1"
+
 func init(cur realm) {
-	gnotif.Declare(cross(cur), cur.PkgPath(), "Message", "", "to", "New message", "{msg}", "/")
+	me := cur.Sub(gnotif.Subpath) // a variable: cross() takes a bare identifier
+	gnotif.Declare(cross(me),
+		gnotif.Trigger{Event: "Message", Param: "to", Title: "New message", Body: "{text}", Link: "/"},
+		gnotif.Trigger{Event: "Reply", Title: "New reply", Link: "/"},
+	)
 }
 ```
 
-The trigger's declarer is the realm's address, so only the realm can remove it, through a function that calls `gnotif.Remove(cross(cur), id)`.
+`me` is the realm's gnotif identity, which the chain reports as `<realm path>#gnotif`. `cur.Sub` makes it only from the realm's own live `cur`, in code that runs as the realm, and the registry takes a realm's triggers only from that realm's gnotif identity. Every trigger the registry holds carries the [verified mark](how-it-works.md#what-the-verified-mark-means). A realm whose path is longer than 249 bytes cannot make `me`, so keep your realm's path within 249 bytes.
 
-## The verified mark
+The registry's functions:
 
-A trigger that a realm declares for itself from `init` carries the [verified mark](how-it-works.md#what-the-verified-mark-means).
+```go
+func Declare(cur realm, ts ...Trigger) []string
+func Drop(cur realm, target, ids string)
+func Active(target string) string
+```
 
-`Declare` from any other caller panics with `caller is not the target`.
+`Declare` returns the ids of the triggers in its list, in order. `Active` returns a realm's ids, comma-separated, oldest first. Ids count up from `0000001` in v0, and begin with `v<N>-` in version N of the registry, such as `v1-0000001`.
+
+`gnotif.Trigger` holds the six fields a dapp sets ([Fields](#fields)). It is the struct of the package `gno.land/p/nym-gfanton001/gnotif/trigger/v0`, and a dapp imports only the registry to use it.
+
+## Declare once, at deploy
+
+A realm's namespace is the first element of its path after `gno.land/r/`. Its owner is the address it names, as in `gno.land/r/<address>/...`, or the user whose registered name it is. The registry asks `gno.land/r/sys/names` for the owner, as the chain does on every deploy.
+
+The registry takes a realm's triggers in one `Declare` call, and only when the namespace owner signed the transaction with its own key and sent it straight to the realm. The owner's deploy does both, so the triggers are active once the realm goes live. On a chain that does not enforce namespaces, such as a local gnodev, any key's deploy declares them.
+
+After that call, the realm's triggers are set. A trigger identical in every field to one of the realm's triggers, or to an earlier one in the same list, gets that trigger's id. A later `Declare` must repeat all of the realm's triggers: one that does changes nothing, so an `init` that runs again does no harm. A later `Declare` that leaves one of them out panics, and so does one that adds any other trigger, a dropped one included.
+
+`Declare` panics, which reverts the transaction, when:
+
+| Panic | Cause |
+|---|---|
+| `call with this realm's gnotif identity (me := cur.Sub(gnotif.Subpath), then cross(me)); got <path>` | the caller is not a realm's gnotif identity: a realm's plain `cur`, or another `Sub` of it |
+| `declare at least one trigger` | the list is empty |
+| `invalid event`, `invalid filter`, `invalid param`, `invalid title`, `invalid body`, `invalid link` | the first field that breaks its [rule](#fields) |
+| `the triggers of <target> are set: deploy a new version of the realm to change them` | the realm declared its triggers before, and the list leaves one of them out or holds a new one |
+| `signed with a session key: sign with the namespace owner's own key` | a session key signed the transaction |
+| `<addr> is not authorized for namespace <ns>` | the signer does not own the realm's namespace |
+| `the dapp was not entered directly by its namespace owner; entered from <path>` | the signer called another realm, which called the dapp |
+| `too many triggers for target` | the list passes the [limit](#at-most-64-triggers-per-realm) |
 
 ## At most 64 triggers per realm
 
-A realm holds at most 64 verified triggers in each registry version it imports. The 65th `Declare` panics with `too many triggers for target`, which reverts the transaction, so a deploy that declares it fails. `Remove` frees a place.
+A realm declares at most 64 triggers in each registry version.
+
+## One trigger for every user or group
+
+A realm declares its triggers once, so a trigger never names one user, group or game. One trigger with a `param` covers them all: the event names the user or group in that attribute, and each browser opts in with the value it follows, such as its own address or a group's id.
 
 ## A trigger's id can change
 
-A trigger cannot be edited. To change one, a realm removes it and declares a new one. A realm deployed at a new path, such as a `v1`, declares its own new triggers. Each `Declare` makes a new trigger with a new id. Opt-ins never move from one trigger to another, and removing a trigger drops its opt-ins.
+A trigger cannot be edited, and a realm declares its triggers once. To change them, deploy a new version of the realm at a new path, such as `…/v2`, whose `init` declares the new list. Its triggers get new ids, and opt-ins never move from one trigger to another. The namespace owner [drops](#drop-a-trigger) the old version's triggers when they should stop.
 
 So a page never keeps a trigger id. It asks for the ids with `triggers(target)` each time it loads, and sends its opt-ins with the ids it gets.
 
+## Pause notifications
+
+The registry has no pause. A realm that may need one builds it into its own events: while it emits nothing, gnotif servers send nothing, and its triggers and opt-ins stay. Here is the [Getting started](getting-started.md) realm with a switch that only its deployer can flip:
+
+```go
+var (
+	admin address
+	muted bool
+)
+
+func init(cur realm) {
+	admin = cur.Previous().Address() // the address that deployed the realm
+	// ... declare the triggers ...
+}
+
+// SetMuted stops or resumes the realm's notifications.
+func SetMuted(cur realm, v bool) {
+	if cur.Previous().Address() != admin {
+		panic("only the deployer can mute")
+	}
+	muted = v
+}
+
+func Notify(cur realm, to address, msg string) {
+	if !muted {
+		chain.Emit("Message", "to", to.String(), "msg", msg)
+	}
+}
+```
+
+For a realm deployed without such a switch, the only way to stop its notifications is to [drop](#drop-a-trigger) its triggers, for good.
+
+## Drop a trigger
+
+`Drop` removes triggers for good. The realm's namespace owner calls it directly, signed with its own key, such as with gnokey:
+
+```sh
+gnokey maketx call -pkgpath gno.land/r/nym-gfanton001/gnotif/v1 -func Drop \
+  -args gno.land/r/<you>/notify -args v1-0000007 \
+  -gas-wanted 20000000 -gas-fee 40000ugnot \
+  -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 mykey
+```
+
+The first argument is the realm's path, and the second lists the ids to drop, separated by commas, such as `v1-0000007,v1-0000008`. Spaces around an id are ignored. The realm's [page on gnoweb](#see-the-triggers-on-gnoweb) lists its ids.
+
+Dropping a trigger deletes its opt-ins on every gnotif server. The realm's triggers stay set, even once all of them are dropped: only a new version of the realm can declare new ones.
+
+A drop cannot be undone. Check each id on the realm's page first, and add `-simulate only` to the command to try it without sending it: an id that is not active fails there.
+
+`Drop` drops nothing and panics when:
+
+| Panic | Cause |
+|---|---|
+| `only the namespace owner may do this, in a call signed with its own key; got <path>` | a realm called it |
+| `sign with the namespace owner's own key, not a session key` | a session key signed the transaction |
+| `invalid target <target>` | the first argument is not a realm path |
+| `<addr> is not authorized for namespace <ns>` | the signer does not own the realm's namespace |
+| `<id> is not an active trigger of <target>` | an id is not one of the realm's triggers, or appears twice |
+
+## Let other code declare your triggers
+
+Code that holds `me` can declare the realm's triggers. To have a library declare them, pass `me` from `init` to a plain function of the library, one whose first parameter is not a `realm`:
+
+```go
+// the library's realm
+func Setup(_ int, me realm) {
+	gnotif.Declare(cross(me), gnotif.Trigger{Event: "Message", Param: "to", Title: "New message", Body: "{text}", Link: "/"})
+}
+
+// your realm
+func init(cur realm) {
+	me := cur.Sub(gnotif.Subpath)
+	library.Setup(0, me)
+}
+```
+
+A crossing function cannot use `me`: it runs with its own `cur`, so `cross(me)` panics there.
+
+## Keep your gnotif identity to your realm
+
+Code that can make your realm's `me` can declare triggers in your realm's name until your realm's triggers are set. Declare in `init`, so that this ends with your deploy. These rules keep other code from making `me`:
+
+- Never pass your `cur` to code you do not control, `/p/` code above all: a `/p/` function given your `cur` runs as your realm and can make `me`.
+- Never expose a pointer to your own `/p/` object whose methods call a function they are given.
+- Make `me` only from your own crossing function's `cur`. Never write a function that calls `Sub` on a realm value it receives.
+
 ## Fields
+
+A dapp sets the first six fields, capitalized in `gnotif.Trigger`: `Event`, `Filter`, `Param`, `Title`, `Body` and `Link`. The registry sets the others.
 
 | Field | Meaning | Rule |
 |---|---|---|
-| `target` | package path of the realm whose events the trigger watches | a realm path, at most 256 bytes |
 | `event` | event type to match | 1 to 64 bytes of `A-Z a-z 0-9 _` |
 | `filter` | fixed `key=value` pairs the event must carry, comma-separated; empty for none | up to 8 pairs; each key 1 to 64 bytes of `A-Z a-z 0-9 _`; each value 1 to 64 bytes without `=` or `,` |
 | `param` | attribute whose value a browser opts in with; empty notifies every browser that opted in | empty, or 1 to 64 bytes of `A-Z a-z 0-9 _` |
 | `title` | notification title template | 1 to 64 bytes |
 | `body` | notification body template | at most 255 bytes |
 | `link` | path template opened on click, on the dapp's own origin | a path of at most 256 bytes, starting with a single `/`; no ASCII control characters or backslash |
+| `target` | package path of the realm whose events the trigger watches: the realm whose gnotif identity declared it | set by the registry |
 | `id` | the trigger's id | set by the registry |
-| `declarer` | address that called `Declare` | set by the registry |
-| `verified` | always `true` in v0 | set by the registry |
+| `declarer` | address of the target realm | set by the registry |
+| `verified` | always `true` | set by the registry |
 
-`Declare` panics on the first field that breaks its rule, which reverts the transaction. The rules keep a trigger from imitating the verified mark or sending a dapp's users to another site ([How gnotif works](how-it-works.md#what-the-verified-mark-means)).
+The rules keep a trigger from imitating the verified mark or sending a dapp's users to another site ([How gnotif works](how-it-works.md#what-the-verified-mark-means)).
 
 ## Templates
 
@@ -87,6 +203,6 @@ gnotif does not check that an address belongs to the browser that opts in with i
 
 Each registry version renders on gnoweb, under its own path:
 
-- `/r/nym-gfanton001/gnotif/v0` lists every trigger, newest first, 50 to a page, and `/r/nym-gfanton001/gnotif/v0:page/2` is the second page;
-- `/r/nym-gfanton001/gnotif/v0:trigger/<id>` shows one trigger with its templates;
-- `/r/nym-gfanton001/gnotif/v0:target/<realm path>` lists one realm's verified triggers, such as `:target/gno.land/r/<you>/notify`.
+- `/r/nym-gfanton001/gnotif/v1` lists every trigger, newest first, 50 to a page, and `/r/nym-gfanton001/gnotif/v1:page/2` is the second page;
+- `/r/nym-gfanton001/gnotif/v1:trigger/<id>` shows one trigger with its templates;
+- `/r/nym-gfanton001/gnotif/v1:target/<realm path>` lists one realm's triggers, such as `:target/gno.land/r/<you>/notify`.

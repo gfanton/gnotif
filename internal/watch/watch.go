@@ -408,6 +408,9 @@ func (w *Watcher) applyRegistry(b *windowBatch, e trigger.Event, version int) {
 		edit.delete(id)
 		b.triggers = edit.done()
 		b.stmts = append(b.stmts, store.DeleteTriggerStatement(id))
+	default:
+		w.cfg.Log.Error("skip registry event", "height", e.Height, "tx", e.TxHash,
+			"err", fmt.Sprintf("unknown event type %s: this gnotifd may be older than registry version %d", e.Type, version))
 	}
 }
 

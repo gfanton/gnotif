@@ -34,5 +34,5 @@ const (
 	npmURL      = "https://www.npmjs.com/package/gnotif"
 
 	// registryPath is the registry behind serverURL.
-	registryPath = "gno.land/r/nym-gfanton001/gnotif/v0"
+	registryPath = "gno.land/r/nym-gfanton001/gnotif/v1"
 )
