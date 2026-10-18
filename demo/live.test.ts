@@ -21,6 +21,6 @@ test("the log's heading names no channel, since pushes list there with live upda
 
 test("the live log is announced as messages arrive", () => {
   const tag = page.match(/<[^>]*\bid="arrivals"[^>]*>/);
-  assert.ok(tag, 'the page has an element with id="arrivals"');
+  assert.ok(tag !== null, 'the page has an element with id="arrivals"');
   assert.ok(tag[0].includes('role="log"'), tag[0]);
 });

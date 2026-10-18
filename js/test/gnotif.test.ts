@@ -338,6 +338,34 @@ test("triggers rejects a malformed answer", async (t) => {
   );
 });
 
+test("triggers rejects an answer that is not JSON", async (t) => {
+  t.after(
+    stubGlobal("fetch", async () => ({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError("Unexpected token '<'");
+      },
+    })),
+  );
+  await assert.rejects(
+    new Gnotif({ server: SERVER }).triggers("gno.land/r/dev/echo/v0"),
+    (err) => err instanceof GnotifError && err.code === "server",
+  );
+});
+
+test("a server error whose body has no string error gives the status message", async (t) => {
+  t.after(stubGlobal("fetch", async () => ({ ok: false, status: 400, json: async () => ({ error: 5 }) })));
+  await assert.rejects(
+    new Gnotif({ server: SERVER }).triggers("gno.land/r/dev/echo/v0"),
+    (err) =>
+      err instanceof GnotifError &&
+      err.code === "server" &&
+      err.status === 400 &&
+      err.message === "gnotif server answered 400",
+  );
+});
+
 test("triggers keeps the known fields of an answer with an extra field", async (t) => {
   t.after(stubGlobal("fetch", answering([{ ...TRIGGER, icon: "/i.png" }])));
   assert.deepEqual(await new Gnotif({ server: SERVER }).triggers("gno.land/r/dev/echo/v0"), [TRIGGER]);

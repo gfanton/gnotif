@@ -9,8 +9,8 @@
   "scripts": {
     "check": "tsc -p js/tsconfig.json && tsc -p js/src/sw/tsconfig.json && tsc -p js/test/tsconfig.json && tsc -p js/scripts/tsconfig.json && tsc -p demo/tsconfig.json && tsc -p e2e/conformance/tsconfig.json",
     "lint": "oxlint --type-aware",
-    "fmt": "prettier --write 'js/**/*.ts' 'demo/*.ts' 'e2e/conformance/*.ts'",
-    "fmt:check": "prettier --check 'js/**/*.ts' 'demo/*.ts' 'e2e/conformance/*.ts'",
+    "fmt": "prettier --write 'js/{src,test,scripts}/**/*.ts' 'demo/*.ts' 'e2e/conformance/*.ts'",
+    "fmt:check": "prettier --check 'js/{src,test,scripts}/**/*.ts' 'demo/*.ts' 'e2e/conformance/*.ts'",
     "build": "pnpm -r build",
     "test": "pnpm build && node --test 'js/test/*.test.ts' 'demo/*.test.ts'"
   },

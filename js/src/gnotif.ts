@@ -468,8 +468,8 @@ export class Gnotif {
         return;
       }
       case undefined:
-        // A server may add frame types; this client ignores the ones it
-        // does not know.
+        // Unknown frame types, non-JSON text and known types with a mistyped
+        // field all parse to no type; the client ignores them.
         return;
     }
   }
@@ -619,6 +619,13 @@ export class Gnotif {
       }
       throw new GnotifError("server", message, res.status);
     }
-    return res.status === 204 ? null : res.json();
+    if (res.status === 204) {
+      return null;
+    }
+    try {
+      return await res.json();
+    } catch {
+      throw new GnotifError("server", `gnotif server answered ${res.status} with a body that is not JSON`, res.status);
+    }
   }
 }
