@@ -13,7 +13,7 @@ TOOLS := .tools
 GNO_CHECKOUT ?= https://github.com/gnolang/gno
 TX_INDEXER_VERSION := v1.3.0
 NS ?=
-DEMO_JS := demo/gnotif.js demo/sw.js
+PNPM_STAMP := node_modules/.modules.yaml
 
 .PHONY: all test gno-test gno-lint gno-deps go-test js-test tools e2e conformance demo site site-serve deploy-pkgs clean fclean help
 
@@ -42,8 +42,12 @@ go-test: ## Run go vet and the Go tests
 	go vet ./...
 	go test ./...
 
-js-test: ## Run the browser script tests
-	node --test 'js/test/*.test.mjs' 'demo/*.test.mjs'
+$(PNPM_STAMP): pnpm-lock.yaml pnpm-workspace.yaml package.json js/package.json demo/package.json
+	pnpm install --frozen-lockfile
+	touch $@
+
+js-test: $(PNPM_STAMP) ## Run the browser script tests
+	pnpm test
 
 # Marks .tools as a separate workspace, so the root one skips the gno checkout.
 $(TOOLS)/gnowork.toml:
@@ -70,13 +74,11 @@ e2e: tools ## Run the local end-to-end test
 
 conformance: ## Check the live endpoint of GNOTIF_SERVER, opting into a trigger of GNOTIF_TARGET
 	test -n "$(GNOTIF_SERVER)" && test -n "$(GNOTIF_TARGET)" || { echo "conformance: set GNOTIF_SERVER=<gnotif server URL> GNOTIF_TARGET=<realm path>" >&2; exit 1; }
-	GNOTIF_SERVER=$(GNOTIF_SERVER) GNOTIF_TARGET=$(GNOTIF_TARGET) node --test e2e/conformance/stream.test.mjs
+	GNOTIF_SERVER=$(GNOTIF_SERVER) GNOTIF_TARGET=$(GNOTIF_TARGET) node --test e2e/conformance/stream.test.ts
 
-$(DEMO_JS): demo/%.js: js/src/%.js
-	cp $< $@
-
-demo: $(DEMO_JS) ## Serve the demo dapp on http://localhost:3000
-	python3 -m http.server 3000 --bind 127.0.0.1 --directory demo
+demo: $(PNPM_STAMP) ## Build the demo dapp into demo/dist and serve it on http://localhost:3000
+	pnpm build
+	pnpm --filter gnotif-demo serve
 
 site: ## Build the website into site/dist
 	rm -rf site/dist
@@ -98,12 +100,11 @@ deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>
 	done
 	touch $(TOOLS)/deploy/gnowork.toml
 
-clean: ## Remove built tools, deploy copies, the website build and the demo's copied scripts
-	rm -rf $(TOOLS) site/dist
-	rm -f $(DEMO_JS)
+clean: ## Remove built tools, deploy copies, the website build, the package build and the demo build
+	rm -rf $(TOOLS) site/dist js/dist demo/dist
 
-fclean: clean ## Also remove the gno toolchain and the realms' dependencies in .cache
-	rm -rf $(CACHE)
+fclean: clean ## Also remove the gno toolchain, the realms' dependencies in .cache and the installed JavaScript packages
+	rm -rf $(CACHE) node_modules js/node_modules demo/node_modules
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## / : /'

@@ -1,0 +1,45 @@
+// The Web Push side that the client and the service worker both read. Each
+// parse function gives undefined or a fallback for data that does not match
+// its schema.
+
+import * as v from "valibot";
+
+// Unpadded base64url: a length of 1 more than a multiple of 4 encodes no bytes.
+const BASE64URL = /^(?:[\w-]{4})*[\w-]{2,4}$/;
+
+const VapidSchema = v.object({ publicKey: v.pipe(v.string(), v.regex(BASE64URL)) });
+
+const PayloadSchema = v.object({ title: v.pipe(v.string(), v.nonEmpty()), body: v.string(), link: v.string() });
+
+const ClickDataSchema = v.object({ link: v.string() });
+
+const RelayableSchema = v.looseObject({ id: v.string() });
+
+export function parsed<T>(schema: v.GenericSchema<unknown, T>, data: unknown): T | undefined {
+  const result = v.safeParse(schema, data);
+  return result.success ? result.output : undefined;
+}
+
+export function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+export function parseVapidKey(data: unknown): string | undefined {
+  return parsed(VapidSchema, data)?.publicKey;
+}
+
+export function parsePayload(text: string): v.InferOutput<typeof PayloadSchema> {
+  return parsed(PayloadSchema, parseJson(text)) ?? { title: "New activity", body: "", link: "./" };
+}
+
+export function relayable(text: string): v.InferOutput<typeof RelayableSchema> | undefined {
+  return parsed(RelayableSchema, parseJson(text));
+}
+
+export function parseClickLink(data: unknown): string {
+  return parsed(ClickDataSchema, data)?.link ?? "./";
+}

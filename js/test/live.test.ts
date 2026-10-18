@@ -1,0 +1,429 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { Gnotif, GnotifError, type GnotifNotification } from "../src/gnotif.ts";
+import {
+  A,
+  ACCEPTED,
+  B,
+  FakeWebSocket,
+  SERVER,
+  connected,
+  flush,
+  last,
+  notification,
+  sockets,
+  stubGlobal,
+  stubLive,
+} from "./fakes.ts";
+
+test("connect opens the stream and resolves once the set is accepted", async (t) => {
+  stubLive(t);
+  const g = new Gnotif({ server: SERVER });
+  await g.setOptins(A);
+  const p = g.connect();
+  assert.equal(sockets().length, 1);
+  assert.equal(last().url, "wss://gnotif.example/v1/stream");
+  last().open();
+  assert.deepEqual(last().optinsSent(), [A]);
+  last().receive(ACCEPTED);
+  await p;
+  g.disconnect();
+});
+
+test("connect rejects with the server's message and does not retry", async (t) => {
+  stubLive(t);
+  const g = new Gnotif({ server: SERVER });
+  await g.setOptins(A);
+  const p = g.connect();
+  last().open();
+  last().receive('{"type":"error","error":"unknown trigger \\"0000001\\""}');
+  await assert.rejects(
+    p,
+    (err) => err instanceof GnotifError && err.code === "server" && err.message === 'unknown trigger "0000001"',
+  );
+  await flush();
+  t.mock.timers.tick(60_000);
+  assert.equal(sockets().length, 1);
+});
+
+// ThrowingWebSocket refuses its URL at once, as a browser does for ws: from
+// an https: page, while throwing.on is set.
+class ThrowingWebSocket extends FakeWebSocket {
+  static on = true;
+
+  constructor(url: string) {
+    if (ThrowingWebSocket.on) {
+      throw new DOMException("refused by the browser", "SecurityError");
+    }
+    super(url);
+  }
+}
+
+test("connect rejects with code network when the connection closes before the server answers", async (t) => {
+  stubLive(t);
+  const g = new Gnotif({ server: SERVER });
+  const p = g.connect();
+  last().drop();
+  await assert.rejects(p, (err) => err instanceof GnotifError && err.code === "network");
+});
+
+test("connect rejects with code network when the socket cannot be created, and can be tried again", async (t) => {
+  stubLive(t);
+  ThrowingWebSocket.on = true;
+  t.after(stubGlobal("WebSocket", ThrowingWebSocket));
+  const g = new Gnotif({ server: SERVER });
+  await assert.rejects(
+    g.connect(),
+    (err) => err instanceof GnotifError && err.code === "network" && err.message === "refused by the browser",
+  );
+
+  ThrowingWebSocket.on = false;
+  const p = g.connect();
+  assert.equal(sockets().length, 1);
+  last().open();
+  last().receive(ACCEPTED);
+  await p;
+  g.disconnect();
+});
+
+test("a socket refused while reconnecting is retried later", async (t) => {
+  stubLive(t, 0);
+  t.after(stubGlobal("WebSocket", ThrowingWebSocket));
+  ThrowingWebSocket.on = false;
+  const g = await connected(t);
+  ThrowingWebSocket.on = true;
+  last().drop();
+  t.mock.timers.tick(500); // the retry is refused at once
+  assert.equal(sockets().length, 1);
+  ThrowingWebSocket.on = false;
+  t.mock.timers.tick(1000);
+  assert.equal(sockets().length, 2);
+  last().open();
+  last().receive(ACCEPTED);
+  assert.deepEqual(last().optinsSent(), [A]);
+  g.disconnect();
+});
+
+test("connect called twice opens one socket", async (t) => {
+  stubLive(t);
+  const g = new Gnotif({ server: SERVER });
+  const p1 = g.connect();
+  const p2 = g.connect();
+  assert.equal(sockets().length, 1);
+  last().open();
+  assert.deepEqual(last().optinsSent(), [[]]);
+  last().receive(ACCEPTED);
+  await Promise.all([p1, p2]);
+  g.disconnect();
+});
+
+test("disconnect during a pending connect rejects it as inactive", async (t) => {
+  stubLive(t);
+  const g = new Gnotif({ server: SERVER });
+  const p = g.connect();
+  last().open();
+  g.disconnect();
+  await assert.rejects(p, (err) => err instanceof GnotifError && err.code === "inactive");
+});
+
+test("notifications reach handlers with the link resolved on the page origin", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  const got: GnotifNotification[] = [];
+  g.on("notification", (n) => got.push(n));
+  last().receive(JSON.stringify(notification("/?game=7", "i1")));
+  last().receive(JSON.stringify(notification("//evil.example/x", "i2")));
+  const { type, ...fields } = notification("https://dapp.example/?game=7");
+  assert.equal(type, "notification");
+  assert.deepEqual(got[0], { ...fields, source: "live" });
+  assert.equal(got[1]?.link, "https://dapp.example/");
+});
+
+test("a notification without its block time reaches no handler", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  const got: GnotifNotification[] = [];
+  g.on("notification", (n) => got.push(n));
+  const { time, ...untimed } = notification("/");
+  last().receive(JSON.stringify(untimed));
+  last().receive(JSON.stringify({ ...untimed, time: Date.parse(time) }));
+  assert.deepEqual(got, []);
+});
+
+test("a notification without its id reaches no handler", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  const got: GnotifNotification[] = [];
+  g.on("notification", (n) => got.push(n));
+  const { id, ...anonymous } = notification("/");
+  last().receive(JSON.stringify(anonymous));
+  last().receive(JSON.stringify({ ...anonymous, id: 7 }));
+  assert.deepEqual(got, []);
+});
+
+test("a notification frame with an extra field is delivered", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  const got: GnotifNotification[] = [];
+  g.on("notification", (n) => got.push(n));
+  last().receive(JSON.stringify({ ...notification("/game"), priority: "high" }));
+  assert.equal(got.length, 1);
+  assert.equal(Object.hasOwn(got[0] ?? {}, "priority"), false);
+});
+
+test("a link to another origin gives the service worker's scope", async (t) => {
+  stubLive(t);
+  const g = await connected(t, A, { serviceWorker: "/app/sw.js" });
+  const got: GnotifNotification[] = [];
+  g.on("notification", (n) => got.push(n));
+  last().receive(JSON.stringify(notification("//evil.example/x", "i1")));
+  last().receive(JSON.stringify(notification("/?game=7", "i2")));
+  assert.equal(got[0]?.link, "https://dapp.example/app/");
+  assert.equal(got[1]?.link, "https://dapp.example/?game=7");
+});
+
+test("on returns a function that removes the handler", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  let calls = 0;
+  const off = g.on("notification", () => calls++);
+  off();
+  last().receive(JSON.stringify(notification("/")));
+  assert.equal(calls, 0);
+});
+
+test("a throwing handler does not stop the others", async (t) => {
+  stubLive(t);
+  const logged = t.mock.method(console, "error", () => {});
+  const g = await connected(t);
+  let second = 0;
+  g.on("notification", () => {
+    throw new Error("boom");
+  });
+  g.on("notification", () => second++);
+  last().receive(JSON.stringify(notification("/")));
+  assert.equal(logged.mock.callCount(), 1);
+  assert.equal(second, 1);
+});
+
+test("pings every 30 s and reconnects without a pong within 10 s", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  let disconnects = 0;
+  g.on("reconnecting", () => disconnects++);
+
+  t.mock.timers.tick(30_000);
+  assert.equal(last().sent.at(-1), '{"type":"ping"}');
+  last().receive('{"type":"pong"}');
+  t.mock.timers.tick(10_000);
+  assert.equal(last().closedWith, undefined);
+
+  t.mock.timers.tick(20_000);
+  assert.equal(last().sent.at(-1), '{"type":"ping"}');
+  t.mock.timers.tick(10_000);
+  assert.notEqual(last().closedWith, undefined);
+  await flush();
+  assert.equal(disconnects, 1);
+});
+
+test("reconnects with jittered backoff and fires reconnect", async (t) => {
+  const rnd = stubLive(t, 0);
+  const g = await connected(t);
+  let disconnects = 0;
+  let reconnects = 0;
+  g.on("reconnecting", () => disconnects++);
+  g.on("reconnect", () => reconnects++);
+
+  last().drop();
+  assert.equal(disconnects, 1);
+  t.mock.timers.tick(499);
+  assert.equal(sockets().length, 1);
+  t.mock.timers.tick(1);
+  assert.equal(sockets().length, 2);
+
+  last().drop(); // the retry fails before it opens
+  t.mock.timers.tick(999);
+  assert.equal(sockets().length, 2);
+  t.mock.timers.tick(1);
+  assert.equal(sockets().length, 3);
+  assert.equal(disconnects, 1);
+
+  last().open();
+  assert.deepEqual(last().optinsSent(), [A]);
+  last().receive(ACCEPTED);
+  assert.equal(reconnects, 1);
+
+  rnd.value = 1;
+  last().drop();
+  t.mock.timers.tick(999);
+  assert.equal(sockets().length, 3);
+  t.mock.timers.tick(1);
+  assert.equal(sockets().length, 4);
+});
+
+test("a set refused after a reconnect stops live updates and fires error", async (t) => {
+  stubLive(t, 0);
+  const g = await connected(t);
+  const errors: GnotifError[] = [];
+  g.on("error", (err) => errors.push(err));
+  last().drop();
+  t.mock.timers.tick(500);
+  const ws = last();
+  ws.open();
+  ws.receive('{"type":"error","error":"unknown trigger \\"0000001\\""}');
+  assert.equal(errors.length, 1);
+  assert.ok(errors[0] instanceof GnotifError);
+  assert.equal(errors[0].code, "server");
+  assert.equal(errors[0].message, 'unknown trigger "0000001"');
+  // The new connection holds no opt-ins: it is closed, not kept.
+  assert.equal(ws.closedWith, 1000);
+  await flush();
+  t.mock.timers.tick(60_000);
+  assert.equal(sockets().length, 2);
+
+  const p = g.connect();
+  assert.equal(sockets().length, 3);
+  last().open();
+  last().receive(ACCEPTED);
+  await p;
+});
+
+for (const code of [1009, 1003]) {
+  test(`a close with ${code} stops live updates and fires error`, async (t) => {
+    stubLive(t, 0);
+    const g = await connected(t);
+    const errors: GnotifError[] = [];
+    g.on("error", (err) => errors.push(err));
+    const pending = g.setOptins(B);
+    last().drop(code);
+    await assert.rejects(pending, (err) => err instanceof GnotifError && err.code === "server");
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0]?.code, "server");
+    t.mock.timers.tick(60_000);
+    assert.equal(sockets().length, 1);
+  });
+}
+
+// SilentCloseWebSocket never reports its own close, as a browser may not
+// for long on a dead network.
+class SilentCloseWebSocket extends FakeWebSocket {
+  close(code?: number): void {
+    if (this.readyState === 3) return;
+    this.readyState = 3;
+    this.closedWith = code ?? 1005;
+  }
+}
+
+test("a missing pong reconnects without waiting for the socket's close", async (t) => {
+  stubLive(t, 0);
+  t.after(stubGlobal("WebSocket", SilentCloseWebSocket));
+  const g = await connected(t);
+  let reconnecting = 0;
+  g.on("reconnecting", () => reconnecting++);
+  t.mock.timers.tick(30_000);
+  assert.equal(last().sent.at(-1), '{"type":"ping"}');
+  t.mock.timers.tick(10_000);
+  assert.equal(reconnecting, 1);
+  t.mock.timers.tick(500);
+  assert.equal(sockets().length, 2);
+});
+
+test("on refuses an event it does not know, naming the ones it does", () => {
+  const g = new Gnotif({ server: SERVER });
+  // Reflect.apply calls on as a JavaScript caller can, with any event name.
+  assert.throws(
+    () => Reflect.apply(g.on.bind(g), undefined, ["disconnect", () => {}]),
+    (err) =>
+      err instanceof TypeError &&
+      err.message === 'unknown event "disconnect": use "notification", "reconnecting", "reconnect" or "error"',
+  );
+});
+
+test("setOptins while reconnecting sends the latest set once", async (t) => {
+  stubLive(t, 0);
+  const g = await connected(t);
+  last().drop();
+  const p1 = g.setOptins(A);
+  const p2 = g.setOptins(B);
+  t.mock.timers.tick(500);
+  last().open();
+  assert.deepEqual(last().optinsSent(), [B]);
+  last().receive(ACCEPTED);
+  await Promise.all([p1, p2]);
+});
+
+// A reconnect the server keeps refusing must not hold setOptins: the set goes
+// out when a socket opens again.
+test("setOptins resolves while reconnecting, and the reopened socket sends the set", async (t) => {
+  stubLive(t, 0);
+  const g = await connected(t);
+  last().drop();
+  const outcome = await Promise.race([
+    g.setOptins(B).then(() => "settled"),
+    new Promise((resolve) => setImmediate(() => resolve("pending"))),
+  ]);
+  assert.equal(outcome, "settled");
+  t.mock.timers.tick(500);
+  last().open();
+  assert.deepEqual(last().optinsSent(), [B]);
+});
+
+test("one optins frame in flight", async (t) => {
+  stubLive(t);
+  const g = await connected(t, []);
+  const ws = last();
+  const pa = g.setOptins(A);
+  const pb = g.setOptins(B);
+  assert.deepEqual(ws.optinsSent(), [[], A]);
+  ws.receive(ACCEPTED);
+  await pa;
+  assert.deepEqual(ws.optinsSent(), [[], A, B]);
+  ws.receive(ACCEPTED);
+  await pb;
+});
+
+test("disconnect closes and stops reconnecting", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  let events = 0;
+  g.on("reconnecting", () => events++);
+  g.on("reconnect", () => events++);
+  const ws = last();
+  g.disconnect();
+  assert.equal(ws.closedWith, 1000);
+  await flush();
+  t.mock.timers.tick(60_000);
+  assert.equal(sockets().length, 1);
+  assert.equal(events, 0);
+});
+
+test("the live set carries every item, without the push key", async (t) => {
+  stubLive(t);
+  await connected(t, [
+    { trigger: "0000001", value: "g1bob" },
+    { trigger: "0000002", value: "g1bob", push: false },
+  ]);
+  assert.deepEqual(last().optinsSent()[0], [
+    { trigger: "0000001", value: "g1bob" },
+    { trigger: "0000002", value: "g1bob" },
+  ]);
+});
+
+test("unknown frame types are ignored", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  let calls = 0;
+  g.on("notification", () => calls++);
+  g.on("error", () => calls++);
+  last().receive('{"type":"future"}');
+  assert.equal(calls, 0);
+});
+
+test("an error frame without a string error rejects with the generic refusal", async (t) => {
+  stubLive(t);
+  const g = await connected(t);
+  const p = g.setOptins(B);
+  last().receive('{"type":"error","error":5}');
+  await assert.rejects(p, (err) => err instanceof GnotifError && err.message === "gnotif server refused the opt-ins");
+});

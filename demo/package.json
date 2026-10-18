@@ -1,0 +1,16 @@
+{
+  "name": "gnotif-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.ts",
+    "serve": "esbuild --servedir=dist --serve=127.0.0.1:3000 --watch=forever"
+  },
+  "dependencies": {
+    "gnotif": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "valibot": "1.5.0"
+  }
+}

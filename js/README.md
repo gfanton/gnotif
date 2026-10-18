@@ -15,7 +15,7 @@ A service worker only controls the origin that serves it, so the dapp
 serves its own copy of `sw.js`:
 
 ```sh
-cp node_modules/gnotif/src/sw.js public/sw.js
+cp node_modules/gnotif/dist/sw.js public/sw.js
 ```
 
 The package exports the file as `gnotif/sw.js` for build tools that copy
@@ -71,7 +71,9 @@ const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
 A trigger's id can change, so call it on every page load rather than
 keeping an id. It rejects with a `TypeError`, before any request, when
 `target` is not a non-empty string, and throws a `GnotifError` with code
-`server` when the server answers an error.
+`server` when the server answers an error or the answer is malformed,
+either not JSON or not the documented shape. Each trigger it returns
+holds only the documented fields.
 
 ### `enable()`
 
@@ -89,7 +91,8 @@ It throws a `GnotifError` with code:
   notifications for the site, `enable()` throws `denied` at once, without
   a prompt, until the browser's site settings lift the block.
 - `server` when the server answers an error, to the request for its
-  VAPID key (`GET /v1/vapid`) or to the subscription.
+  VAPID key (`GET /v1/vapid`) or to the subscription, and when an answer
+  is malformed, either not JSON or not the documented shape.
 
 ### `setOptins(optins)`
 
@@ -222,9 +225,10 @@ waiting rejects with code `inactive`.
 - `code`: `"unsupported"`, `"denied"`, `"inactive"`, `"server"` or
   `"network"`, the last for a live connection that could not open;
 - `message`: for `server`, the server's error text when it sent one,
-  otherwise `gnotif server answered <status>`;
-- `status`: the HTTP status of a `server` error, `undefined` for the
-  other codes.
+  `gnotif server answered <status>` for an error answer without one, and
+  what was malformed for a malformed answer;
+- `status`: the HTTP status when the server answered with an error
+  status, `undefined` otherwise.
 
 A network failure of the other calls, or a failure inside the browser's
 Push API, rejects with the browser's own error rather than a

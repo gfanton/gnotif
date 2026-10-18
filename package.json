@@ -1,0 +1,24 @@
+{
+  "name": "gnotif-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.9.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "tsc -p js/tsconfig.json && tsc -p js/src/sw/tsconfig.json && tsc -p js/test/tsconfig.json && tsc -p js/scripts/tsconfig.json && tsc -p demo/tsconfig.json && tsc -p e2e/conformance/tsconfig.json",
+    "lint": "oxlint --type-aware",
+    "fmt": "prettier --write 'js/{src,test,scripts}/**/*.ts' 'demo/*.ts' 'e2e/conformance/*.ts'",
+    "fmt:check": "prettier --check 'js/{src,test,scripts}/**/*.ts' 'demo/*.ts' 'e2e/conformance/*.ts'",
+    "build": "pnpm -r build",
+    "test": "pnpm build && node --test 'js/test/*.test.ts' 'demo/*.test.ts'"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "oxlint": "1.88.0",
+    "oxlint-tsgolint": "7.0.2004",
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
+  }
+}
