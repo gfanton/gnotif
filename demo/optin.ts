@@ -55,7 +55,7 @@ export function optinsAtLoad(on: boolean, resuming: boolean, trigger: Trigger | 
 export function listenerMismatch(
   caller: string,
   on: boolean,
-  saved: Pick<Settings, "address" | "optins"> | null,
+  saved: Pick<Settings, "address"> | null,
 ): string | undefined {
   if (!on || saved === null || saved.address === caller) {
     return undefined;

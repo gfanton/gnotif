@@ -49,11 +49,11 @@ test("optinsAtLoad leaves the opt-ins to live updates that resume at load", () =
 });
 
 test("listenerMismatch names the opted-in address when the sender is another", () => {
-  assert.equal(listenerMismatch(address, true, { address: other, optins: [] }), other);
+  assert.equal(listenerMismatch(address, true, { address: other }), other);
 });
 
 test("listenerMismatch is undefined when this browser listens for the sender or for nobody", () => {
-  assert.equal(listenerMismatch(address, true, { address, optins: [] }), undefined, "same address");
-  assert.equal(listenerMismatch(address, false, { address: other, optins: [] }), undefined, "notifications off");
+  assert.equal(listenerMismatch(address, true, { address }), undefined, "same address");
+  assert.equal(listenerMismatch(address, false, { address: other }), undefined, "notifications off");
   assert.equal(listenerMismatch(address, true, null), undefined, "nothing stored");
 });
