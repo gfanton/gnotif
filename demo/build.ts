@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
 
+import { valibotBanner } from "../js/scripts/banner.ts";
 import { configFor } from "./config.ts";
 
 const network = process.env.DEMO_NETWORK;
@@ -23,6 +24,7 @@ await build({
   outfile: join(dist, "app.js"),
   bundle: true,
   format: "esm",
+  banner: { js: valibotBanner },
   define: { DEMO_NETWORK: JSON.stringify(name) },
   // Skips the paths of demo/tsconfig.json, so the bundle takes the built
   // package through its exports, as a dapp does.

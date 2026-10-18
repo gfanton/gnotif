@@ -7,6 +7,8 @@ import { join } from "node:path";
 
 import { build } from "esbuild";
 
+import { valibotBanner } from "./banner.ts";
+
 const root = join(import.meta.dirname, "..");
 const dist = join(root, "dist");
 
@@ -18,6 +20,7 @@ await build({
   bundle: true,
   format: "esm",
   target: "es2022",
+  banner: { js: valibotBanner },
 });
 
 // A dapp copies sw.js as a classic script, so it must hold no import or export.
@@ -27,6 +30,9 @@ await build({
   bundle: true,
   format: "iife",
   target: "es2022",
+  banner: {
+    js: `/*! gnotif service worker. A dapp serves a copy of this file from its own\n * origin and registers it as sw.js?server=<gnotif server URL>, plus an\n * optional &icon=<image URL> that every notification shows. */\n${valibotBanner}`,
+  },
 });
 
 // The package ships only gnotif.d.ts, so it must import none of the other

@@ -39,3 +39,13 @@ test("gnotif.d.ts imports nothing", () => {
 test("a strict consumer compiles against the published types", () => {
   execFileSync("tsc", ["-p", join(root, "test", "consumer", "tsconfig.json")], { stdio: "inherit" });
 });
+
+test("the bundles carry Valibot's licence notice", () => {
+  const licence = readFileSync(join(root, "node_modules", "valibot", "LICENSE.md"), "utf8");
+  const copyright = licence.split("\n").find((line) => line.startsWith("Copyright"));
+  assert.ok(copyright !== undefined, "valibot's LICENSE.md has a copyright line");
+  for (const bundle of ["gnotif.js", "sw.js"]) {
+    assert.ok(readFileSync(join(root, "dist", bundle), "utf8").includes(copyright), bundle);
+  }
+  assert.ok(readFileSync(join(root, "dist", "sw.js"), "utf8").startsWith("/*!"));
+});
