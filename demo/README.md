@@ -1,6 +1,6 @@
 # The echo demo
 
-echo sends you your own message as a browser notification: one person, one message, one notification. You turn on notifications for your gno.land address, call the echo realm with a message, and the browser shows it, even with the page closed. The page sends the message with the Adena wallet, or links to Adena's install page when the browser has none, and always gives you a gnokey command to run. Under each step, "See the code" shows the client calls and the realm functions behind it; `snippets.test.mjs` checks them against `app.mjs` and `echo.gno`. The deployed demo runs at https://demo.gnotif.xyz, on the onyx testnet, with `https://gnotif.xyz/onyx` as its server.
+echo sends you your own message as a browser notification: one person, one message, one notification. You turn on notifications for your gno.land address, call the echo realm with a message, and the browser shows it, even with the page closed. The page sends the message with the Adena wallet, or links to Adena's install page when the browser has none, and always gives you a gnokey command to run. Under each step, "See the code" shows the client calls and the realm functions behind it; `snippets.test.ts` checks them against `app.ts` and `echo.gno`. The deployed demo runs at https://demo.gnotif.xyz, on the onyx testnet, with `https://gnotif.xyz/onyx` as its server.
 
 With "Live updates on this page" switched on, the page also holds a connection to the server and lists the five newest arrivals, newest first. A message sent with Adena first shows as a waiting row with a clock; its arrival settles the row and says how many seconds it took, and a row still waiting after 60 s turns red. Each arrival shows its block. Opening it lists the block time, the transaction, the channel that delivered it, the trigger, the event's attributes and the link. Turning live updates off empties the list. A push also lists there, with live updates on or off, since the service worker passes it on to the open page.
 
@@ -10,9 +10,10 @@ This folder holds the realms and the page:
 |---|---|
 | `gno.land/r/echo/v0/` | the echo realm, which the page calls |
 | `gno.land/r/pingpong/v0/` | pingpong, an example of a two-player dapp |
-| `index.html`, `app.mjs`, `address.mjs`, `adena.mjs`, `echo-tx.mjs`, `optin.mjs`, `live-log.mjs` | the page, a static dapp that opts the browser in with the `gnotif` client |
+| `index.html`, `app.ts`, `adena.ts`, `echo-tx.ts`, `optin.ts`, `address.ts`, `address-area.ts`, `settings.ts`, `live-log.ts` | the page, a static dapp that opts the browser in with the `gnotif` client |
 | `icon.png` | the image each notification shows, the gnotif mark |
-| `config.js` | the gnotif client's options, the echo realm, the chain and the gnoweb that the page uses |
+| `config.ts` | a `local` and an `onyx` entry, each with the gnotif client's options, the echo realm, the chain and the gnoweb that the page uses. `DEMO_NETWORK` picks one at build time, `local` when unset or empty |
+| `dist/` | the built page: `app.js`, `index.html`, `icon.png` and `sw.js`, which `pnpm --filter gnotif-demo build` (or `make demo`) copies from the package's `dist/sw.js` |
 
 ## The echo realm
 
@@ -30,7 +31,7 @@ The recipient is always the caller and never an argument, so nobody can notify a
 
 ## Run it on a local chain
 
-This runs the whole stack on your machine: a local chain with gnodev, tx-indexer, gnotifd and the page. It needs Go, Git, Python 3 for `make demo`, and a browser with Web Push, such as Chrome. On macOS, also allow notifications for the browser in System Settings.
+This runs the whole stack on your machine: a local chain with gnodev, tx-indexer, gnotifd and the page. It needs Go, Git, Node.js and pnpm (`nix develop` provides them), and a browser with Web Push, such as Chrome. On macOS, also allow notifications for the browser in System Settings.
 
 Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so give each of them its own terminal.
 
@@ -107,7 +108,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
    curl -s 'http://127.0.0.1:8080/v1/triggers?target=gno.land/r/dev/echo/v0'
    ```
 
-7. Serve the demo:
+7. Build and serve the demo:
 
    ```sh
    make demo
@@ -147,8 +148,8 @@ Then repeat steps 3 to 6 without the block that makes the VAPID keys, and turn n
 
    onyx enables echo a few seconds after its deploy, and runs its `init` then, so the trigger is declared with no other call.
 3. Check that the registry lists the trigger as verified, on gnoweb at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0:target/gno.land/r/<namespace>/echo/v0`.
-4. Point the page at the deploy in `config.js`, whose comment gives the onyx values: `gnotif` to `{ server: "<your gnotifd's URL>" }`, `echo` to `gno.land/r/<namespace>/echo/v0`, `chain` to onyx's id, name and RPC, and `gnoweb` to onyx's gnoweb.
-5. Serve this folder at the root of a site, with `gnotif.js` and `sw.js` copied from `js/src/`, as `make demo` does.
+4. Point the page at the deploy in the `onyx` entry of `config.ts`: `gnotif` to `{ server: "<your gnotifd's URL>" }`, `echo` to `gno.land/r/<namespace>/echo/v0`, `chain` to onyx's id, name and RPC, and `gnoweb` to onyx's gnoweb.
+5. Build the page with `DEMO_NETWORK=onyx pnpm --filter gnotif-demo build`, and serve `demo/dist/` at the root of a site.
 
 ## pingpong, a two-player example
 

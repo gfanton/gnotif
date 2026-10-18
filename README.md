@@ -27,7 +27,7 @@ gnotif.xyz is a public gnotifd that any dapp can use. To run your own, follow [R
 
 ## Develop
 
-`make test` runs the realm tests, the Go tests and the browser client's tests. It needs Go and Node.js. The first run installs the gno release onyx runs, pinned as `GNO_REF` in the [Makefile](Makefile), into `.cache/` and fetches the realms' dependencies from onyx. `make fclean` removes them.
+`make test` runs the realm tests, the Go tests and the browser client's tests. It needs Go, Node.js and pnpm, which `nix develop` (or direnv, with the repo's `.envrc`) provides at the pinned versions. It installs the JavaScript dependencies itself. The first run installs the gno release onyx runs, pinned as `GNO_REF` in the [Makefile](Makefile), into `.cache/` and fetches the realms' dependencies from onyx. `make fclean` removes them.
 
 `make e2e` runs the realms, tx-indexer and gnotifd together on a local chain. `make help` lists every target.
 

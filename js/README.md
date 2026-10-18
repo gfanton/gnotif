@@ -15,7 +15,7 @@ A service worker only controls the origin that serves it, so the dapp
 serves its own copy of `sw.js`:
 
 ```sh
-cp node_modules/gnotif/src/sw.js public/sw.js
+cp node_modules/gnotif/dist/sw.js public/sw.js
 ```
 
 The package exports the file as `gnotif/sw.js` for build tools that copy

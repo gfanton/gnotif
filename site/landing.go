@@ -40,7 +40,7 @@ func init(cur realm) {
 	{
 		Label: "Subscribe",
 		Title: "Subscribe the browser from your page",
-		Text:  "Copy <code>node_modules/gnotif/src/sw.js</code> to the folder your site serves at its root. From a click, call <code>enable()</code>, then opt the browser in with the user's address.",
+		Text:  "Copy <code>node_modules/gnotif/dist/sw.js</code> to the folder your site serves at its root. From a click, call <code>enable()</code>, then opt the browser in with the user's address.",
 		Lang:  "js",
 		Code: `import { Gnotif } from "gnotif";
 
