@@ -2,10 +2,9 @@
 .cache/
 gnotif.db*
 js/dist/
+demo/dist/
 node_modules/
 .direnv/
-demo/gnotif.js
-demo/sw.js
 vapid.env
 site/dist/
 *~

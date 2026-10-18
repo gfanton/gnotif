@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, save } from "./settings.mjs";
+import { load, save } from "./settings.ts";
 
-function storage(initial) {
+function storage(initial?: string): Pick<Storage, "getItem" | "setItem" | "removeItem"> {
   const items = new Map(initial === undefined ? [] : [["gnotif-demo", initial]]);
   return {
-    getItem: (k) => (items.has(k) ? items.get(k) : null),
+    getItem: (k) => items.get(k) ?? null,
     setItem: (k, v) => items.set(k, String(v)),
     removeItem: (k) => items.delete(k),
   };
@@ -33,4 +33,15 @@ test("nothing stored, or garbage, loads as null", () => {
   assert.equal(load(storage()), null);
   assert.equal(load(storage("{")), null);
   assert.equal(load(storage("42")), null);
+});
+
+test("stored opt-in items that fail their schema are dropped", () => {
+  const s = storage(JSON.stringify({ ...settings, optins: [...settings.optins, { trigger: 5 }] }));
+  assert.deepEqual(load(s)?.optins, settings.optins);
+});
+
+test("a stored opt-in item with an extra key keeps its trigger and value", () => {
+  const item = { trigger: "0000001", value: settings.address };
+  const s = storage(JSON.stringify({ ...settings, optins: [{ ...item, push: false }] }));
+  assert.deepEqual(load(s)?.optins, [item]);
 });

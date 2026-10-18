@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canEnable, listenerMismatch, optinsAtLoad, optinsFor } from "./optin.mjs";
+import { canEnable, listenerMismatch, optinsAtLoad, optinsFor } from "./optin.ts";
 
 const trigger = {
   id: "7",
@@ -22,7 +22,9 @@ test("optinsFor opts the address into the trigger", () => {
 });
 
 test("optinsFor refuses before the trigger has loaded", () => {
-  assert.throws(() => optinsFor(null, address), { message: "The echo trigger has not loaded. Reload the page, then try again." });
+  assert.throws(() => optinsFor(null, address), {
+    message: "The echo trigger has not loaded. Reload the page, then try again.",
+  });
 });
 
 test("optinsFor refuses an empty or malformed address", () => {

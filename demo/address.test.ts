@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isAddress } from "./address.mjs";
+import { isAddress } from "./address.ts";
 
 const valid = [
   "g1zrjyzatudmadgqu39d5wfamhdvf0adwlxkz25d",
   "g13rqvks880v0hmlfepcj0kkudq0js38d3pc5k6a",
   "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5",
-];
+] as const;
 const a = valid[0];
 
 test("accepts well-formed addresses", () => {

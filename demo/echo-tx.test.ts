@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { callMessage, gas, gnokeyCommand, shellQuote } from "./echo-tx.mjs";
+import { callMessage, gas, gnokeyCommand, shellQuote } from "./echo-tx.ts";
 
 const chain = { id: "onyx-1", name: "Gno.land onyx testnet", rpc: "https://rpc.onyx.testnets.gno.land:443" };
 const pkgPath = "gno.land/r/dev/echo/v0";
@@ -24,9 +24,9 @@ test("shellQuote escapes a single quote as '\\''", () => {
 test("gnokeyCommand builds a call to Echo on the configured chain", () => {
   assert.equal(
     gnokeyCommand(chain, pkgPath, "hello"),
-    "gnokey maketx call -pkgpath gno.land/r/dev/echo/v0 -func Echo -args 'hello'"
-      + ` -gas-wanted ${gas.wanted} -gas-fee ${gas.fee}ugnot`
-      + " -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 <your key>",
+    "gnokey maketx call -pkgpath gno.land/r/dev/echo/v0 -func Echo -args 'hello'" +
+      ` -gas-wanted ${gas.wanted} -gas-fee ${gas.fee}ugnot` +
+      " -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 <your key>",
   );
 });
 

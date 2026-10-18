@@ -14,9 +14,9 @@ test("the live log follows the live switch's state line, in step 1", () => {
 });
 
 test("the log's heading names no channel, since pushes list there with live updates off", () => {
-  const head = page.match(/id="arrivals-head">([^<]*)</);
-  assert.ok(head, 'the page has an element with id="arrivals-head"');
-  assert.doesNotMatch(head[1], /live/i);
+  const head = page.match(/id="arrivals-head">([^<]*)</)?.[1];
+  assert.ok(head !== undefined, 'the page has an element with id="arrivals-head"');
+  assert.doesNotMatch(head, /live/i);
 });
 
 test("the live log is announced as messages arrive", () => {
