@@ -442,8 +442,8 @@ export class Gnotif {
     ws.send(JSON.stringify({ type: "optins", optins: this.#items(false) }));
   }
 
-  // #items returns the kept set as the server takes it, without the push key.
-  /** @param pushOnly leave out the items with push: false */
+  // #items returns the kept set as the server takes it, without the push key;
+  // pushOnly leaves out the items with push: false.
   #items(pushOnly: boolean): { trigger: string; value: string }[] {
     return (this.#optins ?? [])
       .filter((o) => !pushOnly || o.push !== false)
@@ -475,7 +475,6 @@ export class Gnotif {
   }
 
   // register() without a scope option scopes the worker to its URL's directory.
-  /** @returns the service worker's scope */
   #scope(): string {
     return new URL("./", new URL(this.#serviceWorker, location.href)).href;
   }

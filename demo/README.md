@@ -13,7 +13,8 @@ This folder holds the realms and the page:
 | `index.html`, `app.ts`, `adena.ts`, `echo-tx.ts`, `optin.ts`, `address.ts`, `address-area.ts`, `settings.ts`, `live-log.ts` | the page, a static dapp that opts the browser in with the `gnotif` client |
 | `icon.png` | the image each notification shows, the gnotif mark |
 | `config.ts` | a `local` and an `onyx` entry, each with the gnotif client's options, the echo realm, the chain and the gnoweb that the page uses. `DEMO_NETWORK` picks one at build time, `local` when unset or empty |
-| `dist/` | the built page: `app.js`, `index.html`, `icon.png` and `sw.js`, which `pnpm build` (or `make demo`) copies from the package's `dist/sw.js` |
+| `build.ts` | bundles `app.ts` with esbuild into `dist/app.js` and copies `index.html`, `icon.png` and the package's `sw.js` beside it |
+| `dist/` | the built page, written by `pnpm build` and `make demo`: `app.js`, `index.html`, `icon.png` and `sw.js` |
 
 ## The echo realm
 
@@ -149,7 +150,7 @@ Then repeat steps 3 to 6 without the block that makes the VAPID keys, and turn n
    onyx enables echo a few seconds after its deploy, and runs its `init` then, so the trigger is declared with no other call.
 3. Check that the registry lists the trigger as verified, on gnoweb at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0:target/gno.land/r/<namespace>/echo/v0`.
 4. Point the page at the deploy in the `onyx` entry of `config.ts`: `gnotif` to `{ server: "<your gnotifd's URL>" }`, `echo` to `gno.land/r/<namespace>/echo/v0`, `chain` to onyx's id, name and RPC, and `gnoweb` to onyx's gnoweb.
-5. Build the page with `DEMO_NETWORK=onyx pnpm build`, which builds the package first and then the page, and serve `demo/dist/` at the root of a site. Run it after any `pnpm test`, which rewrites `demo/dist/` with the `local` entry.
+5. Build the page with `DEMO_NETWORK=onyx pnpm build`, which builds the package first and then the page, and serve `demo/dist/` at the root of a site. `pnpm test` rebuilds `demo/dist/` with the `local` entry, so run this build again after it.
 
 ## pingpong, a two-player example
 

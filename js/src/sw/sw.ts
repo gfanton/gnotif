@@ -1,6 +1,5 @@
-// gnotif service worker. A dapp serves a copy of this file from its own
-// origin and registers it as sw.js?server=<gnotif server URL>, plus an
-// optional &icon=<image URL> that every notification shows.
+// gnotif service worker. It reads the server and the icon from its own URL:
+// sw.js?server=<gnotif server URL>&icon=<image URL>, the icon optional.
 
 import { safeLink } from "../link.ts";
 import { parseClickLink, parsePayload, parseVapidKey, relayable } from "../push.ts";

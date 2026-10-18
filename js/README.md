@@ -71,9 +71,9 @@ const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
 A trigger's id can change, so call it on every page load rather than
 keeping an id. It rejects with a `TypeError`, before any request, when
 `target` is not a non-empty string, and throws a `GnotifError` with code
-`server` when the server answers an error. It throws the same error when
-the answer is malformed, either not JSON or not the documented shape, and
-each trigger holds only the documented fields.
+`server` when the server answers an error or the answer is malformed,
+either not JSON or not the documented shape. Each trigger it returns
+holds only the documented fields.
 
 ### `enable()`
 
