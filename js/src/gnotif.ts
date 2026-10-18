@@ -34,7 +34,7 @@ export type Optin = {
    * false keeps the item off push: the page hears it live only. Push stays
    * on when absent.
    */
-  push?: boolean;
+  push?: boolean | undefined;
 };
 
 /** A notification as either channel delivers it. */
@@ -156,13 +156,13 @@ export class Gnotif {
     icon,
   }: {
     /** gno.land network whose hosted server to use, "onyx" by default; only a label when server is set */
-    network?: string;
+    network?: string | undefined;
     /** base URL of another gnotif server, such as your own gnotifd */
-    server?: string;
+    server?: string | undefined;
     /** URL of the dapp's copy of sw.js */
-    serviceWorker?: string;
+    serviceWorker?: string | undefined;
     /** URL of the image every notification shows, such as a PNG of the dapp's logo, relative to the page */
-    icon?: string;
+    icon?: string | undefined;
   } = {}) {
     if (server === undefined) {
       network ??= "onyx";
