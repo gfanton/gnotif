@@ -10,11 +10,11 @@ This folder holds the realms and the page:
 |---|---|
 | `gno.land/r/echo/v0/` | the echo realm, which the page calls |
 | `gno.land/r/pingpong/v0/` | pingpong, an example of a two-player dapp |
-| `index.html`, `app.ts`, `adena.ts`, `echo-tx.ts`, `optin.ts`, `address.ts`, `address-area.ts`, `settings.ts`, `live-log.ts` | the page, a static dapp that opts the browser in with the `gnotif` client |
+| `index.html`, `style.css`, `app.ts`, `adena.ts`, `echo-tx.ts`, `optin.ts`, `address.ts`, `address-area.ts`, `settings.ts`, `live-log.ts` | the page, a static dapp that opts the browser in with the `gnotif` client |
 | `icon.png` | the image each notification shows, the gnotif mark |
 | `config.ts` | a `local` and an `onyx` entry, each with the gnotif client's options, the echo realm, the chain and the gnoweb that the page uses. `DEMO_NETWORK` picks one at build time, `local` when unset or empty |
-| `build.ts` | bundles `app.ts` with esbuild into `dist/app.js` and copies `index.html`, `icon.png` and the package's `sw.js` beside it |
-| `dist/` | the built page, written by `pnpm build` and `make demo`: `app.js`, `index.html`, `icon.png` and `sw.js` |
+| `build.ts` | bundles `app.ts` with esbuild into `dist/app.js` and copies `index.html`, `style.css`, `icon.png` and the package's `sw.js` beside it |
+| `dist/` | the built page, written by `pnpm build` and `make demo`: `app.js`, `index.html`, `style.css`, `icon.png` and `sw.js` |
 
 ## The echo realm
 

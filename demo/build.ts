@@ -32,5 +32,6 @@ await build({
 });
 
 copyFileSync(join(root, "index.html"), join(dist, "index.html"));
+copyFileSync(join(root, "style.css"), join(dist, "style.css"));
 copyFileSync(join(root, "icon.png"), join(dist, "icon.png"));
 copyFileSync(fileURLToPath(import.meta.resolve("gnotif/sw.js")), join(dist, "sw.js"));

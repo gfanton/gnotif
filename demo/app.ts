@@ -48,7 +48,7 @@ function address(): string {
 function message(): string {
   const msg = el("msg", HTMLInputElement);
   const typed = msg.value.trim();
-  return typed !== "" ? typed : msg.placeholder;
+  return typed !== "" ? typed : "Hello, me";
 }
 
 function say(id: string, text: string, isError = false): void {
@@ -388,7 +388,7 @@ async function send(): Promise<void> {
       say(
         "sent",
         on
-          ? `Sent. The notification arrives in a few seconds.${hash === undefined || hash === "" ? "" : ` Transaction ${hash}.`}`
+          ? `Transaction submitted. Allow a few seconds for the push.${hash === undefined || hash === "" ? "" : ` Transaction ${hash}.`}`
           : "Sent, but notifications are off in this browser. Turn them on in step 1 to get the next one.",
       );
     }
@@ -474,6 +474,8 @@ void findAdena(globalThis).then((found) => {
   adena = found;
   adenaState = found === undefined ? "absent" : "found";
   el("send-row", HTMLElement).hidden = found === undefined;
+  el("cli", HTMLDetailsElement).open = found === undefined;
+  el("cli-label", HTMLElement).textContent = found === undefined ? "Send with gnokey" : "Use gnokey instead";
   renderAddress();
   setPrimary();
 });
