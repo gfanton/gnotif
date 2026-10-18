@@ -249,7 +249,7 @@ test("a failed AddNetwork stops the sequence", async () => {
 });
 
 /** A window whose document is in readyState, with a load event to fire. */
-function fakeWindow(readyState: string, adena: Adena | undefined) {
+function fakeWindow(readyState: string, adena: unknown) {
   const listeners: (() => void)[] = [];
   return {
     adena,
@@ -281,6 +281,12 @@ test("findAdena waits for the page to load, as Adena injects itself late", async
 
 test("findAdena answers undefined on a loaded page without Adena", async () => {
   assert.equal(await findAdena(fakeWindow("complete", undefined)), undefined);
+});
+
+test("findAdena answers undefined when window.adena lacks a method the demo calls", async () => {
+  for (const adena of [{ ...fakeAdena(), SwitchNetwork: undefined }, {}, "adena"]) {
+    assert.equal(await findAdena(fakeWindow("complete", adena)), undefined, JSON.stringify(adena));
+  }
 });
 
 test("walletLabel says what the Adena button does in each state", () => {

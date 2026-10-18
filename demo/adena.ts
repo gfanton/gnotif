@@ -26,21 +26,30 @@ const NetworkSchema = v.object({ chainId: v.string() });
 const AccountSchema = v.object({ address: v.string(), chainId: v.string() });
 const SentSchema = v.object({ hash: v.optional(v.string()) });
 
-/** The window.adena methods the demo calls. */
+/** The window.adena methods the demo calls. Each answer is parsed where it is awaited. */
 export type Adena = {
-  AddEstablish: (site: string) => Promise<unknown>;
-  GetNetwork: () => Promise<unknown>;
-  SwitchNetwork: (chainId: string) => Promise<unknown>;
-  AddNetwork: (network: { chainId: string; chainName: string; rpcUrl: string }) => Promise<unknown>;
-  GetAccount: () => Promise<unknown>;
+  AddEstablish: (site: string) => unknown;
+  GetNetwork: () => unknown;
+  SwitchNetwork: (chainId: string) => unknown;
+  AddNetwork: (network: { chainId: string; chainName: string; rpcUrl: string }) => unknown;
+  GetAccount: () => unknown;
   DoContract: (params: {
     messages: ReturnType<typeof callMessage>[];
     memo?: string;
     gasFee?: number;
     gasWanted?: number;
     networkInfo?: { chainId: string; rpcUrl: string };
-  }) => Promise<unknown>;
+  }) => unknown;
 };
+
+const AdenaSchema = v.looseObject({
+  AddEstablish: v.function(),
+  GetNetwork: v.function(),
+  SwitchNetwork: v.function(),
+  AddNetwork: v.function(),
+  GetAccount: v.function(),
+  DoContract: v.function(),
+});
 
 /** A failure Adena reported, with its `type` and a message for the visitor. */
 export class AdenaError extends Error {
@@ -91,19 +100,21 @@ function check(answer: unknown, chain: { name: string }, accepted: string[] = []
 }
 
 /**
- * findAdena resolves to the injected Adena wallet, or undefined without one.
- * The extension injects window.adena after the page's scripts run, so a page
- * still loading is checked again once it has loaded.
+ * findAdena resolves to the injected Adena wallet, or undefined without one,
+ * or when window.adena lacks a method the demo calls. The extension injects
+ * window.adena after the page's scripts run, so a page still loading is
+ * checked again once it has loaded.
  */
 export function findAdena(win: {
-  adena?: Adena | undefined;
+  adena?: unknown;
   document: { readyState: string };
   addEventListener(type: "load", fn: () => void, options: { once: boolean }): void;
 }): Promise<Adena | undefined> {
+  const found = (): Adena | undefined => (v.is(AdenaSchema, win.adena) ? win.adena : undefined);
   if (win.adena !== undefined || win.document.readyState === "complete") {
-    return Promise.resolve(win.adena);
+    return Promise.resolve(found());
   }
-  return new Promise((resolve) => win.addEventListener("load", () => resolve(win.adena), { once: true }));
+  return new Promise((resolve) => win.addEventListener("load", () => resolve(found()), { once: true }));
 }
 
 /** @returns the address cut to its start and end, such as "g1zrjy…z25d" */
