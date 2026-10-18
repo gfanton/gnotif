@@ -14,7 +14,7 @@ function inScope(client: WindowClient): boolean {
 // relayToWindows posts a full payload to each window in scope.
 async function relayToWindows(text: string): Promise<void> {
   const notification = relayable(text);
-  if (notification === null) {
+  if (notification === undefined) {
     return;
   }
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

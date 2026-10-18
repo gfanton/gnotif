@@ -1,6 +1,6 @@
 // The Web Push side that the client and the service worker both read. Each
-// parse function gives undefined, a fallback or null for data that does not
-// match its schema.
+// parse function gives undefined or a fallback for data that does not match
+// its schema.
 
 import * as v from "valibot";
 
@@ -32,12 +32,12 @@ export function parseVapidKey(data: unknown): string | undefined {
   return parsed(VapidSchema, data)?.publicKey;
 }
 
-export function parsePayload(text: string): { title: string; body: string; link: string } {
+export function parsePayload(text: string): v.InferOutput<typeof PayloadSchema> {
   return parsed(PayloadSchema, parseJson(text)) ?? { title: "New activity", body: "", link: "./" };
 }
 
-export function relayable(text: string): ({ id: string } & Record<string, unknown>) | null {
-  return parsed(RelayableSchema, parseJson(text)) ?? null;
+export function relayable(text: string): v.InferOutput<typeof RelayableSchema> | undefined {
+  return parsed(RelayableSchema, parseJson(text));
 }
 
 export function parseClickLink(data: unknown): string {
