@@ -68,7 +68,7 @@ export function canSend(
   trigger: Trigger | null,
   address: string,
   receiving: boolean,
-  optins: { trigger: string; value: string }[],
+  optins: Settings["optins"],
 ): boolean {
   return (
     receiving &&

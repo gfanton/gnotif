@@ -246,13 +246,16 @@ function setPrimary(): void {
   for (const id of ["send-hint", "copy-hint"]) {
     const hint = el(id, HTMLElement);
     hint.hidden = ready && (id === "copy-hint" || adena !== undefined);
-    hint.textContent = !isAddress(address())
+    const text = !isAddress(address())
       ? "Set your address in step 1 to continue."
       : !ready
-        ? "Turn on notifications or live updates in step 1 to continue."
+        ? "Turn on notifications or live updates for this address in step 1 to continue."
         : adenaState === "pending"
           ? "Checking for Adena…"
           : "Install Adena to send from this page, or use gnokey below.";
+    if (hint.textContent !== text) {
+      hint.textContent = text;
+    }
   }
 }
 
@@ -293,7 +296,7 @@ function renderAddress(): void {
 
 function busy(state: boolean): void {
   working = state;
-  for (const id of ["disable", "connect", "disconnect", "send"]) {
+  for (const id of ["disable", "connect", "disconnect"]) {
     el(id, HTMLButtonElement).disabled = state;
   }
   el("enable", HTMLButtonElement).disabled = !canEnable(state, trigger);
@@ -360,7 +363,6 @@ async function turnOff(): Promise<void> {
 el("disable", HTMLButtonElement).addEventListener("click", () => void turnOff());
 
 async function connectAdena(): Promise<void> {
-  // Adena must be available before asking it to connect or send.
   if (adena === undefined) {
     return;
   }
@@ -373,6 +375,7 @@ async function connectAdena(): Promise<void> {
     el("address", HTMLInputElement).value = wallet;
     say("message", `Adena connected as ${short(wallet)}.`);
     say("mismatch", "");
+    await changeAddress();
   } catch (err) {
     say("message", messageOf(err), true);
   }
@@ -390,7 +393,6 @@ el("disconnect", HTMLButtonElement).addEventListener("click", () => {
 });
 
 async function send(): Promise<void> {
-  // Adena must be available before asking it to connect or send.
   if (adena === undefined || working || !readyToSend()) {
     return;
   }
