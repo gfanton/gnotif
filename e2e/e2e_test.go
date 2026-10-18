@@ -257,7 +257,7 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 	require.Eventually(t, func() bool { return len(player2()) == 2 }, 10*time.Second, 100*time.Millisecond)
 	assert.Equal(t, frames, player2())
 
-	conformance := exec.Command("node", "--test", "conformance/stream.test.mjs")
+	conformance := exec.Command("node", "--test", "conformance/stream.test.ts")
 	conformance.Env = append(os.Environ(), "GNOTIF_SERVER="+base, "GNOTIF_TARGET="+pingpongPath)
 	report, err := conformance.CombinedOutput()
 	require.NoError(t, err, "conformance suite:\n%s", report)

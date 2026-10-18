@@ -74,7 +74,7 @@ e2e: tools ## Run the local end-to-end test
 
 conformance: ## Check the live endpoint of GNOTIF_SERVER, opting into a trigger of GNOTIF_TARGET
 	test -n "$(GNOTIF_SERVER)" && test -n "$(GNOTIF_TARGET)" || { echo "conformance: set GNOTIF_SERVER=<gnotif server URL> GNOTIF_TARGET=<realm path>" >&2; exit 1; }
-	GNOTIF_SERVER=$(GNOTIF_SERVER) GNOTIF_TARGET=$(GNOTIF_TARGET) node --test e2e/conformance/stream.test.mjs
+	GNOTIF_SERVER=$(GNOTIF_SERVER) GNOTIF_TARGET=$(GNOTIF_TARGET) node --test e2e/conformance/stream.test.ts
 
 demo: $(PNPM_STAMP) ## Build the demo dapp into demo/dist and serve it on http://localhost:3000
 	pnpm build
