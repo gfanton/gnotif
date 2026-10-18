@@ -89,7 +89,7 @@ export class GnotifError extends Error {
   status: number | undefined;
   code: "unsupported" | "denied" | "inactive" | "server" | "network";
 
-  /** @param status HTTP status of a "server" error */
+  /** @param status HTTP status of the error answer a "server" error comes from */
   constructor(code: GnotifError["code"], message: string, status?: number) {
     super(message);
     this.status = status;
@@ -625,7 +625,7 @@ export class Gnotif {
     try {
       return await res.json();
     } catch {
-      throw new GnotifError("server", `gnotif server answered ${res.status} with a body that is not JSON`, res.status);
+      throw new GnotifError("server", `gnotif server answered ${res.status} with a body that is not JSON`);
     }
   }
 }

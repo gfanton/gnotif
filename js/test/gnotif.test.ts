@@ -358,7 +358,7 @@ test("triggers rejects an answer that is not JSON", async (t) => {
   );
   await assert.rejects(
     new Gnotif({ server: SERVER }).triggers("gno.land/r/dev/echo/v0"),
-    (err) => err instanceof GnotifError && err.code === "server",
+    (err) => err instanceof GnotifError && err.code === "server" && err.status === undefined,
   );
 });
 

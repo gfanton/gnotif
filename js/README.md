@@ -225,9 +225,10 @@ waiting rejects with code `inactive`.
 - `code`: `"unsupported"`, `"denied"`, `"inactive"`, `"server"` or
   `"network"`, the last for a live connection that could not open;
 - `message`: for `server`, the server's error text when it sent one,
-  otherwise `gnotif server answered <status>`;
-- `status`: the HTTP status of a `server` error, `undefined` for the
-  other codes.
+  `gnotif server answered <status>` for an error answer without one, and
+  what was malformed for a malformed answer;
+- `status`: the HTTP status when the server answered with an error
+  status, `undefined` otherwise.
 
 A network failure of the other calls, or a failure inside the browser's
 Push API, rejects with the browser's own error rather than a
