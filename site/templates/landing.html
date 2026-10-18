@@ -25,7 +25,7 @@
       </div>
       {{end}}
     </div>
-    <div class="scene-controls" aria-label="Notification examples">{{range $i, $s := .Scenes}}<button type="button" data-scene="{{$i}}" aria-pressed="{{if eq $i 0}}true{{else}}false{{end}}">{{$s.Event}}</button>{{end}}<button type="button" class="cycle-toggle" aria-label="Pause automatic examples">Pause ⏸</button></div>
+    <div class="scene-controls" role="group" aria-label="Notification examples">{{range $i, $s := .Scenes}}<button type="button" data-scene="{{$i}}" aria-pressed="{{if eq $i 0}}true{{else}}false{{end}}">{{$s.Event}}</button>{{end}}<button type="button" class="cycle-toggle" aria-label="Pause automatic examples">Pause ⏸</button></div>
   </div>
   <div class="hero-actions">
     <p class="actions">
@@ -43,7 +43,7 @@
   <p class="lede">Your realm emits an event. gnotif finds the matching trigger and sends a push to the browser that opted in.</p>
   <ol class="simple-flow">
     <li><span class="eyebrow">01 / Emit</span><h3>Something happens on chain</h3><p>A message, a new turn, an update. Your realm emits an event.</p></li>
-    <li><span class="eyebrow">02 / Match</span><h3>A trigger picks the recipient</h3><p>The registry describes which event to watch and who to notify.</p></li>
+    <li><span class="eyebrow">02 / Match</span><h3>A trigger picks the recipient</h3><p>A trigger in the gnotif registry says which event to watch and who to notify.</p></li>
     <li><span class="eyebrow">03 / Notify</span><h3>The browser gets the push</h3><p>Your dapp’s service worker shows it, even when the tab is closed.</p></li>
   </ol>
   <details class="architecture"><summary>Explore the delivery path</summary>
@@ -110,7 +110,7 @@
       { opacity: 1, offset: 0.1 },
       { opacity: 1, offset: 0.85 },
       { opacity: 0, offset: 1 }
-    ].map((frame, i) => ({ ...frame, [narrow ? 'top' : 'left']: i === 0 ? '0%' : i === 3 ? '50%' : i === 1 ? '5%' : '45%' })),
+    ].map((frame, i) => ({ ...frame, [narrow ? 'top' : 'left']: ['0%', '5%', '45%', '50%'][i] })),
     { duration: 500, delay: 500 }));
     const toast = hero.querySelector('.scene.active .toast');
     const bounds = hero.getBoundingClientRect();
@@ -174,7 +174,8 @@
     schedule();
   });
   scenes.forEach((scene, i) => scene.setAttribute('aria-hidden', String(i !== 0)));
-  document.fonts.ready.then(() => { playSignal(); schedule(); });
+  playSignal();
+  schedule();
   addEventListener('resize', stopSignal);
   reducedMotion.addEventListener('change', () => { stopSignal(); schedule(); });
   document.addEventListener('visibilitychange', () => { stopSignal(); schedule(); });
