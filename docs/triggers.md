@@ -229,7 +229,7 @@ A drop cannot be undone. Check each id on the realm's page first, and add `-simu
 
 Code that holds both your handle and `me` can change your realm's triggers. Give them only to code you have read, such as a `/p/` package like `admins`: make `me` in your own crossing function and pass it to the package, which never calls `Sub` itself.
 
-A crossing function cannot use `me`: it runs with its own `cur`, so `cross(me)` panics there. Pass `me` to a plain function, one whose first parameter is not a `realm`.
+A crossing function cannot use a `me` that its caller made: it runs with its own `cur`, so `cross(me)` panics there. Make `me` in the function that uses it, or pass it to a plain function, one whose first parameter is not a `realm`.
 
 ## Keep your gnotif identity to your realm
 
