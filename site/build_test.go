@@ -107,18 +107,18 @@ func TestBuildLanding(t *testing.T) {
 
 	assert.Contains(t, text, "there is no notification server to run")
 	assert.Contains(t, text, "chain.Emit(")
-	assert.Contains(t, text, "gnotif.Declare(")
-	assert.Contains(t, text, "func init(cur realm)", "the realm declares its trigger at deploy")
+	assert.Contains(t, text, "func init(cur realm)", "the realm sets its trigger at deploy")
 	assert.Contains(t, text, `import "gno.land/r/nym-gfanton001/gnotif/v1"`)
 	assert.Contains(t, text, "me := cur.Sub(gnotif.Subpath)", "the registry takes triggers only from the realm's gnotif identity")
-	assert.Contains(t, text, "gnotif.Declare(cross(me), gnotif.Trigger{")
-	assert.Contains(t, text, "declares its triggers once, in init")
+	assert.Contains(t, text, "h := gnotif.Open(cross(me))")
+	assert.Contains(t, text, `h.Set(cross(me), "message", gnotif.Trigger{`)
+	assert.Contains(t, text, "opens its handle once, in init")
 	assert.Contains(t, text, "new Gnotif(")
 	assert.Contains(t, text, `gnotif.triggers("gno.land/r/<you>/notify")`, "the page asks for its own realm's triggers")
 	assert.Contains(t, text, `new Gnotif({ network: "onyx" })`, "the snippet names its network")
 	assert.Contains(t, html, "https://gnotif.xyz/onyx")
 	assert.GreaterOrEqual(t, strings.Count(html, `class="chroma"`), 3)
-	for _, anchor := range []string{"#1-emit-an-event", "#2-declare-the-trigger", "#3-add-the-client-to-your-page"} {
+	for _, anchor := range []string{"#1-emit-an-event", "#2-set-the-trigger", "#3-add-the-client-to-your-page"} {
 		assert.Contains(t, html, `href="/docs/getting-started/`+anchor+`"`)
 	}
 	for _, node := range []string{"dapp realm", "gnotif registry", "tx-indexer", "gnotifd", "push service", "sw.js"} {

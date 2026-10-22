@@ -18,16 +18,17 @@ This folder holds the realms and the page:
 
 ## The echo realm
 
-echo has one function to call, `Echo(cur, msg string)`. It emits `Echo{to, msg}`, where `to` is the caller's address. echo declares its trigger from its `init` function, so deploying it declares the trigger with no other call:
+echo has one function to call, `Echo(cur, msg string)`. It emits `Echo{to, msg}`, where `to` is the caller's address. echo sets its trigger from its `init` function, so deploying it sets the trigger with no other call:
 
 ```go
 func init(cur realm) {
 	me := cur.Sub(gnotif.Subpath)
-	gnotif.Declare(cross(me), gnotif.Trigger{Event: "Echo", Param: "to", Title: "Echo", Body: "{msg}", Link: "/"})
+	h := gnotif.Open(cross(me))
+	h.Set(cross(me), "echo", gnotif.Trigger{Event: "Echo", Param: "to", Title: "Echo", Body: "{msg}", Link: "/"})
 }
 ```
 
-`me` is echo's gnotif identity. The registry takes a declaration only from it, and, where namespaces are enforced, only when the namespace owner deploys echo with its own key.
+`me` is echo's gnotif identity. The registry gives echo its handle only through it, and, where namespaces are enforced, only when the namespace owner deploys echo with its own key. echo keeps no reference to the handle, so its trigger never changes.
 
 A browser opts in with an address, and shows each message that address sends to echo, with "Echo" as the title and the message as the body. A click on the notification opens the demo.
 
@@ -74,7 +75,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
      -gas-fee 1000000ugnot -gas-wanted 50000000 -home .tools/keys me
    ```
 
-   gnokey asks for the passphrase. The events it prints include `TriggerDeclared`, with `verified` set to `true`. gnodev does not enforce namespaces, so any key can deploy echo and declare its trigger.
+   gnokey asks for the passphrase. The events it prints include `TriggerDeclared`, from echo's `Set`, with `verified` set to `true`. gnodev does not enforce namespaces, so any key can deploy echo and set its trigger.
 
 5. Start tx-indexer:
 
@@ -165,12 +166,13 @@ pingpong is a game where the only move is to pass the turn. It shows what echo d
 | `Play(cur, game string)` | the player whose turn it is | `TurnPlayed{game, next, turn}` |
 | `Leave(cur, game string)` | either player | `GameEnded{game, by}` |
 
-Its `init` declares one trigger, on `TurnPlayed`, whose param `next` is the player who plays next:
+Its `init` sets one trigger, `turn`, on `TurnPlayed`, whose param `next` is the player who plays next:
 
 ```go
 func init(cur realm) {
 	me := cur.Sub(gnotif.Subpath)
-	gnotif.Declare(cross(me), gnotif.Trigger{Event: "TurnPlayed", Param: "next", Title: "Your turn", Body: "Game {game}, turn {turn}", Link: "/?game={game}"})
+	h := gnotif.Open(cross(me))
+	h.Set(cross(me), "turn", gnotif.Trigger{Event: "TurnPlayed", Param: "next", Title: "Your turn", Body: "Game {game}, turn {turn}", Link: "/?game={game}"})
 }
 ```
 

@@ -4,7 +4,7 @@ gnotifd is one process with one database, a SQLite file or a [remote store](runn
 
 ```
 +-- gno.land chain --------------------------------+
-|  dapp realm ----Declare----> gnotif registry     |
+|  dapp realm ---Open, Set---> gnotif registry     |
 +------+----------------------------+--------------+
        | realm events               | TriggerDeclared, TriggerRemoved
        v                            v
@@ -28,19 +28,19 @@ gnotifd never reads the registry's state. It rebuilds its triggers from the even
 | `TriggerDeclared` | `id`, `target`, `event`, `filter`, `param`, `title`, `body`, `link`, `declarer`, `verified`, and from v1 `approver` |
 | `TriggerRemoved` | `id` |
 
-`approver` is the namespace owner who signed the transaction that declared the trigger. gnotifd reads only the other ten.
+`approver` is the namespace owner who signed the transaction that opened the realm's handle. gnotifd reads only the other ten.
 
-gnotifd applies these events only when they come from the registry version given with `-registry` or a later version under the same prefix, such as `…/gnotif/v1` after `…/gnotif/v0`. It never reads an earlier version. An event applies only when its id carries its own version's prefix: `0000001` in v0, `v<N>-…` in version N. It logs any other event, and any event type it does not know, as `skip registry event` and skips it. It stores a trigger only when `verified` is `true`. It logs a `TriggerDeclared` it cannot read as an error and skips it. A `TriggerRemoved` deletes the trigger with its opt-ins, but a push the trigger already queued is still sent. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
+gnotifd applies these events only when they come from the registry version given with `-registry` or a later version under the same prefix, such as `…/gnotif/v1` after `…/gnotif/v0`. It never reads an earlier version. An event applies only when its id carries its own version's prefix: `0000001` in v0, `v<N>-…` in version N. It logs any other event, and any event type it does not know, as `skip registry event` and skips it. It stores a trigger only when `verified` is `true`. A `TriggerDeclared` for an id it holds replaces that trigger and keeps its opt-ins: a registry edits a trigger that way. It logs a `TriggerDeclared` it cannot read as an error and skips it. A `TriggerRemoved` deletes the trigger with its opt-ins, but a push the trigger already queued is still sent. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
 
 [Triggers](triggers.md) covers each field and the [limit of 64 per realm and version](triggers.md#at-most-64-triggers-per-realm).
 
 ## What the verified mark means
 
-The verified mark says that the target realm's authority stands behind the trigger. The registry takes a trigger only from the realm's gnotif identity, `<target>#gnotif`, in a transaction that the owner of the realm's namespace signed with its own key and sent straight to the realm, such as the realm's deploy ([Triggers](triggers.md#declare-once-at-deploy)). So every trigger it stores carries the mark.
+The verified mark says that the target realm's authority stands behind the trigger. The registry takes a trigger only from the realm's gnotif identity, `<target>#gnotif`, with the handle the registry gave the realm in a transaction that the owner of the realm's namespace signed with its own key and sent straight to the realm, such as the realm's deploy ([Triggers](triggers.md#open-once-in-init)). So every trigger it stores carries the mark.
 
-The mark rests on the namespace ownership that the chain checks on every deploy, so it is as strong as that check: on a chain that does not enforce namespaces, whoever deploys a realm can declare its triggers.
+The mark rests on the namespace ownership that the chain checks on every deploy, so it is as strong as that check: on a chain that does not enforce namespaces, whoever deploys a realm can set its triggers.
 
-The mark covers whatever code ran in that transaction with the realm's gnotif identity. A trigger declared by code the realm handed `me` to, or by `/p/` code that ran with the realm's `cur`, carries it too ([Keep your gnotif identity to your realm](triggers.md#keep-your-gnotif-identity-to-your-realm)).
+The mark covers whatever code holds the realm's handle and runs with its gnotif identity: the realm's own code, the code it hands both to, such as the [admins package](triggers.md#let-admins-change-your-triggers), and code that opened the handle before the realm did ([Keep your gnotif identity to your realm](triggers.md#keep-your-gnotif-identity-to-your-realm)).
 
 v0's triggers carry the mark on a weaker check: any realm that a dapp passed its `cur` to could declare triggers in the dapp's name. A server that follows v0 keeps that risk.
 
@@ -119,12 +119,12 @@ The registry is immutable, so a change ships as a new version at `…/gnotif/v<N
 1. **Path.** Deploy it at `…/gnotif/v<N+1>`, in the same namespace.
 2. **Not private.** Never set `private = true`. The creator of a private package can redeploy it in place. `init` then runs again with fresh globals, the id counter restarts, and the version reissues its own ids over the stored triggers.
 3. **Ids** take the form `v<N+1>-…`.
-4. **Existing attributes are frozen.** Never remove, rename or change the meaning of a `TriggerDeclared` or `TriggerRemoved` attribute. gnotifd skips a `TriggerDeclared` that lacks one of the ten.
+4. **Existing attributes are frozen.** Never remove, rename or change the meaning of a `TriggerDeclared` or `TriggerRemoved` attribute. gnotifd skips a `TriggerDeclared` that lacks one of the ten. A version may emit `TriggerDeclared` again for one of its own ids to change its title, body or link; it never changes that id's target, event, filter or param.
 5. **Attribute hygiene.** Never emit the same key twice, since gnotifd reads the first. Stay within the chain's caps for one event: 64 attribute pairs, and at most 4096 bytes for each type, key and value. v1 uses 11 pairs.
 6. **New attributes** must be safe to ignore: presentation only, such as an icon.
 7. **Narrowing changes go in a new event type.** Anything that narrows matching, such as an extra filter or an expiry, goes in a new event type, which older servers skip. A new event type may only add triggers. Removal stays `TriggerRemoved`, and so does anything else that stops notifications, a pause included: an older server skips an event type it does not know, and would keep sending.
 8. **Emit from the realm package itself.** Call `chain.Emit` directly in the realm. An emit moved into a `/p/` helper carries the helper's path, and servers miss it.
 9. **No other emitters.** Emit registry events only from the registry's own exported functions, and never call a function or interface value a caller supplies.
-10. **`verified` means the target realm's authority stands behind the trigger.** In v0 the caller presented the realm's live `cur`. From v1 the realm's gnotif identity, `<target>#gnotif`, declared it in a transaction the target's namespace owner signed and sent straight to the realm. `target` never contains `#`.
+10. **`verified` means the target realm's authority stands behind the trigger.** In v0 the caller presented the realm's live `cur`. From v1 the realm's gnotif identity, `<target>#gnotif`, set it with the handle the registry gave the realm in a transaction the target's namespace owner signed and sent straight to the realm. `target` never contains `#`.
 
 gnotifd trusts every later version under the prefix and takes `verified` at face value. That trust rests on the chain's deploy gate, which lets only a namespace's owner deploy under it. GovDAO controls that gate, and the operators of a hardfork are a trust root too. An address namespace, `gno.land/r/<address>/gnotif/v<N>`, removes only the risk of a name changing hands; the GovDAO and hardfork risks remain.

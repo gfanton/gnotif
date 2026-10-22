@@ -17,9 +17,9 @@ func Notify(cur realm, to address, msg string) {
 
 The chain marks every event with the path of the realm that emitted it, so no other realm can emit an event in your realm's name.
 
-## 2. Declare the trigger
+## 2. Set the trigger
 
-A trigger tells gnotif which event to watch and what notification to send. Your realm declares it in the gnotif registry, from its `init` function. `init` runs once, when the realm is deployed, so the deploy declares the trigger, and nobody can run `init` again.
+A trigger tells gnotif which event to watch and what notification to send. Your realm sets it in the gnotif registry, from its `init` function. `init` runs once, when the realm is deployed, so the deploy sets the trigger, and nobody can run `init` again.
 
 Here is the whole realm:
 
@@ -34,7 +34,8 @@ import (
 
 func init(cur realm) {
 	me := cur.Sub(gnotif.Subpath)
-	gnotif.Declare(cross(me), gnotif.Trigger{Event: "Message", Param: "to", Title: "New message", Body: "{msg}", Link: "/"})
+	h := gnotif.Open(cross(me))
+	h.Set(cross(me), "message", gnotif.Trigger{Event: "Message", Param: "to", Title: "New message", Body: "{msg}", Link: "/"})
 }
 
 // Notify sends msg to the browsers that opted in with the address to.
@@ -43,7 +44,7 @@ func Notify(cur realm, to address, msg string) {
 }
 ```
 
-`gno.land/r/nym-gfanton001/gnotif/v1` is the registry that gnotif.xyz reads. The trigger says:
+`gno.land/r/nym-gfanton001/gnotif/v1` is the registry that gnotif.xyz reads. The trigger, named `message` in your realm, says:
 
 - watch the `Message` events of this realm;
 - a browser opts in with an address, and hears about the events whose `to` attribute is that address;
@@ -52,7 +53,7 @@ func Notify(cur realm, to address, msg string) {
 
 To notify every browser that opted in, whatever its address, leave out `Param`, and opt in with `value: ""`.
 
-`me` is your realm's gnotif identity, the only caller the registry takes your realm's triggers from. Declare everything in one call, in `init`: a later call that adds a trigger panics.
+`me` is your realm's gnotif identity, the only caller the registry takes your realm's triggers from. `Open` gives your realm the handle that sets its triggers, once, so open it in `init`. This realm keeps no reference to the handle, so its trigger never changes. To change triggers later, keep the handle: [Change your triggers later](triggers.md#change-your-triggers-later).
 
 With this realm, anyone can send a message to any address, and the text is whatever the caller sends.
 
