@@ -65,7 +65,7 @@ func newStack(t *testing.T) *stack {
 	for _, p := range examplePackages {
 		args = append(args, filepath.Join(tools, "gno-src", "examples", "gno.land", "p", "nt", p))
 	}
-	args = append(args, filepath.Join(root, "gno", "r", "gnotif", "v0"))
+	args = append(args, filepath.Join(root, "gno", "r", "gnotif"))
 	s.start("gnodev", []string{"GNOROOT=" + filepath.Join(tools, "gno-src")}, args...)
 	// The RPC answers before gnodev commits its first block, and a
 	// transaction sent then fails its signature check.
@@ -73,7 +73,7 @@ func newStack(t *testing.T) *stack {
 		2*time.Minute, 250*time.Millisecond, "gnodev never committed a block")
 	// The tx-indexer files genesis transactions at height 0, below where
 	// gnotifd reads, so pingpong declares its trigger in a deploy transaction.
-	s.addpkg("devtest", filepath.Join(root, "demo", "gno.land", "r", "pingpong", "v0"), pingpongPath)
+	s.addpkg("devtest", filepath.Join(root, "demo", "gno.land", "r", "pingpong"), pingpongPath)
 
 	idx := freeAddr(t)
 	s.indexer = "http://" + idx + "/graphql/query"

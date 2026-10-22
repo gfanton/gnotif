@@ -26,7 +26,7 @@ const lines = (text: string): string[] =>
     .filter((l) => l !== "");
 
 test("the Gno snippet is lines of the echo realm", () => {
-  const realm = new Set(lines(read("./gno.land/r/echo/v0/echo.gno")));
+  const realm = new Set(lines(read("./gno.land/r/echo/echo.gno")));
   const code = lines(snippet("code-gno"));
   assert.ok(code.length > 0);
   for (const line of code) {

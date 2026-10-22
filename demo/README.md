@@ -8,8 +8,8 @@ This folder holds the realms and the page:
 
 | Path | What it is |
 |---|---|
-| `gno.land/r/echo/v0/` | the echo realm, which the page calls |
-| `gno.land/r/pingpong/v0/` | pingpong, an example of a two-player dapp |
+| `gno.land/r/echo/` | the echo realm, which the page calls |
+| `gno.land/r/pingpong/` | pingpong, an example of a two-player dapp |
 | `index.html`, `style.css`, `app.ts`, `adena.ts`, `echo-tx.ts`, `optin.ts`, `address.ts`, `address-area.ts`, `settings.ts`, `live-log.ts` | the page, a static dapp that opts the browser in with the `gnotif` client |
 | `icon.png` | the image each notification shows, the gnotif mark |
 | `config.ts` | a `local` and an `onyx` entry, each with the gnotif client's options, the echo realm, the chain and the gnoweb that the page uses. `DEMO_NETWORK` picks one at build time, `local` when unset or empty |
@@ -53,7 +53,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
 
    ```sh
    .tools/gnodev local -C /tmp -no-watch -home $PWD/.tools/keys \
-     $PWD/gno/r/gnotif/v0 \
+     $PWD/gno/r/gnotif \
      $PWD/.tools/gno-src/examples/gno.land/p/nt/avl/v0 \
      $PWD/.tools/gno-src/examples/gno.land/p/nt/cford32/v0 \
      $PWD/.tools/gno-src/examples/gno.land/p/nt/seqid/v0 \
@@ -68,7 +68,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
 4. Deploy echo with your key. Its `init` declares its trigger in this same transaction:
 
    ```sh
-   .tools/gnokey maketx addpkg -pkgpath gno.land/r/dev/echo/v0 -pkgdir demo/gno.land/r/echo/v0 \
+   .tools/gnokey maketx addpkg -pkgpath gno.land/r/dev/echo/v0 -pkgdir demo/gno.land/r/echo \
      -gas-fee 1000000ugnot -gas-wanted 50000000 -home .tools/keys me
    ```
 

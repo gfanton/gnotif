@@ -4,7 +4,7 @@ CACHE := $(CURDIR)/.cache
 GNO_STORE := $(CACHE)/gno-$(GNO_REF)
 GNO := $(GNO_STORE)/gno
 GNO_DEPS := $(GNO_STORE)/deps.stamp
-GNO_MODS := $(wildcard gno/r/*/*/gnomod.toml demo/gno.land/r/*/*/gnomod.toml)
+GNO_MODS := $(wildcard gno/r/*/gnomod.toml demo/gno.land/r/*/gnomod.toml)
 GNOROOT_DIR := $(shell go env GOMODCACHE)/github.com/gnolang/gno@$(GNO_REF)
 GNO_ENV = GNOROOT=$(GNOROOT_DIR) GNOHOME=$(GNO_STORE)/gnohome
 ONYX_RPC := https://rpc.onyx.testnets.gno.land:443
@@ -91,9 +91,9 @@ deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>
 	test -n "$(NS)" || { echo "deploy-pkgs: set NS=gno.land/r/<namespace>" >&2; exit 1; }
 	rm -rf $(TOOLS)/deploy
 	mkdir -p $(TOOLS)/deploy/gnotif/v0 $(TOOLS)/deploy/echo/v0 $(TOOLS)/deploy/pingpong/v0
-	cp -R gno/r/gnotif/v0/. $(TOOLS)/deploy/gnotif/v0/
-	cp -R demo/gno.land/r/echo/v0/. $(TOOLS)/deploy/echo/v0/
-	cp -R demo/gno.land/r/pingpong/v0/. $(TOOLS)/deploy/pingpong/v0/
+	cp -R gno/r/gnotif/. $(TOOLS)/deploy/gnotif/v0/
+	cp -R demo/gno.land/r/echo/. $(TOOLS)/deploy/echo/v0/
+	cp -R demo/gno.land/r/pingpong/. $(TOOLS)/deploy/pingpong/v0/
 	find $(TOOLS)/deploy \( -name '*_test.gno' -o -name filetests \) -prune -exec rm -rf {} +
 	find $(TOOLS)/deploy -type f | while read -r f; do \
 		sed 's|gno.land/r/dev|$(NS)|g' "$$f" > "$$f.tmp" && mv "$$f.tmp" "$$f" || exit 1; \
