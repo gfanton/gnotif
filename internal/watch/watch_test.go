@@ -1029,6 +1029,37 @@ func TestDeclaredWithApproverApplies(t *testing.T) {
 	assert.Len(t, h.sent, 1)
 }
 
+// A registry edits a trigger by declaring its id again. The edit keeps the
+// opt-ins, a match in the same window gets the new text, and so does a
+// restarted server, which reads its triggers back from the store.
+func TestRedeclaredTriggerKeepsOptins(t *testing.T) {
+	h := newHarness(t, 1)
+	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+	h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+	h.fake.add(3, declaredBy(registryV1, "v1-0000001", game))
+	h.tick(t)
+	h.optIn(t, "E", "v1-0000001", "g1bob")
+
+	edited := declaredBy(registryV1, "v1-0000001", game)
+	i := slices.IndexFunc(edited.attrs, func(p trigger.Pair) bool { return p.Key == "title" })
+	edited.attrs[i].Value = "Your move"
+	h.fake.add(6, edited)
+	h.fake.add(7, turn("7", "g1bob"))
+	h.tick(t)
+
+	require.Equal(t, []string{"v1-0000001"}, h.triggerIDs(t))
+	require.Len(t, h.sent, 1)
+	assert.Equal(t, "Your move", h.sent[0].Notification.Title)
+
+	h.restart()
+	h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
+	h.fake.add(10, turn("8", "g1bob"))
+	h.tick(t) // reads the indexer's new height
+	h.tick(t)
+	require.Len(t, h.sent, 2)
+	assert.Equal(t, "Your move", h.sent[1].Notification.Title)
+}
+
 func TestUnknownRegistryEventLogged(t *testing.T) {
 	h := newHarness(t, 1)
 	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
