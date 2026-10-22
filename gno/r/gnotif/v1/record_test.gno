@@ -40,6 +40,7 @@ func TestUnpackFieldsRoundTrip(t *testing.T) {
 func TestRecordRoundTrip(t *testing.T) {
 	r := record{
 		Target: "gno.land/r/alice/chat/v0",
+		Name:   "new_message",
 		T: Trigger{
 			Event:  "Message",
 			Filter: "k=v",

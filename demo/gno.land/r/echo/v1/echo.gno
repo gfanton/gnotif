@@ -8,10 +8,12 @@ import (
 	"gno.land/r/dev/gnotif/v1"
 )
 
-// This realm's gnotif identity declares its trigger; the deploy activates it.
+// This realm's gnotif identity opens its handle and sets its trigger at
+// deploy. It keeps no handle, so the trigger never changes.
 func init(cur realm) {
 	me := cur.Sub(gnotif.Subpath)
-	gnotif.Declare(cross(me), gnotif.Trigger{Event: "Echo", Param: "to", Title: "Echo", Body: "{msg}", Link: "/"})
+	h := gnotif.Open(cross(me))
+	h.Set(cross(me), "echo", gnotif.Trigger{Event: "Echo", Param: "to", Title: "Echo", Body: "{msg}", Link: "/"})
 }
 
 // Echo sends msg to the browsers that opted in with the caller's address.

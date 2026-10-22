@@ -1,13 +1,12 @@
-// Package evil is realm Y, the attacker. Every path ends in report, which
-// declares a fake trigger with the identity it obtained.
+// Package evil is realm Y, the attacker. Most paths end in report, which
+// opens a handle with the identity it obtained and sets a fake trigger.
 package evil
 
 import (
-	"strings"
-
 	pbox "gno.land/p/bob/pbox/v0"
 	pevil "gno.land/p/bob/pevil/v0"
 	pmint "gno.land/p/bob/pmint/v0"
+	leaky "gno.land/r/alice/leaky/v0"
 	gnotif "gno.land/r/dev/gnotif/v1"
 )
 
@@ -22,8 +21,8 @@ func ViaBox(_ int, rlm realm, b *pbox.Box) {
 // UseLent holds a lent cur and nothing else.
 func UseLent(_ int, rlm realm, try string) {
 	switch try {
-	case "declare":
-		gnotif.Declare(cross(rlm), fake)
+	case "open":
+		gnotif.Open(cross(rlm))
 	case "sub":
 		report("lent", rlm.Sub(gnotif.Subpath))
 	}
@@ -40,6 +39,19 @@ func sink(_ int, me realm) { report("G2", me) }
 // ReSub tries to turn a sub of the victim into its gnotif identity.
 func ReSub(_ int, v realm) { report("resub", v.Sub(gnotif.Subpath)) }
 
+// UseLeaked sets a trigger through leaky's exported handle, with Y's gnotif
+// identity or with Y's own cur.
+func UseLeaked(cur realm, as string) {
+	switch as {
+	case "me":
+		me := cur.Sub(gnotif.Subpath)
+		println(leaky.H.Set(cross(me), "fake", fake))
+	case "cur":
+		println(leaky.H.Set(cross(cur), "fake", fake))
+	}
+}
+
 func report(tag string, me realm) {
-	println(tag, "declared", strings.Join(gnotif.Declare(cross(me), fake), ","))
+	h := gnotif.Open(cross(me))
+	println(tag, "set", h.Set(cross(me), "fake", fake))
 }

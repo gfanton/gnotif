@@ -1,5 +1,6 @@
-// Package forgot is a second dapp in alice's namespace. Its init declares
-// nothing; every declaration comes from a later function.
+// Package forgot is a second dapp in alice's namespace. Its init opens
+// nothing: it opens from Activate and keeps its handle, and any caller may
+// change its triggers.
 package forgot
 
 import (
@@ -11,28 +12,38 @@ import (
 	gnotif "gno.land/r/dev/gnotif/v1"
 )
 
-var box = &pbox.Box{N: 1}
+var (
+	box = &pbox.Box{N: 1}
+	h   *gnotif.Handle
+)
 
-// Activate declares the dapp's trigger.
-func Activate(cur realm) string {
+// Activate opens the dapp's handle.
+func Activate(cur realm) {
 	me := cur.Sub(gnotif.Subpath)
-	return strings.Join(gnotif.Declare(cross(me), gnotif.Trigger{Event: "Message", Title: "New message", Link: "/"}), ",")
+	h = gnotif.Open(cross(me))
 }
 
-// Many declares n distinct triggers in one call.
+// Set sets t under name.
+func Set(cur realm, name string, t gnotif.Trigger) string {
+	me := cur.Sub(gnotif.Subpath)
+	return h.Set(cross(me), name, t)
+}
+
+// Remove removes the trigger under name.
+func Remove(cur realm, name string) {
+	me := cur.Sub(gnotif.Subpath)
+	h.Remove(cross(me), name)
+}
+
+// Many sets n distinct triggers, t0 to t<n-1>, and returns their ids.
 func Many(cur realm, n int) string {
 	me := cur.Sub(gnotif.Subpath)
-	ts := make([]gnotif.Trigger, n)
-	for i := range ts {
-		ts[i] = gnotif.Trigger{Event: "E" + strconv.Itoa(i), Title: "t", Link: "/"}
+	ids := make([]string, n)
+	for i := range ids {
+		s := strconv.Itoa(i)
+		ids[i] = h.Set(cross(me), "t"+s, gnotif.Trigger{Event: "E" + s, Title: "t", Link: "/"})
 	}
-	return strings.Join(gnotif.Declare(cross(me), ts...), ",")
-}
-
-// List declares the given triggers.
-func List(cur realm, ts ...gnotif.Trigger) string {
-	me := cur.Sub(gnotif.Subpath)
-	return strings.Join(gnotif.Declare(cross(me), ts...), ",")
+	return strings.Join(ids, ",")
 }
 
 // Lend has the G1 bug.
@@ -47,15 +58,14 @@ func HandMe(cur realm) {
 // RunPlugin has the G2 bug.
 func RunPlugin(cur realm) { evil.Plugin().Setup(0, cur) }
 
-// LendThenActivate reaches the G1 bug before its own Declare.
-func LendThenActivate(cur realm) string {
+// LendThenActivate reaches the G1 bug before its own Open.
+func LendThenActivate(cur realm) {
 	Lend(cur)
-	return Activate(cur)
+	Activate(cur)
 }
 
-// ActivateThenLend reaches the G1 bug after its own Declare.
-func ActivateThenLend(cur realm) string {
-	ids := Activate(cur)
+// ActivateThenLend reaches the G1 bug after its own Open.
+func ActivateThenLend(cur realm) {
+	Activate(cur)
 	Lend(cur)
-	return ids
 }

@@ -28,6 +28,7 @@ func main(cur realm) {
 	testing.SetRealm(testing.NewUserRealm(admin))
 	names.Enable(cross(cur))
 	testing.SetRealm(testing.NewUserRealm(alice))
+	forgot.Activate(cross(cur))
 	ids := strings.Split(forgot.Many(cross(cur), 64), ",")
 	page1 := reg.Render("")
 	page2 := reg.Render("page/2")

@@ -23,82 +23,103 @@ const Subpath = "gnotif"
 // Trigger is an alias, so a dapp imports only the registry.
 type Trigger = trigger.Trigger
 
+// Handle changes the triggers of the realm that opened it. Each method also
+// needs that realm's gnotif identity as its caller, so the pointer alone is
+// useless to any other realm.
+type Handle struct {
+	target   string
+	approver string // the namespace owner who signed the Open
+}
+
 var (
 	triggers bptree.BPTree // id → record.encode()
-	// byTarget maps a target to its active ids, oldest first. The entry
-	// stays once set, even with no ids left, and marks the target as set.
-	byTarget bptree.BPTree
+	byTarget bptree.BPTree // target → []string of its active ids, oldest first
+	handles  bptree.BPTree // target → its live *Handle
 	lastID   seqid.ID
 )
 
-// Declare activates ts for the realm whose gnotif identity calls it and
-// returns their ids in order. Only the realm's first activating call can add
-// triggers, and only when the realm's namespace owner signed the transaction
-// and sent it straight to the realm. A later call must list every active
-// trigger.
-func Declare(cur realm, ts ...Trigger) []string {
+// Open returns the handle that changes the triggers of the realm whose gnotif
+// identity calls it. It panics while the realm holds a handle its namespace
+// owner has not revoked, and unless that owner signed the transaction and
+// sent it straight to the realm.
+func Open(cur realm) *Handle {
 	me := cur.Previous()
 	target := targetOf(0, me)
-	if len(ts) == 0 {
-		panic("declare at least one trigger")
-	}
-	for _, t := range ts {
-		validate(t)
-	}
-	active, set := activeOf(target)
-	idOf := make(map[Trigger]string, len(active))
-	for _, id := range active {
-		idOf[decodeRecord(triggers.Get(id)).T] = id
-	}
-	ids := make([]string, len(ts))
-	first := make(map[Trigger]int) // index in ts of each new trigger's first copy
-	named := make(map[string]bool, len(active))
-	for i, t := range ts {
-		if id, ok := idOf[t]; ok {
-			ids[i] = id
-			named[id] = true
-		} else if _, ok := first[t]; !ok {
-			first[t] = i
-		}
-	}
-	// A list that leaves out an active trigger reaches the panic below, so code
-	// that declared first cannot hide an extra trigger behind the realm's list.
-	if len(first) == 0 && len(named) == len(active) {
-		return ids
-	}
-	if set {
-		panic("the triggers of " + target + " are set: deploy a new version of the realm to change them")
+	if handles.Has(target) {
+		panic(target + " already holds a handle: its namespace owner can Revoke it")
 	}
 	mustOwnerEntered(0, me, target)
-	if len(active)+len(first) > maxPerTarget {
-		panic("too many triggers for target")
-	}
-	approver := unsafe.OriginCaller().String()
-	for i, t := range ts {
-		if ids[i] != "" {
-			continue
-		}
-		if j := first[t]; j < i {
-			ids[i] = ids[j]
-			continue
-		}
-		ids[i] = add(target, t, approver)
-		active = append(active, ids[i])
-	}
-	byTarget.Set(target, active)
-	return ids
+	h := &Handle{target: target, approver: unsafe.OriginCaller().String()}
+	handles.Set(target, h)
+	return h
 }
 
-// Drop removes target's listed active triggers, ids separated by commas, for
-// good. Spaces around an id are ignored. Only target's namespace owner may
-// call it, directly, with their own key. A call that lists an id more than
-// once, or one that is not an active trigger of target, removes nothing. The
-// target stays set: its realm cannot declare again.
+// Set stores t under name and returns its id. A new name gets a new id. On a
+// name in use, t must watch the same event, filter and param: the id stays,
+// so users who turned the trigger on keep it.
+func (h *Handle) Set(cur realm, name string, t Trigger) string {
+	h.mustHold(cur.Previous().PkgPath())
+	if !validName(name, 1, maxName) {
+		panic("invalid name")
+	}
+	validate(t)
+	ids := activeOf(h.target)
+	for _, id := range ids {
+		r := decodeRecord(triggers.Get(id))
+		if r.Name != name {
+			continue
+		}
+		if r.T == t {
+			return id
+		}
+		if r.T.Event != t.Event || r.T.Filter != t.Filter || r.T.Param != t.Param {
+			panic(name + " watches a different event, filter or param: Remove it, then Set it again")
+		}
+		store(id, record{Target: h.target, Name: name, T: t}, h.approver)
+		return id
+	}
+	if len(ids) >= maxPerTarget {
+		panic("too many triggers for target")
+	}
+	id := "v1-" + lastID.Next().String()
+	store(id, record{Target: h.target, Name: name, T: t}, h.approver)
+	byTarget.Set(h.target, append(ids, id))
+	return id
+}
+
+// Remove removes the trigger under name, and with it every user's choice to
+// receive it.
+func (h *Handle) Remove(cur realm, name string) {
+	h.mustHold(cur.Previous().PkgPath())
+	for _, id := range activeOf(h.target) {
+		if decodeRecord(triggers.Get(id)).Name == name {
+			removeIDs(h.target, id)
+			return
+		}
+	}
+	panic(name + " is not a trigger of " + h.target)
+}
+
+// mustHold panics unless h is its realm's live handle and caller is that
+// realm's gnotif identity.
+func (h *Handle) mustHold(caller string) {
+	if handles.Get(h.target) != h {
+		panic("not the live handle of " + h.target)
+	}
+	if caller != h.target+"#"+Subpath {
+		panic("not the gnotif identity of " + h.target + ": " + caller)
+	}
+}
+
+// Drop removes target's listed active triggers, ids separated by commas.
+// Spaces around an id are ignored. Only target's namespace owner may call it,
+// directly, with their own key. A call that lists an id more than once, or one
+// that is not an active trigger of target, removes nothing. Drop leaves the
+// realm's handle live: Revoke stops the realm from setting them again.
 func Drop(cur realm, target, ids string) {
 	mustOwn(cur, target)
-	active, _ := activeOf(target)
-	live := make(map[string]bool, len(active))
-	for _, id := range active {
+	live := make(map[string]bool)
+	for _, id := range activeOf(target) {
 		live[id] = true
 	}
 	dropped := strings.Split(ids, ",")
@@ -110,30 +131,27 @@ func Drop(cur realm, target, ids string) {
 		}
 		live[id] = false
 	}
-	// left stays a nil []string when no id is left: its type marks the target
-	// as set, and a zero-length non-nil slice would keep its last array stored.
-	var left []string
-	for _, id := range active {
-		if live[id] {
-			left = append(left, id)
-		}
-	}
-	byTarget.Set(target, left)
-	for _, id := range dropped {
-		triggers.Remove(id)
-		chain.Emit("TriggerRemoved", "id", id)
+	removeIDs(target, dropped...)
+}
+
+// Revoke ends target's handle: its methods panic from then on, and target's
+// triggers stay. The realm can Open a new handle. Only target's namespace
+// owner may call it, directly, with their own key.
+func Revoke(cur realm, target string) {
+	mustOwn(cur, target)
+	if _, removed := handles.Remove(target); !removed {
+		panic(target + " holds no handle")
 	}
 }
 
 // Active lists target's active trigger ids, comma-separated, oldest first.
 func Active(target string) string {
-	ids, _ := activeOf(target)
-	return strings.Join(ids, ",")
+	return strings.Join(activeOf(target), ",")
 }
 
-func activeOf(target string) (ids []string, set bool) {
-	ids, set = byTarget.Get(target).([]string)
-	return ids, set
+func activeOf(target string) []string {
+	ids, _ := byTarget.Get(target).([]string)
+	return ids
 }
 
 // targetOf returns the realm whose gnotif identity me is, and panics for any
@@ -179,23 +197,43 @@ func mustOwn(cur realm, target string) {
 	}
 }
 
-// add stores t under a new id and emits TriggerDeclared. The caller lists the
-// id under target in byTarget.
-func add(target string, t Trigger, approver string) string {
-	id := "v1-" + lastID.Next().String()
-	triggers.Set(id, record{Target: target, T: t}.encode())
+// store writes r under id and emits TriggerDeclared. gnotifd replaces a
+// trigger whose id it already holds and keeps its opt-ins.
+func store(id string, r record, approver string) {
+	triggers.Set(id, r.encode())
 	chain.Emit("TriggerDeclared",
 		"id", id,
-		"target", target,
-		"event", t.Event,
-		"filter", t.Filter,
-		"param", t.Param,
-		"title", t.Title,
-		"body", t.Body,
-		"link", t.Link,
-		"declarer", chain.PackageAddress(target).String(),
+		"target", r.Target,
+		"event", r.T.Event,
+		"filter", r.T.Filter,
+		"param", r.T.Param,
+		"title", r.T.Title,
+		"body", r.T.Body,
+		"link", r.T.Link,
+		"declarer", chain.PackageAddress(r.Target).String(),
 		"verified", "true",
 		"approver", approver,
 	)
-	return id
+}
+
+// removeIDs removes the listed active ids of target and emits TriggerRemoved
+// for each.
+func removeIDs(target string, ids ...string) {
+	gone := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		gone[id] = true
+	}
+	// left stays a nil []string when no id is left: a zero-length non-nil
+	// slice would keep its last array stored.
+	var left []string
+	for _, id := range activeOf(target) {
+		if !gone[id] {
+			left = append(left, id)
+		}
+	}
+	byTarget.Set(target, left)
+	for _, id := range ids {
+		triggers.Remove(id)
+		chain.Emit("TriggerRemoved", "id", id)
+	}
 }

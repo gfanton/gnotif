@@ -18,6 +18,6 @@ func main() {
 // g1tw6tyv67zjyf26nskj6g5z9fhtvv4996w50xwf
 // # gnotif triggers for gno\.land/r/dev/pingpong/v0
 //
-// - [**v1-0000001**](/r/dev/gnotif/v1:trigger/v1-0000001) gno\.land/r/dev/pingpong/v0 · TurnPlayed · param next · ✓ verified · by g1tw6tyv67zjyf26nskj6g5z9fhtvv4996w50xwf
+// - [**v1-0000001**](/r/dev/gnotif/v1:trigger/v1-0000001) gno\.land/r/dev/pingpong/v0 · turn · TurnPlayed · param next · ✓ verified · by g1tw6tyv67zjyf26nskj6g5z9fhtvv4996w50xwf
 //
 // [All triggers](/r/dev/gnotif/v1)

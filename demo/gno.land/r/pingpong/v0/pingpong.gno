@@ -29,10 +29,12 @@ var (
 	lastGame seqid.ID
 )
 
-// This realm's gnotif identity declares its trigger; the deploy activates it.
+// This realm's gnotif identity opens its handle and sets its trigger at
+// deploy. It keeps no handle, so the trigger never changes.
 func init(cur realm) {
 	me := cur.Sub(gnotif.Subpath)
-	gnotif.Declare(cross(me), gnotif.Trigger{Event: "TurnPlayed", Param: "next", Title: "Your turn", Body: "Game {game}, turn {turn}", Link: "/?game={game}"})
+	h := gnotif.Open(cross(me))
+	h.Set(cross(me), "turn", gnotif.Trigger{Event: "TurnPlayed", Param: "next", Title: "Your turn", Body: "Game {game}, turn {turn}", Link: "/?game={game}"})
 }
 
 func load(id string) *Game {

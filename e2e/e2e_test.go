@@ -164,9 +164,9 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 		return true
 	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed the verified pingpong trigger")
 
-	// The registry refuses a declaration from anyone but a realm's gnotif
-	// identity. MsgCall cannot pass a Trigger, so the call passes none.
-	out, err := s.tryCallPackage("devtest", registryPath, "Declare")
+	// The registry opens a handle only for a realm's gnotif identity; a user's
+	// direct call is not one.
+	out, err := s.tryCallPackage("devtest", registryPath, "Open")
 	require.Error(t, err)
 	assert.Contains(t, out, "call with this realm's gnotif identity")
 

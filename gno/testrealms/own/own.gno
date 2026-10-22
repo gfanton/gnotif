@@ -1,15 +1,12 @@
 // Package own is a dapp in the address namespace of gno.land/r/test/main, the
-// filetests' realm. Its init declares nothing.
+// filetests' realm. Its init opens nothing.
 package own
 
-import (
-	"strings"
+import gnotif "gno.land/r/dev/gnotif/v1"
 
-	gnotif "gno.land/r/dev/gnotif/v1"
-)
-
-// Activate declares the dapp's trigger.
+// Activate opens the dapp's handle and sets its trigger.
 func Activate(cur realm) string {
 	me := cur.Sub(gnotif.Subpath)
-	return strings.Join(gnotif.Declare(cross(me), gnotif.Trigger{Event: "Message", Title: "New message", Link: "/"}), ",")
+	h := gnotif.Open(cross(me))
+	return h.Set(cross(me), "message", gnotif.Trigger{Event: "Message", Title: "New message", Link: "/"})
 }

@@ -5,18 +5,19 @@ import (
 	"strings"
 )
 
-const recordFields = 7
+const recordFields = 8
 
-// record is a trigger and its target as the registry stores them: one string
-// per trigger, because a tree holds a string inline and a struct is one more
-// stored object.
+// record is a trigger, its target and its name as the registry stores them:
+// one string per trigger, because a tree holds a string inline and a struct
+// is one more stored object.
 type record struct {
 	Target string
+	Name   string
 	T      Trigger
 }
 
 func (r record) encode() string {
-	return packFields(r.Target, r.T.Event, r.T.Filter, r.T.Param, r.T.Title, r.T.Body, r.T.Link)
+	return packFields(r.Target, r.Name, r.T.Event, r.T.Filter, r.T.Param, r.T.Title, r.T.Body, r.T.Link)
 }
 
 // decodeRecord reads a string made by encode and panics on any other.
@@ -24,7 +25,8 @@ func decodeRecord(v any) record {
 	f := unpackFields(v.(string), recordFields)
 	return record{
 		Target: f[0],
-		T:      Trigger{Event: f[1], Filter: f[2], Param: f[3], Title: f[4], Body: f[5], Link: f[6]},
+		Name:   f[1],
+		T:      Trigger{Event: f[2], Filter: f[3], Param: f[4], Title: f[5], Body: f[6], Link: f[7]},
 	}
 }
 

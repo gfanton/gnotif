@@ -32,7 +32,7 @@ func Render(path string) string {
 		return renderTrigger(id, decodeRecord(v))
 	case strings.HasPrefix(path, "target/"):
 		target := strings.TrimPrefix(path, "target/")
-		ids, _ := activeOf(target)
+		ids := activeOf(target)
 		if len(ids) == 0 {
 			return "Not found."
 		}
@@ -74,7 +74,7 @@ func renderTarget(target string, ids []string) string {
 
 func writeLine(b *strings.Builder, id string, r record) {
 	b.WriteString("- [**" + id + "**](" + selfPath + ":trigger/" + id + ") " +
-		sanitize.InlineText(r.Target) + " · " + sanitize.InlineText(r.T.Event))
+		sanitize.InlineText(r.Target) + " · " + sanitize.InlineText(r.Name) + " · " + sanitize.InlineText(r.T.Event))
 	if r.T.Param != "" {
 		b.WriteString(" · param " + sanitize.InlineText(r.T.Param))
 	}
@@ -85,6 +85,7 @@ func renderTrigger(id string, r record) string {
 	var b strings.Builder
 	b.WriteString("# Trigger " + id + "\n\n")
 	b.WriteString("- Target: " + sanitize.InlineText(r.Target) + "\n")
+	b.WriteString("- Name: " + sanitize.InlineText(r.Name) + "\n")
 	b.WriteString("- Event: " + sanitize.InlineText(r.T.Event) + "\n")
 	b.WriteString("- Filter: " + sanitize.InlineText(r.T.Filter) + "\n")
 	b.WriteString("- Param: " + sanitize.InlineText(r.T.Param) + "\n")
