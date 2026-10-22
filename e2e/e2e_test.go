@@ -170,18 +170,8 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, out, "call with this realm's gnotif identity")
 
-	key, err := ecdh.P256().GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	auth := make([]byte, 16)
-	rand.Read(auth)
 	endpoint := push.URL + "/push/1"
-	put(t, base+"/v1/subscription", map[string]any{
-		"endpoint": endpoint,
-		"keys": map[string]string{
-			"p256dh": base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()),
-			"auth":   base64.RawURLEncoding.EncodeToString(auth),
-		},
-	})
+	subscribe(t, base, endpoint)
 	put(t, base+"/v1/subscription/optins", map[string]any{
 		"endpoint": endpoint,
 		"optins":   []map[string]string{{"trigger": triggerID, "value": s.addrs["player2"]}},
@@ -368,6 +358,65 @@ func TestRegistryVersions(t *testing.T) {
 	v0, err := listTriggers(base, pingpongPath)
 	require.NoError(t, err)
 	assert.Equal(t, []listedTrigger{{ID: "v1-0000001", Title: "Your turn"}}, v0)
+}
+
+// A realm whose admins library holds its handle changes its trigger in
+// transactions after its deploy, and the edit keeps the user's opt-in.
+func TestManagedTriggerAcrossTransactions(t *testing.T) {
+	s := newStack(t)
+	const managedPath = "gno.land/r/dev/managed/v0"
+	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "managed"), managedPath)
+	base, rec := startGnotifd(t, s)
+
+	// listed returns the id of the realm's one trigger when its title is title.
+	listed := func(title string) (string, bool) {
+		ts, err := listTriggers(base, managedPath)
+		if err != nil || len(ts) != 1 || ts[0].Title != title {
+			return "", false
+		}
+		return ts[0].ID, true
+	}
+
+	s.callPackage("devtest", managedPath, "SetTitle", "First")
+	var id string
+	require.Eventually(t, func() bool {
+		var ok bool
+		id, ok = listed("First")
+		return ok
+	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed the managed trigger")
+
+	endpoint := rec.server.URL + "/push/1"
+	subscribe(t, base, endpoint)
+	put(t, base+"/v1/subscription/optins", map[string]any{
+		"endpoint": endpoint,
+		"optins":   []map[string]string{{"trigger": id, "value": s.addrs["devtest"]}},
+	})
+
+	s.callPackage("devtest", managedPath, "SetTitle", "Second")
+	require.Eventually(t, func() bool {
+		edited, ok := listed("Second")
+		return ok && edited == id
+	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed the edited trigger under the same id")
+
+	s.callPackage("devtest", managedPath, "Ping", "hi")
+	require.Eventually(t, func() bool { return rec.count() == 1 }, 30*time.Second, 100*time.Millisecond, "expected 1 push, got %d", rec.count())
+	assert.Never(t, func() bool { return rec.count() > 1 }, 3*time.Second, 100*time.Millisecond)
+}
+
+// subscribe registers a browser subscription at endpoint, with fresh keys.
+func subscribe(t *testing.T, base, endpoint string) {
+	t.Helper()
+	key, err := ecdh.P256().GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	auth := make([]byte, 16)
+	rand.Read(auth)
+	put(t, base+"/v1/subscription", map[string]any{
+		"endpoint": endpoint,
+		"keys": map[string]string{
+			"p256dh": base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()),
+			"auth":   base64.RawURLEncoding.EncodeToString(auth),
+		},
+	})
 }
 
 func put(t *testing.T, url string, body any) {

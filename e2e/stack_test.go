@@ -63,6 +63,7 @@ func newStack(t *testing.T) *stack {
 		"local", "-no-web", "-no-watch", "-home", s.keybase, "-node-rpc-listener", s.rpc,
 		"-extra-root", filepath.Join(tools, "gno-src", "examples"),
 		filepath.Join(root, "gno", "p", "gnotif", "trigger", "v0"),
+		filepath.Join(root, "gno", "p", "gnotif", "admins", "v0"),
 		filepath.Join(root, "gno", "r", "gnotif", "v1"))
 	// The RPC answers before gnodev commits its first block, and a
 	// transaction sent then fails its signature check.
