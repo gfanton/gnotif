@@ -51,6 +51,13 @@ func UseLeaked(cur realm, as string) {
 	}
 }
 
+// UseLeakedAdmins sets a trigger through leaky's exported admins value with
+// Y's own gnotif identity.
+func UseLeakedAdmins(cur realm) {
+	me := cur.Sub(gnotif.Subpath)
+	println(leaky.A.Set(0, me, "fake", fake))
+}
+
 func report(tag string, me realm) {
 	h := gnotif.Open(cross(me))
 	println(tag, "set", h.Set(cross(me), "fake", fake))
