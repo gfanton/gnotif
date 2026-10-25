@@ -11,6 +11,7 @@ ONYX_RPC := https://rpc.onyx.testnets.gno.land:443
 GNO_TEST_FLAGS ?=
 TOOLS := .tools
 GNO_CHECKOUT ?= https://github.com/gnolang/gno
+GNO_SRC_STAMP := $(TOOLS)/gno-src-$(GNO_REF).stamp
 TX_INDEXER_VERSION := v1.3.0
 NS ?=
 PNPM_STAMP := node_modules/.modules.yaml
@@ -54,13 +55,17 @@ $(TOOLS)/gnowork.toml:
 	mkdir -p $(@D)
 	touch $@
 
-$(TOOLS)/gno-src: | $(TOOLS)/gnowork.toml
-	git clone --depth 1 --branch $(GNO_REF) $(GNO_CHECKOUT) $@
+# A new GNO_REF has no stamp yet: its release replaces the checkout, and
+# gnodev and gnokey rebuild from it.
+$(GNO_SRC_STAMP): | $(TOOLS)/gnowork.toml
+	rm -rf $(TOOLS)/gno-src $(TOOLS)/gno-src-*.stamp
+	git clone --depth 1 --branch $(GNO_REF) $(GNO_CHECKOUT) $(TOOLS)/gno-src
+	touch $@
 
-$(TOOLS)/gnodev: | $(TOOLS)/gno-src $(TOOLS)/gnowork.toml
+$(TOOLS)/gnodev: $(GNO_SRC_STAMP) | $(TOOLS)/gnowork.toml
 	cd $(TOOLS)/gno-src/contribs/gnodev && go build -o $(abspath $@) .
 
-$(TOOLS)/gnokey: | $(TOOLS)/gno-src $(TOOLS)/gnowork.toml
+$(TOOLS)/gnokey: $(GNO_SRC_STAMP) | $(TOOLS)/gnowork.toml
 	cd $(TOOLS)/gno-src && go build -o $(abspath $@) ./gno.land/cmd/gnokey
 
 $(TOOLS)/tx-indexer: | $(TOOLS)/gnowork.toml
