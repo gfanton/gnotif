@@ -25,12 +25,12 @@ gnotifd never reads the registry's state. It rebuilds its triggers from the even
 
 | Event | Attributes |
 |---|---|
-| `TriggerDeclared` | `id`, `target`, `event`, `filter`, `param`, `title`, `body`, `link`, `declarer`, `verified`, and from v1 `approver` |
+| `TriggerDeclared` | `id`, `target`, `event`, `filter`, `param`, `title`, `body`, `link`, `declarer`, `verified`, and from v1 `name` and `approver` |
 | `TriggerRemoved` | `id` |
 
-`approver` is the namespace owner who signed the transaction that opened the realm's handle. gnotifd reads only the other ten.
+`name` is the name the realm set the trigger under. `approver` is the namespace owner who signed the transaction that opened the realm's handle. gnotifd reads only the other ten.
 
-gnotifd applies these events only when they come from the registry version given with `-registry` or a later version under the same prefix, such as `…/gnotif/v1` after `…/gnotif/v0`. It never reads an earlier version. An event applies only when its id carries its own version's prefix: `0000001` in v0, `v<N>-…` in version N. It logs any other event, and any event type it does not know, as `skip registry event` and skips it. It stores a trigger only when `verified` is `true`. A `TriggerDeclared` for an id it holds replaces that trigger and keeps its opt-ins: a registry edits a trigger that way. It logs a `TriggerDeclared` it cannot read as an error and skips it. A `TriggerRemoved` deletes the trigger with its opt-ins, but a push the trigger already queued is still sent. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
+gnotifd applies these events only when they come from the registry version given with `-registry` or a later version under the same prefix, such as `…/gnotif/v1` after `…/gnotif/v0`. It never reads an earlier version. An event applies only when its id carries its own version's prefix: `0000001` in v0, `v<N>-…` in version N. It logs any other event, and any event type it does not know, as `skip registry event` and skips it. It stores a trigger only when `verified` is `true`. A `TriggerDeclared` for an id it holds replaces that trigger's title, body and link and keeps its opt-ins: a registry edits a trigger that way. One that changes the trigger's target, event, filter or param is logged as `skip registry event` and skipped. It logs a `TriggerDeclared` it cannot read as an error and skips it. A `TriggerRemoved` deletes the trigger with its opt-ins, but a push the trigger already queued is still sent. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
 
 [Triggers](triggers.md) covers each field and the [limit of 64 per realm and version](triggers.md#at-most-64-triggers-per-realm).
 
@@ -119,8 +119,8 @@ The registry is immutable, so a change ships as a new version at `…/gnotif/v<N
 1. **Path.** Deploy it at `…/gnotif/v<N+1>`, in the same namespace.
 2. **Not private.** Never set `private = true`. The creator of a private package can redeploy it in place. `init` then runs again with fresh globals, the id counter restarts, and the version reissues its own ids over the stored triggers.
 3. **Ids** take the form `v<N+1>-…`.
-4. **Existing attributes are frozen.** Never remove, rename or change the meaning of a `TriggerDeclared` or `TriggerRemoved` attribute. gnotifd skips a `TriggerDeclared` that lacks one of the ten. A version may emit `TriggerDeclared` again for one of its own ids to change its title, body or link; it never changes that id's target, event, filter or param.
-5. **Attribute hygiene.** Never emit the same key twice, since gnotifd reads the first. Stay within the chain's caps for one event: 64 attribute pairs, and at most 4096 bytes for each type, key and value. v1 uses 11 pairs.
+4. **Existing attributes are frozen.** Never remove, rename or change the meaning of a `TriggerDeclared` or `TriggerRemoved` attribute. gnotifd skips a `TriggerDeclared` that lacks one of the ten. A version may emit `TriggerDeclared` again for one of its own ids to change its title, body or link; it never changes that id's target, event, filter or param, and gnotifd skips a declaration that does.
+5. **Attribute hygiene.** Never emit the same key twice, since gnotifd reads the first. Stay within the chain's caps for one event: 64 attribute pairs, and at most 4096 bytes for each type, key and value. v1 uses 12 pairs.
 6. **New attributes** must be safe to ignore: presentation only, such as an icon.
 7. **Narrowing changes go in a new event type.** Anything that narrows matching, such as an extra filter or an expiry, goes in a new event type, which older servers skip. A new event type may only add triggers. Removal stays `TriggerRemoved`, and so does anything else that stops notifications, a pause included: an older server skips an event type it does not know, and would keep sending.
 8. **Emit from the realm package itself.** Call `chain.Emit` directly in the realm. An emit moved into a `/p/` helper carries the helper's path, and servers miss it.

@@ -152,6 +152,8 @@ func activeOf(target string) []string {
 	return ids
 }
 
+// ceiling: decodes up to maxPerTarget records per lookup; index target and
+// name to id before raising maxPerTarget.
 func find(ids []string, name string) (string, record, bool) {
 	for _, id := range ids {
 		if r := decodeRecord(triggers.Get(id)); r.Name == name {
@@ -210,6 +212,7 @@ func store(id string, r record, approver string) {
 	chain.Emit("TriggerDeclared",
 		"id", id,
 		"target", r.Target,
+		"name", r.Name,
 		"event", r.T.Event,
 		"filter", r.T.Filter,
 		"param", r.T.Param,

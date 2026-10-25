@@ -104,6 +104,10 @@ func main(cur realm) {
 //         "value": "gno.land/r/alice/forgot/v0"
 //       },
 //       {
+//         "key": "name",
+//         "value": "turn"
+//       },
+//       {
 //         "key": "event",
 //         "value": "Turn"
 //       },
@@ -162,6 +166,10 @@ func main(cur realm) {
 //       {
 //         "key": "target",
 //         "value": "gno.land/r/alice/forgot/v0"
+//       },
+//       {
+//         "key": "name",
+//         "value": "turn"
 //       },
 //       {
 //         "key": "event",
