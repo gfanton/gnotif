@@ -90,10 +90,11 @@ site-serve: site ## Build and serve the website on http://localhost:3001
 deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>, without tests
 	test -n "$(NS)" || { echo "deploy-pkgs: set NS=gno.land/r/<namespace>" >&2; exit 1; }
 	rm -rf $(TOOLS)/deploy
-	mkdir -p $(TOOLS)/deploy/gnotif/v0 $(TOOLS)/deploy/echo/v0 $(TOOLS)/deploy/pingpong/v0
-	cp -R gno/r/gnotif/. $(TOOLS)/deploy/gnotif/v0/
-	cp -R demo/gno.land/r/echo/. $(TOOLS)/deploy/echo/v0/
-	cp -R demo/gno.land/r/pingpong/. $(TOOLS)/deploy/pingpong/v0/
+	for d in gno/r/gnotif demo/gno.land/r/echo demo/gno.land/r/pingpong; do \
+		v=$$(sed -n 's|^module = ".*/\(v[0-9][0-9]*\)"$$|\1|p' "$$d/gnomod.toml"); \
+		test -n "$$v" || { echo "deploy-pkgs: $$d/gnomod.toml names no version" >&2; exit 1; }; \
+		mkdir -p "$(TOOLS)/deploy/$${d##*/}/$$v" && cp -R "$$d/." "$(TOOLS)/deploy/$${d##*/}/$$v/" || exit 1; \
+	done
 	find $(TOOLS)/deploy \( -name '*_test.gno' -o -name filetests \) -prune -exec rm -rf {} +
 	find $(TOOLS)/deploy -type f | while read -r f; do \
 		sed 's|gno.land/r/dev|$(NS)|g' "$$f" > "$$f.tmp" && mv "$$f.tmp" "$$f" || exit 1; \
