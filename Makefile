@@ -1,5 +1,5 @@
 SHELL := /bin/sh
-GNO_REF := v1.5.0
+GNO_REF := v1.6.0-rc.1
 CACHE := $(CURDIR)/.cache
 GNO_STORE := $(CACHE)/gno-$(GNO_REF)
 GNO := $(GNO_STORE)/gno

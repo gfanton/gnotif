@@ -31,9 +31,9 @@ Lint the realms before deploying them:
 make gno-lint
 ```
 
-It lints the repository's realms with gno v1.5.0, the release the [Makefile](../Makefile) pins as `GNO_REF`, and installs it on the first run. The deploy copies differ from the realms only by namespace.
+It lints the repository's realms with gno v1.6.0-rc.1, the release the [Makefile](../Makefile) pins as `GNO_REF`, and installs it on the first run. The deploy copies differ from the realms only by namespace.
 
-To check that onyx still runs v1.5.0, open https://rpc.onyx.testnets.gno.land/status and read `build_version`. When onyx runs another release, move the pin to it and pass the realm tests with it before deploying.
+To check that onyx still runs v1.6.0-rc.1, open https://rpc.onyx.testnets.gno.land/status and read `build_version`. When onyx runs another release, move the pin to it and pass the realm tests with it before deploying.
 
 ## 4. Deploy the registry
 

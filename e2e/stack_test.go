@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// devtestMnemonic is integration.DefaultAccount_Seed in gno v1.5.0, the
+// devtestMnemonic is integration.DefaultAccount_Seed in gno v1.6.0-rc.1, the
 // account gnodev premines and deploys with by default.
 const devtestMnemonic = "source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast"
 
