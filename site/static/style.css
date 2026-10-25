@@ -1,4 +1,109 @@
 /* Signal: matte near-black canvas, mono display, one amber indicator. Dark is the default theme. */
+
+/* ---- Fonts: IBM Plex, under the SIL Open Font License in fonts/OFL.txt */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-400-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-500-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-500-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-600-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-600-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   color-scheme: dark;
   --color-canvas: oklch(0.17 0.008 70);
@@ -75,31 +180,39 @@ a:hover { text-decoration-color: var(--color-indicator); }
 code, pre, kbd { font-family: var(--font-display); font-size: 0.92em; }
 img { max-width: 100%; }
 ul, ol { margin: 0; padding-left: 1.25em; }
+[hidden] { display: none !important; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-.skip { position: absolute; left: -999px; top: var(--space-4); padding: var(--space-2) var(--space-3); background: var(--color-surface-raised); border-radius: var(--radius); }
+.skip { position: absolute; z-index: 1; left: -999px; top: var(--space-4); padding: var(--space-2) var(--space-3); background: var(--color-surface-raised); border-radius: var(--radius); }
 .skip:focus { left: var(--space-4); }
 
-.eyebrow { font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
+/* A small label naming the object under it: an event line, a notification.
+   It keeps its case, since it can quote an address. */
 .indicator { display: inline-block; width: 0.55em; height: 0.55em; border-radius: 50%; background: var(--color-indicator); vertical-align: 0.05em; }
+/* A dot the script will light stays dark until its first play. */
+.unlit .indicator { background: var(--color-line); }
 
 /* ---- Wordmark */
-.wordmark { font-family: var(--font-display); font-weight: 500; font-size: 1.625rem; letter-spacing: -0.03em; text-decoration: none; display: inline-block; line-height: 1; }
+.wordmark { font-family: var(--font-display); font-weight: 500; font-size: 1.625rem; letter-spacing: -0.03em; text-decoration: none; display: inline-block; line-height: 1; padding-block: 0.1em 0.2em; white-space: nowrap; flex-shrink: 0; }
 .wordmark.small { font-size: 1rem; }
 .wordmark .i { position: relative; display: inline-block; }
 .wordmark .dot { position: absolute; left: 50%; top: 0.08em; width: 0.17em; height: 0.17em; border-radius: 50%; background: var(--color-indicator); transform: translateX(-50%); }
+.footer .wordmark { padding-block: 0; }
 
 /* ---- Nav and footer */
 .nav, .footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--gutter); }
 .nav { border-bottom: 1px solid var(--color-line); }
 .brand { display: flex; align-items: center; gap: var(--space-3); margin: 0; }
 .tag { font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); padding: 0.1em var(--space-2); border: 1px solid var(--color-line); border-radius: var(--radius); line-height: 1.6; }
-.footer { border-top: 1px solid var(--color-line); margin-top: var(--space-16); color: var(--color-text-muted); font-size: var(--text-sm); }
+.footer { flex-wrap: wrap; border-top: 1px solid var(--color-line); margin-top: var(--space-16); color: var(--color-text-muted); font-size: var(--text-sm); }
 .nav nav, .footer nav { display: flex; align-items: center; gap: var(--space-6); flex-wrap: wrap; }
 .nav nav a { font-family: var(--font-display); font-size: var(--text-sm); letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; color: var(--color-text-muted); }
 .nav nav a:hover { color: var(--color-text); }
 .footer nav a { text-decoration: none; }
 .footer nav a:hover { color: var(--color-text); }
-.install { font-size: var(--text-sm); padding: var(--space-1) var(--space-2); border: 1px solid var(--color-line); border-radius: var(--radius); }
+.install { font: inherit; color: var(--color-text); background: transparent; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-line); border-radius: var(--radius); cursor: pointer; }
+.install code { font-size: var(--text-sm); }
+.install:hover { border-color: var(--color-text-muted); }
 
 /* ---- Buttons */
 .button { display: inline-block; font-family: var(--font-display); font-size: var(--text-sm); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); text-decoration: none; }
@@ -113,13 +226,16 @@ main > section + section { border-top: 1px solid var(--color-line); }
 
 .hero { position: relative; overflow: clip; isolation: isolate; display: flex; flex-direction: column; justify-content: center; max-width: none; padding-inline: 0; padding-block: clamp(3rem, 7vw, 6rem); }
 .hero-inner { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-6); width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: var(--gutter); }
-.hero h1 { max-width: 23ch; font-size: clamp(2rem, 4.5vw, 4rem); line-height: 1.05; }
-.hero h1 .l1, .hero h1 .l2 { display: inline-block; }
+.hero h1 { max-width: 25ch; font-size: clamp(2rem, 4.5vw, 4rem); line-height: 1.05; }
+.hero h1 .l1, .hero h1 .l2 { display: inline-block; text-wrap: balance; }
 @media (min-width: 1100px) { .hero h1 .l1, .hero h1 .l2 { white-space: nowrap; } }
 .hero h1 .l2 { color: var(--color-text-muted); }
 .hero-description { max-width: 58ch; color: var(--color-text-muted); font-size: var(--text-lg); }
 .hero-actions { display: flex; flex-direction: column; gap: var(--space-4); align-items: flex-start; }
-.actions { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.hero-actions .hero-more { margin-inline-start: var(--space-3); }
+.facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); color: var(--color-text-muted); }
+.facts li { text-wrap: pretty; }
 .hero-more { font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); text-decoration: none; padding: var(--space-2) 0; }
 .hero-more:hover { color: var(--color-text); }
 
@@ -129,39 +245,49 @@ main > section + section { border-top: 1px solid var(--color-line); }
 .radio-waves span { position: absolute; width: 3rem; height: 3rem; transform: translate(-50%, -50%); border: 1px solid var(--color-indicator-echo); border-radius: 50%; opacity: 0; }
 
 /* The signal line: an event on the left becomes a notification on the right. */
-.signal { position: relative; margin-top: var(--space-6); border-top: 1px solid var(--color-line); border-bottom: 1px solid var(--color-line); padding: var(--space-8) 0 var(--space-4); }
+.signal { position: relative; margin-top: var(--space-6); border-top: 1px solid var(--color-line); padding: var(--space-8) 0 var(--space-4); }
 .stage { position: relative; display: grid; }
-.scene { position: relative; grid-area: 1 / 1; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(8rem, 0.6fr) minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; align-content: center; gap: var(--space-3) var(--space-6); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.35s ease; }
+/* The event column takes its line's width and the wire fills the rest, so the
+   wire starts one gap after the event and ends at the dot, one gap before the
+   card. The card's column is a share of the width, so the card and the dot
+   hold still as the examples change. */
+.scene { position: relative; grid-area: 1 / 1; display: grid; grid-template-columns: auto minmax(7rem, 1fr) minmax(0, 30%); grid-template-rows: auto auto; align-items: center; align-content: center; gap: var(--space-3) var(--space-6); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.35s ease; }
 .scene.active { opacity: 1; visibility: visible; pointer-events: auto; }
 .sig-in, .sig-out { display: contents; }
 .sig-label { font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); grid-row: 1; align-self: end; }
-.sig-in .sig-label { grid-column: 1; }
+.sig-in .sig-label { grid-column: 1 / 3; }
 .sig-out .sig-label { grid-column: 3; }
-.sig-line { grid-column: 1; grid-row: 2; margin: 0; min-width: 0; font-family: var(--font-display); font-size: clamp(0.95rem, 0.45rem + 1.2vw, 1.4rem); line-height: 1.5; color: var(--color-text-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Below 965px the type shrinks just enough that the longest example stays on
+   one line: a wrapped line fills its column, and the wire would start past
+   its end. */
+.sig-line { grid-column: 1; grid-row: 2; margin: 0; min-width: 0; font-family: var(--font-display); font-size: clamp(0.85rem, min(0.6rem + 0.6vw, 2.1vw - 0.33rem), 1.15rem); line-height: 1.5; color: var(--color-text-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .sig-line .ev { color: var(--color-text); }
 .sig-wire { grid-column: 2; grid-row: 2; position: relative; height: 1px; background: repeating-linear-gradient(90deg, var(--color-line) 0 6px, transparent 6px 12px); }
 .sig-pulse { position: absolute; top: 50%; left: 0; width: 2.5rem; height: 2px; transform: translate(-100%, -50%); background: linear-gradient(90deg, transparent, var(--color-indicator)); opacity: 0; pointer-events: none; }
-.sig-dot { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 50%; background: var(--color-canvas); border: 1px solid var(--color-line); }
+.sig-dot { position: absolute; left: 100%; top: 50%; transform: translate(-100%, -50%); display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 50%; background: var(--color-canvas); border: 1px solid var(--color-line); }
 .sig-dot .indicator { width: 0.85rem; height: 0.85rem; }
 .sig-out .toast { grid-column: 3; grid-row: 2; }
-.scene-controls { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-6); }
-.scene-controls button { font: var(--text-xs) var(--font-display); color: var(--color-text-muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius); padding: var(--space-2); cursor: pointer; }
-.scene-controls button[aria-pressed="true"] { color: var(--color-text); border-color: var(--color-line); background: var(--color-surface); }
-.scene-controls .cycle-toggle { margin-left: auto; border-color: var(--color-line); }
+.scene-bar { display: flex; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-6); }
+.scene-tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.scene-bar button { font: var(--text-xs) var(--font-display); color: var(--color-text-muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius); padding: var(--space-2); cursor: pointer; }
+.scene-bar button:hover { color: var(--color-text); border-color: var(--color-line); }
+.scene-tabs [aria-selected="true"] { color: var(--color-text); border-color: var(--color-line); background: var(--color-surface); }
+.scene-bar .cycle-toggle { margin-left: auto; flex: none; border-color: var(--color-line); }
 
 .toast { width: 100%; max-width: 24rem; display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); align-items: start; padding: var(--space-3) var(--space-4); background: var(--color-surface-raised); border: 1px solid var(--color-line); border-radius: var(--radius-float); box-shadow: var(--shadow-float); font-family: var(--font-body); font-size: var(--text-sm); line-height: 1.35; }
-.toast-icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: var(--radius); background: var(--color-canvas); }
-.toast-icon .indicator { width: 0.7rem; height: 0.7rem; }
+/* The dapp's icon, its initial: the wire's dot stays the only light. */
+.toast-icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: var(--radius); background: var(--color-canvas); font-family: var(--font-display); font-weight: 500; text-transform: uppercase; color: var(--color-text-muted); }
 .toast-text { display: flex; flex-direction: column; gap: var(--space-1); }
 .toast-text b { font-weight: 600; }
 .toast-text span, .toast-text small { color: var(--color-text-muted); }
 .toast-text small { font-size: var(--text-xs); }
+@media (prefers-color-scheme: light) { .toast-icon { background: var(--color-surface); } }
 
-.flow-section { display: flex; flex-direction: column; gap: var(--space-8); }
+.flow-section { position: relative; display: flex; flex-direction: column; gap: var(--space-8); }
+.flow-section > h2 { font-size: clamp(1.5rem, 1rem + 1.6vw, 2.25rem); }
 /* Leave a little space above the section when following the hero link. */
 #how { scroll-margin-top: var(--space-4); }
 #how:focus:not(:focus-visible) { outline: none; }
-.lede { color: var(--color-text-muted); font-size: var(--text-lg); max-width: 60ch; }
 .flow { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-4); }
 .node { position: relative; padding: var(--space-4); border: 1px solid var(--color-text-muted); border-radius: var(--radius); display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
 .node.dashed { border-style: dashed; }
@@ -169,26 +295,48 @@ main > section + section { border-top: 1px solid var(--color-line); }
 .node span { font-size: var(--text-xs); color: var(--color-text-muted); }
 .node + .node::before { content: "→"; position: absolute; left: calc(-1 * var(--space-4)); top: 50%; width: var(--space-4); text-align: center; transform: translate(0, -50%); color: var(--color-text-muted); font-family: var(--font-display); }
 .flow-note { color: var(--color-text-muted); max-width: var(--measure); }
-.simple-flow { display: grid; grid-template-columns: repeat(3, 1fr); list-style: none; padding: 0; gap: var(--space-8); margin-top: var(--space-8); }
-.simple-flow li { display: flex; flex-direction: column; gap: var(--space-3); }
-.simple-flow p { color: var(--color-text-muted); }
-.architecture { margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--color-line); }
+.flow-note + .flow-note { margin-top: var(--space-2); }
+.architecture { margin-top: var(--space-4); }
 .architecture summary { cursor: pointer; color: var(--color-text-muted); font-size: var(--text-sm); }
 .architecture .flow { margin-block: var(--space-6); }
 
-.steps { display: flex; flex-direction: column; gap: var(--space-12); }
-.step { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-8); align-items: start; }
-.step-text { display: flex; flex-direction: column; gap: var(--space-3); }
-.step-text p:not(.eyebrow) { color: var(--color-text-muted); }
+/* The path: the signal line turned downward. A dashed wire joins three
+   stations, from the event the realm emits to the notification the browser
+   shows, where the dot lights. */
+.path { list-style: none; padding: 0; display: flex; flex-direction: column; gap: var(--space-12); }
+.station { position: relative; display: grid; grid-template-columns: 3rem minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-8); align-items: start; }
+.station:not(:last-child)::after { content: ""; position: absolute; left: 1.5rem; top: 3rem; bottom: calc(-1 * var(--space-12)); width: 1px; background: repeating-linear-gradient(180deg, var(--color-line) 0 6px, transparent 6px 12px); }
+.station-dot { position: relative; z-index: 1; display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 50%; background: var(--color-canvas); border: 1px solid var(--color-line); }
+.station-dot .indicator { width: 0.85rem; height: 0.85rem; }
+/* The script keeps step 3's dot unlit until the reader reaches it, then runs
+   the pulse down the wire, under the dots, and the dot comes on. */
+.path-pulse { position: absolute; width: 2px; height: var(--space-8); transform: translate(-50%, -100%); background: linear-gradient(180deg, transparent, var(--color-indicator)); opacity: 0; pointer-events: none; }
+.station-text { display: flex; flex-direction: column; gap: var(--space-3); padding-top: var(--space-3); }
+.station-text p { color: var(--color-text-muted); }
+.station-text code { overflow-wrap: anywhere; }
+.station-code { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
 
-.role { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-8); border: 1px solid var(--color-line); border-radius: var(--radius); }
-.role p:not(.eyebrow) { color: var(--color-text-muted); max-width: var(--measure); }
+.closing { display: flex; flex-direction: column; gap: var(--space-4); align-items: flex-start; }
+.self-host { color: var(--color-text-muted); max-width: var(--measure); }
 
 /* ---- Code blocks */
-.code { position: relative; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius); overflow-x: auto; min-width: 0; }
-.code[data-lang]::before { content: attr(data-lang); position: sticky; left: 0; display: block; padding: var(--space-1) var(--space-3); border-bottom: 1px solid var(--color-line); font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
-.code pre { margin: 0; padding: var(--space-3) var(--space-4); font-size: var(--text-sm); line-height: 1.6; }
-.code .chroma { background: transparent; }
+.code { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius); overflow: hidden; min-width: 0; }
+.code-head { display: flex; align-items: center; gap: var(--space-3); min-height: 2rem; padding: 0 var(--space-1) 0 var(--space-3); border-bottom: 1px solid var(--color-line); font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
+.code-head .copy { margin-left: auto; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; background: transparent; border: 1px solid transparent; border-radius: var(--radius); padding: var(--space-1) var(--space-2); cursor: pointer; }
+.code-head .copy:hover { color: var(--color-text); border-color: var(--color-line); }
+/* The code scrolls sideways under its head; a shade at either edge shows
+   that more of it lies past that edge. */
+.code pre { margin: 0; padding: var(--space-3) var(--space-4); font-size: var(--text-sm); line-height: 1.6; tab-size: 4; overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--color-surface) 30%, transparent) left / 2.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--color-surface) 30%, transparent) right / 2.5rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in oklch, var(--color-text-muted) 45%, transparent), transparent) left / 0.75rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in oklch, var(--color-text-muted) 45%, transparent), transparent) right / 0.75rem 100% no-repeat scroll,
+    var(--color-surface); }
+/* Code that scrolls takes focus, and .code clips anything outside it. */
+.code pre:focus-visible { outline-offset: -2px; }
+/* highlight.css paints its own background; the code keeps the page's surface. */
+.code .chroma { background-color: var(--color-surface); }
 .content :not(pre) > code { padding: 0.1em 0.35em; background: var(--color-surface); border-radius: var(--radius); overflow-wrap: anywhere; }
 
 /* ---- Docs */
@@ -231,14 +379,20 @@ main > section + section { border-top: 1px solid var(--color-line); }
 
 /* ---- Narrow screens */
 @media (max-width: 900px) {
-  .step { grid-template-columns: 1fr; }
+  .station { grid-template-columns: 2rem minmax(0, 1fr); gap: var(--space-4); }
+  .station:not(:last-child)::after { left: 1rem; top: 2rem; }
+  .station-dot { width: 2rem; height: 2rem; }
+  .station-dot .indicator { width: 0.6rem; height: 0.6rem; }
+  .station-text { padding-top: var(--space-1); }
+  .station-code { grid-column: 2; }
   .scene { grid-template-columns: 1fr; grid-template-rows: none; gap: var(--space-4); justify-items: center; text-align: center; }
   .sig-in, .sig-out { display: block; width: 100%; min-width: 0; }
   .sig-label, .sig-line, .sig-wire, .sig-out .toast { grid-column: auto; grid-row: auto; }
   .sig-label { display: block; margin-bottom: var(--space-3); }
-  .sig-line { text-wrap-style: balance; }
-  .sig-wire { height: var(--space-24); width: 1px; background: repeating-linear-gradient(180deg, var(--color-line) 0 6px, transparent 6px 12px); }
-  .sig-pulse { left: 50%; top: 0; width: 2px; height: var(--space-8); transform: translate(-50%, -100%); background: linear-gradient(180deg, transparent, var(--color-indicator)); }
+  .sig-line { font-size: 0.95rem; text-wrap-style: balance; }
+  .sig-wire { height: calc(var(--space-12) + 3rem); width: 1px; background: repeating-linear-gradient(180deg, var(--color-line) 0 6px, transparent 6px 12px); }
+  .sig-pulse { left: 50%; top: 0; width: 2px; height: var(--space-6); transform: translate(-50%, -100%); background: linear-gradient(180deg, transparent, var(--color-indicator)); }
+  .sig-dot { left: 50%; top: 100%; transform: translate(-50%, -100%); }
   .sig-out .toast { margin-inline: auto; text-align: left; }
   .flow { grid-template-columns: 1fr; }
   .node + .node::before { content: "↓"; left: var(--space-4); top: calc(-1 * var(--space-4)); width: auto; transform: translate(0, -50%); }
@@ -252,10 +406,26 @@ main > section + section { border-top: 1px solid var(--color-line); }
 @media (max-width: 600px) {
   .install { display: none; }
   .actions, .actions .button { width: 100%; text-align: center; }
-  .simple-flow { grid-template-columns: 1fr; }
+  .hero-actions .hero-more { margin-inline-start: 0; }
   .nav { flex-wrap: wrap; }
   .nav nav { gap: var(--space-4); }
   .nav nav a { font-size: var(--text-xs); }
+}
+/* Touch and phone widths: every control keeps a 44px target, whatever its
+   drawn size. */
+@media (pointer: coarse), (max-width: 600px) {
+  .nav nav a, .footer nav a, .hero-more, .scene-bar button, .code-head .copy, .station-text a { display: inline-flex; align-items: center; min-height: 44px; }
+  .nav .wordmark { padding-block: 0.35em; }
+  .sidebar li a, .toc a { display: flex; align-items: center; min-height: 44px; }
+  .architecture summary { padding-block: var(--space-3); }
+}
+/* A short window trims the hero's air, so the signal line stays in the
+   first screen. */
+@media (max-height: 820px) and (min-width: 901px) {
+  .hero { padding-block: var(--space-6); }
+  .hero-inner { gap: var(--space-4); }
+  .hero-description { max-width: 70ch; }
+  .signal { margin-top: var(--space-4); padding-top: var(--space-6); }
 }
 @media (prefers-reduced-motion: reduce) {
   .radio-waves, .sig-pulse { display: none; }

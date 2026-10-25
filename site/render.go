@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/alecthomas/chroma/v2"
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -86,18 +87,37 @@ func newMarkdown(source string) goldmark.Markdown {
 	)
 }
 
-// wrapCodeBlock puts every fenced block in a div that carries the fence's
+// gnoLexer highlights Gno, whose syntax is Go's, with chroma's Go lexer.
+type gnoLexer struct{ chroma.Lexer }
+
+func (gnoLexer) Config() *chroma.Config {
+	return &chroma.Config{Name: "Gno", Aliases: []string{"gno"}}
+}
+
+// goldmark-highlighting looks fences up in chroma's global registry only.
+func init() {
+	lexers.Register(gnoLexer{lexers.Get("go")})
+}
+
+// codeHead is the bar above a code block: its language, when it has one, and
+// a copy button that stays hidden until the page's script can copy.
+func codeHead(lang string) string {
+	var b strings.Builder
+	b.WriteString(`<div class="code-head">`)
+	if lang != "" {
+		b.WriteString("<span>" + template.HTMLEscapeString(lang) + "</span>")
+	}
+	b.WriteString(`<button type="button" class="copy" hidden>Copy</button></div>`)
+	return b.String()
+}
+
+// wrapCodeBlock puts every fenced block in a div headed by the fence's
 // language, and supplies the pre/code pair chroma does not write for a
 // block it did not highlight.
 func wrapCodeBlock(w util.BufWriter, c highlighting.CodeBlockContext, entering bool) {
 	if entering {
-		_, _ = w.WriteString(`<div class="code"`)
-		if lang, ok := c.Language(); ok {
-			_, _ = w.WriteString(` data-lang="`)
-			_, _ = w.Write(util.EscapeHTML(lang))
-			_, _ = w.WriteString(`"`)
-		}
-		_, _ = w.WriteString(">")
+		lang, _ := c.Language()
+		_, _ = w.WriteString(`<div class="code">` + codeHead(string(lang)))
 		if !c.Highlighted() {
 			_, _ = w.WriteString("<pre><code>")
 		}
@@ -121,7 +141,7 @@ func highlight(lang, code string) (template.HTML, error) {
 		return "", fmt.Errorf("highlight %s: %w", lang, err)
 	}
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, `<div class="code" data-lang="%s">`, template.HTMLEscapeString(lang))
+	buf.WriteString(`<div class="code">` + codeHead(lang))
 	if err := chromahtml.New(chromahtml.WithClasses(true)).Format(&buf, styles.Fallback, iterator); err != nil {
 		return "", fmt.Errorf("highlight %s: %w", lang, err)
 	}

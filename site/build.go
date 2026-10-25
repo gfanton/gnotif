@@ -18,16 +18,15 @@ var assets embed.FS
 
 // siteView is what every template sees about the site itself.
 type siteView struct {
-	SiteURL   string
-	ServerURL string
-	DemoURL   string
-	RepoURL   string
-	BlobURL   string
-	EditURL   string
-	NpmURL    string
+	SiteURL string
+	DemoURL string
+	RepoURL string
+	BlobURL string
+	EditURL string
+	NpmURL  string
 }
 
-var site = siteView{SiteURL: siteURL, ServerURL: serverURL, DemoURL: demoURL, RepoURL: repoURL, BlobURL: repoBlobURL, EditURL: repoEditURL, NpmURL: npmURL}
+var site = siteView{SiteURL: siteURL, DemoURL: demoURL, RepoURL: repoURL, BlobURL: repoBlobURL, EditURL: repoEditURL, NpmURL: npmURL}
 
 // docsView is the data of one documentation page.
 type docsView struct {

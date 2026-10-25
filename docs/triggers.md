@@ -6,7 +6,7 @@ A trigger tells gnotif servers which event of a realm to watch, who hears about 
 
 A realm opens a handle in the registry from its `init` function, then sets each trigger under a name it chooses:
 
-```go
+```gno
 import gnotif "gno.land/r/nym-gfanton001/gnotif/v1"
 
 func init(cur realm) {
@@ -21,7 +21,7 @@ func init(cur realm) {
 
 The registry's functions:
 
-```go
+```gno
 func Open(cur realm) *Handle
 func (h *Handle) Set(cur realm, name string, t Trigger) string
 func (h *Handle) Remove(cur realm, name string)
@@ -67,7 +67,7 @@ A realm that keeps no reference to its handle, as the `init` in [Set your trigge
 
 A realm that keeps its handle can change its triggers at any time. Keep it in an unexported variable, never return it from a function, and mint `me` in the same call that uses it:
 
-```go
+```gno
 var h *gnotif.Handle
 
 func init(cur realm) {
@@ -93,7 +93,7 @@ Anyone can call your realm's exported functions, so an exported function that ch
 
 The package `gno.land/p/nym-gfanton001/gnotif/admins/v0` lets a fixed list of addresses change a realm's triggers. Give it the handle `Open` returned, keep it unexported, and pass `me` on each call:
 
-```go
+```gno
 import (
 	"gno.land/p/nym-gfanton001/gnotif/admins/v0"
 	gnotif "gno.land/r/nym-gfanton001/gnotif/v1"
@@ -137,7 +137,7 @@ gnokey maketx call -pkgpath gno.land/r/nym-gfanton001/gnotif/v1 -func Revoke \
 
 The realm can then `Open` again, in a call its owner signs and sends straight to it. A realm that wants to recover exposes a function that opens again; `Open` refuses every other caller, so it is safe to leave public:
 
-```go
+```gno
 // Reopen gives the realm a new handle after its owner revoked the old one.
 func Reopen(cur realm) {
 	me := cur.Sub(gnotif.Subpath)
@@ -182,7 +182,7 @@ So a page never keeps a trigger id. It asks for the ids with `triggers(target)` 
 
 The registry has no pause. A realm that may need one builds it into its own events: while it emits nothing, gnotif servers send nothing, and its triggers and opt-ins stay. Here is the [Getting started](getting-started.md) realm with a switch that only its deployer can flip:
 
-```go
+```gno
 var (
 	admin address
 	muted bool
