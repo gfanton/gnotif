@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -358,6 +359,30 @@ func TestRegistryVersions(t *testing.T) {
 	v0, err := listTriggers(base, pingpongPath)
 	require.NoError(t, err)
 	assert.Equal(t, []listedTrigger{{ID: "v1-0000001", Title: "Your turn"}}, v0)
+}
+
+// A session key that an admin approved for the realm cannot change the
+// realm's triggers through the admins library; the admin's own key can.
+func TestAdminsRefuseSessionKey(t *testing.T) {
+	s := newStack(t)
+	const managedPath = "gno.land/r/dev/managed/v0"
+	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "managed"), managedPath)
+
+	s.gnokey("\n\n", "add", "session", "-insecure-password-stdin", "-home", s.keybase)
+	pub := regexp.MustCompile(`session \(local\) - addr: g1[0-9a-z]+ pub: (gpub1[0-9a-z]+)`).FindStringSubmatch(s.gnokey("", "list", "-home", s.keybase))
+	require.NotNil(t, pub, "gnokey list shows no public key for the session key")
+	s.gnokey("\n", "maketx", "session", "create", "-pubkey", pub[1],
+		"-allow-paths", "vm/exec:"+managedPath, "-expires-at", "24h", "-spend-limit", "100000000ugnot",
+		"-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
+		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, "devtest")
+
+	out, err := s.runGnokey("\n", "maketx", "call", "-pkgpath", managedPath, "-func", "SetTitle", "-args", "Phished",
+		"-master", "devtest", "-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
+		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, "session")
+	require.Error(t, err, "a session-signed SetTitle went through:\n%s", out)
+	assert.Contains(t, out, "sign with your own key, not a session key")
+
+	s.callPackage("devtest", managedPath, "SetTitle", "First")
 }
 
 // A realm whose admins library holds its handle changes its trigger in

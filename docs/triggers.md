@@ -118,7 +118,7 @@ func Reopen(cur realm, addrs ...address) {
 }
 ```
 
-`admins` takes the caller from `me`: whoever called the function that made it, a user or a realm such as a DAO's executor. It panics with `<address> is not an admin` for anyone else, and with `me is not current: mint it in the crossing function the admin called` for a `me` made in an outer call. It accepts a caller who signed with a session key; check `runtime.GetSessionInfo()` in your function to refuse one. `admins.New` panics with `at least one admin` on an empty list, and with `invalid admin address <address>` on an address no key can have, such as this example's `g1…` placeholder.
+`admins` takes the caller from `me`: whoever called the function that made it, a user or a realm such as a DAO's executor. It panics with `<address> is not an admin` for anyone else, and with `me is not current: mint it in the crossing function the admin called` for a `me` made in an outer call. It refuses a transaction signed with a session key, with `sign with your own key, not a session key`, so a session an admin approves for the realm cannot change its notifications. `admins.New` panics with `at least one admin` on an empty list, and with `invalid admin address <address>` on an address no key can have, such as this example's `g1…` placeholder.
 
 The list of admins is fixed. To change it, the namespace owner [revokes](#revoke-a-handle) the handle, then calls `Reopen` with the new list, each address as its own `-args`. `Open` refuses every caller but the owner's direct call, so `Reopen` is safe to leave public.
 
@@ -167,11 +167,13 @@ A realm holds at most 64 triggers in each registry version.
 
 A realm holds at most 64 triggers, so a trigger does not name one user, group or game. One trigger with a `param` covers them all: the event names the user or group in that attribute, and each browser opts in with the value it follows, such as its own address or a group's id.
 
+The event has to carry that attribute, and its value has to name one thing. A reply event without its thread's author cannot notify that author, and a thread number that starts again on every board matches that number on every board.
+
 ## A trigger's id can change
 
 A trigger keeps its id while only its title, body or link change. It gets a new id when the realm removes it and sets it again, or when a new version of the realm at a new path, such as `…/v2`, sets it. Opt-ins never move from one trigger to another.
 
-So a page never keeps a trigger id. It asks for the ids with `triggers(target)` each time it loads, and sends its opt-ins with the ids it gets.
+So a page never keeps a trigger id. It asks for the ids with `triggers(target)` each time it loads, and sends its opt-ins with the ids it gets. It picks each trigger by its `event` and `param`, never by its place in the list: a trigger set again moves to the end.
 
 ## Pause notifications
 
