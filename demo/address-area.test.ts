@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { addressArea } from "./address-area.ts";
+import { addressArea, lockedRefusal } from "./address-area.ts";
 
 const W = "g1zrjyzatudmadgqu39d5wfamhdvf0adwlxkz25d";
+const OTHER = "g13rqvks880v0hmlfepcj0kkudq0js38d3pc5k6a";
 
 test("off without a wallet, the address is typed, and Adena is offered once found", () => {
   assert.deepEqual(addressArea({ on: false, adena: "found", wallet: "" }), {
@@ -58,4 +59,24 @@ test("notifications on lock the address, typed or from the wallet", () => {
     getAdena: false,
     locked: true,
   });
+});
+
+test("with notifications on, Adena can connect again, so a returning visitor can send with it", () => {
+  assert.deepEqual(addressArea({ on: true, adena: "found", wallet: "" }), {
+    input: "readonly",
+    wallet: false,
+    disconnect: false,
+    connect: true,
+    getAdena: false,
+    locked: true,
+  });
+});
+
+test("a locked address takes Adena's account only when it is that address", () => {
+  assert.equal(lockedRefusal(true, W, W), "");
+  assert.equal(
+    lockedRefusal(true, W, OTHER),
+    "Adena's active account is g13rqv…5k6a, but notifications are on for g1zrjy…z25d. Switch Adena to that account, or turn notifications off first.",
+  );
+  assert.equal(lockedRefusal(false, W, OTHER), "", "an address that is not locked takes any account");
 });

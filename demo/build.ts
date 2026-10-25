@@ -1,7 +1,7 @@
 // Builds the demo into dist/ for the config.ts entry DEMO_NETWORK names,
 // local when it is unset or empty. An unknown name stops it before it writes.
 
-import { copyFileSync, rmSync } from "node:fs";
+import { copyFileSync, cpSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,4 +34,5 @@ await build({
 copyFileSync(join(root, "index.html"), join(dist, "index.html"));
 copyFileSync(join(root, "style.css"), join(dist, "style.css"));
 copyFileSync(join(root, "icon.png"), join(dist, "icon.png"));
+cpSync(join(root, "..", "site", "static", "fonts"), join(dist, "fonts"), { recursive: true });
 copyFileSync(fileURLToPath(import.meta.resolve("gnotif/sw.js")), join(dist, "sw.js"));

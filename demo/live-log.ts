@@ -1,9 +1,6 @@
 // The live log's decisions, apart from the DOM.
 import type { GnotifNotification } from "gnotif";
 
-/** WAIT_MS is how long a send waits for its arrival before it reads as late. */
-export const WAIT_MS = 60_000;
-
 /**
  * answeredSend returns the index of the oldest send in waiting whose
  * notification has body, taking one still on time before a late one, or -1
@@ -33,15 +30,6 @@ export function deliveredBody(body: string): string {
     cut--;
   }
   return new TextDecoder().decode(bytes.subarray(0, cut));
-}
-
-/**
- * clockText is the waiting clock: minutes and seconds since the send, as 1:05.
- * @param ms milliseconds since the send
- */
-export function clockText(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 /**
@@ -86,9 +74,100 @@ export function logShown(live: boolean, rows: number): boolean {
 
 /**
  * waitText words the wait from a send to its arrival in whole seconds, or as
- * within a second under 1 s.
+ * within a second under 1 s. A no-break space keeps the number with its unit.
  * @param ms milliseconds from the send to the arrival
  */
 export function waitText(ms: number): string {
-  return ms < 1000 ? "Arrived within a second of sending" : `Arrived ${Math.round(ms / 1000)} s after sending`;
+  return ms < 1000 ? "Arrived within a second of sending" : `Arrived ${Math.round(ms / 1000)}\u00a0s after sending`;
+}
+
+/** SentWith is how the visitor sent an Echo: from the page with Adena, or from a terminal with gnokey. */
+export type SentWith = "adena" | "gnokey";
+
+// A gnokey send's clock starts at the copy, before the visitor pastes, edits
+// and signs the command, so it waits longer before it reads as late.
+const lateness = {
+  adena: {
+    after: 60_000,
+    note: "It has not arrived after 60\u00a0s. Check that Adena sends from the address in step 1.",
+    row: "Not arrived after 60\u00a0s",
+  },
+  gnokey: {
+    after: 180_000,
+    note: "It has not arrived after 3\u00a0min. If you ran the command, check that it used the key of the address in step 1, and that the address has test GNOT.",
+    row: "Not arrived after 3\u00a0min",
+  },
+} as const satisfies Record<SentWith, { after: number; note: string; row: string }>;
+
+/** lateAfter is how long a send waits for its arrival before it reads as late, in milliseconds. */
+export function lateAfter(via: SentWith): number {
+  return lateness[via].after;
+}
+
+/** lateNote is a send's line once lateAfter passes with no arrival: what to check for the way it was sent. */
+export function lateNote(via: SentWith): string {
+  return lateness[via].note;
+}
+
+/** lateRowNote is a late send's note in the log, which leaves the checks to step 2's line. */
+export function lateRowNote(via: SentWith): string {
+  return lateness[via].row;
+}
+
+/**
+ * waitOf is the wait in milliseconds from a send to its arrival, undefined for
+ * a gnokey send, whose clock starts at the copy rather than at the call.
+ * @param arrivedAt the arrival, in milliseconds since the epoch, as sent.at
+ */
+export function waitOf(sent: { via: SentWith; at: number }, arrivedAt: number): number | undefined {
+  return sent.via === "gnokey" ? undefined : arrivedAt - sent.at;
+}
+
+/**
+ * arrivedText is a send's line once its notification arrives: the message
+ * that arrived, after its wait when the wait is known.
+ * @param wait milliseconds from the send to the arrival, undefined when unknown
+ * @param body the body the notification delivered
+ */
+export function arrivedText(wait: number | undefined, body: string): string {
+  if (wait === undefined) {
+    return `Arrived: "${body}"`;
+  }
+  return wait < 1000 ? `Arrived within a second: "${body}"` : `Arrived in ${Math.round(wait / 1000)}\u00a0s: "${body}"`;
+}
+
+/**
+ * bannerCheck is what to check when a push arrived and the OS showed no
+ * banner, "" for a live arrival, which the page shows itself.
+ */
+export function bannerCheck(source: GnotifNotification["source"]): string {
+  return source === "push"
+    ? "No banner? Check this browser's notification settings in your system settings, and that Focus or Do Not Disturb is off."
+    : "";
+}
+
+/**
+ * sentText is step 2's line once a message goes out: the transaction an
+ * Adena send made, or the next step for a copied gnokey command.
+ * @param hash the transaction's hash, undefined or "" when Adena gave none
+ */
+export function sentText(via: SentWith, hash: string | undefined): string {
+  if (via === "gnokey") {
+    return "Copied. Run it in a terminal, then watch for your message below.";
+  }
+  return hash === undefined || hash === "" ? "Sent." : `Sent. Transaction ${hash}.`;
+}
+
+/**
+ * bodyFor is the notification body msg makes: the trigger's body template
+ * with msg in place of {msg}, cut as gnotifd delivers it.
+ * @param template undefined until the trigger loads, when the body is msg
+ */
+export function bodyFor(template: string | undefined, msg: string): string {
+  return deliveredBody(template === undefined ? msg : template.replaceAll("{msg}", msg));
+}
+
+/** waitsFor reports whether a send with body still waits on time for its arrival. */
+export function waitsFor(waiting: { body: string; late?: boolean }[], body: string): boolean {
+  return waiting.some((sent) => sent.body === body && sent.late !== true);
 }

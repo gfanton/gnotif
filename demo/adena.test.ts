@@ -116,7 +116,7 @@ test("connect refuses when GetAccount reports another chain", async () => {
 
 test("sendEcho runs the sequence and calls Echo with the message", async () => {
   const wallet = fakeAdena();
-  assert.deepEqual(await sendEcho(wallet, chain, pkgPath, "hello"), { caller: address, hash: "abc123" });
+  assert.deepEqual(await sendEcho(wallet, chain, pkgPath, "hello", address), { caller: address, hash: "abc123" });
   assert.deepEqual(names(wallet), ["AddEstablish", "GetNetwork", "GetAccount", "DoContract"]);
   assert.deepEqual(
     wallet.calls[3]?.[1],
@@ -131,9 +131,21 @@ test("sendEcho runs the sequence and calls Echo with the message", async () => {
   );
 });
 
+test("sendEcho refuses to sign from an account step 1 does not listen for", async () => {
+  const listening = "g13rqvks880v0hmlfepcj0kkudq0js38d3pc5k6a";
+  const wallet = fakeAdena();
+  await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello", listening), {
+    name: "AdenaError",
+    type: "WRONG_ACCOUNT",
+    message:
+      "Adena's active account is g1zrjy…z25d, but step 1 listens for g13rqv…5k6a. Switch Adena to that account, then send again.",
+  });
+  assert.ok(!names(wallet).includes("DoContract"), "the wrong account costs no transaction");
+});
+
 test("sendEcho never calls DoContract when the account is on another chain", async () => {
   const wallet = fakeAdena({ account: "dev" });
-  await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello"), AdenaError);
+  await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello", address), AdenaError);
   assert.ok(!names(wallet).includes("DoContract"));
 });
 
@@ -165,7 +177,7 @@ const refusals: Record<string, [Options, string, Method[]]> = {
 for (const [name, [options, type, calls]] of Object.entries(refusals)) {
   test(`sendEcho never calls DoContract when ${name}`, async () => {
     const wallet = fakeAdena(options);
-    await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello"), (err) => {
+    await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello", address), (err) => {
       assert.ok(err instanceof AdenaError);
       assert.equal(err.type, type);
       return true;
@@ -185,7 +197,7 @@ test("sendEcho maps each failure type to its own message", async () => {
   const messages = new Set<string>();
   for (const [type, pattern] of Object.entries(cases)) {
     const wallet = fakeAdena({ answers: { DoContract: fail(type) } });
-    await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello"), (err) => {
+    await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello", address), (err) => {
       assert.ok(err instanceof AdenaError, type);
       assert.equal(err.type, type);
       assert.match(err.message, pattern, type);
@@ -198,13 +210,13 @@ test("sendEcho maps each failure type to its own message", async () => {
 
 test("a rejection stands alone, a chain failure carries the chain's reason", async () => {
   const rejected = fakeAdena({ answers: { DoContract: fail("TRANSACTION_REJECTED") } });
-  await assert.rejects(sendEcho(rejected, chain, pkgPath, "hello"), {
+  await assert.rejects(sendEcho(rejected, chain, pkgPath, "hello", address), {
     message: "You rejected the transaction in Adena.",
   });
   const failed = fakeAdena({
     answers: { DoContract: fail("TRANSACTION_FAILED", { hash: "abc123", error: "out of gas" }) },
   });
-  await assert.rejects(sendEcho(failed, chain, pkgPath, "hello"), {
+  await assert.rejects(sendEcho(failed, chain, pkgPath, "hello", address), {
     message: "The transaction failed on the chain: out of gas.",
   });
 });
@@ -213,7 +225,7 @@ test("a chain reason that ends in a period does not double it", async () => {
   const wallet = fakeAdena({
     answers: { DoContract: fail("TRANSACTION_FAILED", { hash: "abc123", error: "insufficient funds." }) },
   });
-  await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello"), {
+  await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello", address), {
     message: "The transaction failed on the chain: insufficient funds.",
   });
 });
@@ -221,7 +233,7 @@ test("a chain reason that ends in a period does not double it", async () => {
 test("a chain failure without a reason says only that it failed", async () => {
   for (const data of [{ hash: "abc123", error: null }, {}]) {
     const wallet = fakeAdena({ answers: { DoContract: fail("TRANSACTION_FAILED", data) } });
-    await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello"), {
+    await assert.rejects(sendEcho(wallet, chain, pkgPath, "hello", address), {
       message: "The transaction failed on the chain.",
     });
   }

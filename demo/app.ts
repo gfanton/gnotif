@@ -1,12 +1,42 @@
 import { Gnotif, GnotifError, type GnotifNotification, type Trigger } from "gnotif";
 import { type Adena, connect, findAdena, sendEcho, shortAddress as short, walletLabel } from "./adena.ts";
-import { gnokeyCommand } from "./echo-tx.ts";
+import { commandWords, gnokeyCommand } from "./echo-tx.ts";
 import { configFor } from "./config.ts";
-import { isAddress } from "./address.ts";
-import { canSend, canEnable, listenerMismatch, optinsAtLoad, optinsFor } from "./optin.ts";
-import { addressArea } from "./address-area.ts";
+import { addressProblem } from "./address.ts";
+import {
+  addressMessage,
+  canSend,
+  canEnable,
+  notificationState,
+  optinsAtLoad,
+  optinsFor,
+  pushErrorText,
+  pushHelp,
+  pushNoteAtLoad,
+  pushStopped,
+  pushSupported,
+  sendHint,
+  turnOnIsNext,
+} from "./optin.ts";
+import { addressArea, lockedRefusal } from "./address-area.ts";
+import { sendArea } from "./send-area.ts";
 import { type Settings, load, save } from "./settings.ts";
-import { WAIT_MS, answeredSend, blockSummary, clockText, deliveredBody, details, logShown } from "./live-log.ts";
+import {
+  type SentWith,
+  answeredSend,
+  arrivedText,
+  bannerCheck,
+  blockSummary,
+  bodyFor,
+  details,
+  lateAfter,
+  lateNote,
+  lateRowNote,
+  logShown,
+  sentText,
+  waitOf,
+  waitsFor,
+} from "./live-log.ts";
 
 // The name of the config.ts entry to use, which build.ts defines.
 declare const DEMO_NETWORK: string;
@@ -64,12 +94,30 @@ function messageOf(err: unknown): string {
 }
 
 function errorText(err: unknown): string {
-  if (err instanceof GnotifError && err.code === "denied") {
-    return Notification.permission === "denied"
-      ? "Notifications are blocked for this site. Allow them in the browser's site settings, then try again."
-      : "The browser did not get permission. Try again and allow notifications.";
+  const permission = "Notification" in globalThis ? Notification.permission : undefined;
+  return pushErrorText(err instanceof GnotifError ? err.code : undefined, permission, messageOf(err));
+}
+
+// A busy control takes aria-disabled, not disabled, so it keeps focus; its
+// handler checks `working`.
+function markBusy(button: HTMLButtonElement, state: boolean): void {
+  if (state) {
+    button.setAttribute("aria-disabled", "true");
+  } else {
+    button.removeAttribute("aria-disabled");
   }
-  return messageOf(err);
+}
+
+// refocus moves focus to next when the control that had it went away.
+function refocus(next: HTMLElement): void {
+  const active = document.activeElement;
+  if (
+    active === null ||
+    active === document.body ||
+    (active instanceof HTMLElement && active.closest("[hidden]") !== null)
+  ) {
+    next.focus();
+  }
 }
 
 function optin(): { trigger: string; value: string }[] {
@@ -107,11 +155,14 @@ function stopLive(): void {
   live = false;
   el("live", HTMLInputElement).checked = false;
   setLiveState("Live updates off");
-  for (const sent of waiting) {
-    clearInterval(sent.clock);
+  // With notifications on, a push still brings each waiting send.
+  if (!on) {
+    waiting.length = 0;
+    lastSent = undefined;
+    el("arrivals-list", HTMLOListElement).replaceChildren();
+    say("sent", "");
+    say("banner-check", "");
   }
-  waiting.length = 0;
-  el("arrivals-list", HTMLOListElement).replaceChildren();
   renderLog();
   setPrimary();
 }
@@ -120,10 +171,24 @@ const ARRIVALS_KEPT = 5;
 
 type Row = { item: HTMLLIElement; time: HTMLTimeElement; note: HTMLElement };
 
-type Sent = { row: Row; body: string; at: number; clock: ReturnType<typeof setInterval>; late?: boolean };
+type Sent = {
+  row: Row;
+  body: string;
+  via: SentWith;
+  at: number;
+  late?: boolean;
+};
 
-/** Sends waiting for their live arrival, oldest first. */
+/** Sends waiting for their arrival, oldest first. */
 const waiting: Sent[] = [];
+/** The send step 2's line reports on: the latest one. */
+let lastSent: Sent | undefined;
+
+// renderPreview shows the notification the next send becomes.
+function renderPreview(): void {
+  el("toast-title", HTMLElement).textContent = trigger?.title ?? "Echo";
+  el("toast-body", HTMLElement).textContent = bodyFor(trigger?.body, message());
+}
 
 function stamp(time: HTMLTimeElement, at: Date): void {
   time.dateTime = at.toISOString();
@@ -141,49 +206,44 @@ function logRow(title: string, body: string, at: Date): Row {
   text.textContent = body;
   const note = document.createElement("small");
   note.className = "note";
+  const status = document.createElement("div");
+  status.className = "row-status";
+  status.append(note);
   const item = document.createElement("li");
   item.className = "arrival";
-  item.append(time, head, text, note);
+  item.append(time, head, text, status);
   const list = el("arrivals-list", HTMLOListElement);
   list.prepend(item);
   for (const gone of Array.from(list.children).slice(ARRIVALS_KEPT)) {
     gone.remove();
     const i = waiting.findIndex((sent) => sent.row.item === gone);
     if (i !== -1) {
-      const [dropped] = waiting.splice(i, 1);
-      clearInterval(dropped?.clock);
+      waiting.splice(i, 1);
     }
   }
   return { item, time, note };
 }
 
-function addSent(body: string): void {
+function addSent(body: string, via: SentWith): void {
   const at = new Date();
   const row = logRow(el("toast-title", HTMLElement).textContent, body, at);
   row.item.classList.add("pending");
-  const dot = document.createElement("i");
-  dot.className = "indicator";
-  const clock = document.createTextNode(clockText(0));
-  // Hidden from screen readers: the log would read the clock out every second.
-  const ticking = document.createElement("span");
-  ticking.setAttribute("aria-hidden", "true");
-  ticking.append(dot, clock);
-  row.time.replaceChildren(ticking);
   row.note.textContent = "Waiting for it to arrive";
-  const tick = (): void => {
-    clock.data = clockText(Date.now() - at.getTime());
-  };
-  const sent: Sent = { row, body, at: at.getTime(), clock: setInterval(tick, 1000) };
+  const sent: Sent = { row, body, via, at: at.getTime() };
   waiting.push(sent);
+  lastSent = sent;
+  say("banner-check", "");
+  renderLog();
   setTimeout(() => {
     if (waiting.includes(sent)) {
       sent.late = true;
-      clearInterval(sent.clock);
-      clock.data = clockText(WAIT_MS);
       row.item.classList.replace("pending", "late");
-      row.note.textContent = `It has not arrived after ${WAIT_MS / 1000} s. Check that Adena sends from the address in step 1.`;
+      row.note.textContent = lateRowNote(via);
+      if (sent === lastSent) {
+        say("sent", lateNote(via), true);
+      }
     }
-  }, WAIT_MS);
+  }, lateAfter(via));
 }
 
 function addArrival(n: GnotifNotification): void {
@@ -195,19 +255,26 @@ function addArrival(n: GnotifNotification): void {
   if (sent === undefined) {
     row = logRow(n.title, n.body, at);
   } else {
-    clearInterval(sent.clock);
     row = sent.row;
     row.item.classList.remove("pending", "late");
     stamp(row.time, at);
-    wait = at.getTime() - sent.at;
+    wait = waitOf(sent, at.getTime());
+    if (sent === lastSent) {
+      say("sent", "");
+      say("banner-check", bannerCheck(n.source));
+    }
   }
   row.note.replaceWith(arrivalDetails(n, wait));
   renderLog();
 }
 
 function arrivalDetails(n: GnotifNotification, wait: number | undefined): HTMLDetailsElement {
+  // The row's lit dot shows the arrival; screen readers hear it here.
+  const heard = document.createElement("span");
+  heard.className = "visually-hidden";
+  heard.textContent = `${arrivedText(wait, n.body)}. `;
   const summary = document.createElement("summary");
-  summary.textContent = blockSummary(n.height, wait);
+  summary.append(heard, blockSummary(n.height, wait));
   const list = document.createElement("dl");
   for (const [label, value] of details(n, (d) => d.toLocaleString())) {
     const dt = document.createElement("dt");
@@ -222,37 +289,49 @@ function arrivalDetails(n: GnotifNotification, wait: number | undefined): HTMLDe
   return box;
 }
 
-function pointToLog(): void {
-  const link = document.createElement("a");
-  link.href = "#arrivals";
-  link.textContent = "Watch for it above ↑";
-  el("sent", HTMLElement).classList.remove("error");
-  el("sent", HTMLElement).replaceChildren("Sent. ", link);
-}
-
 function readyToSend(): boolean {
   return canSend(trigger, address(), on || live, stored()?.optins ?? []);
+}
+
+function pushAccess(): { supported: boolean; blocked: boolean } {
+  return {
+    supported: pushSupported(globalThis),
+    blocked: "Notification" in globalThis && Notification.permission === "denied",
+  };
+}
+
+/** The lead last shown in step 2: true for gnokey, undefined before the first render. */
+let gnokeyLed: boolean | undefined;
+
+function adenaSends(): boolean {
+  return sendArea({ adena: adenaState, wallet, address: address() }).adenaSend === "enabled";
 }
 
 // One amber button at a time: the next action in the flow.
 function setPrimary(): void {
   const ready = readyToSend();
-  el("enable", HTMLButtonElement).classList.toggle("primary", !on && !live);
-  el("send", HTMLButtonElement).classList.toggle("primary", ready && adena !== undefined);
-  el("copy", HTMLButtonElement).classList.toggle("primary", ready && adena === undefined);
-  for (const id of ["send", "copy"]) {
-    el(id, HTMLButtonElement).disabled = working || !ready || (id === "send" && adena === undefined);
+  const area = sendArea({ adena: adenaState, wallet, address: address() });
+  el("enable", HTMLButtonElement).classList.toggle("primary", turnOnIsNext({ on, live, ...pushAccess() }));
+  el("send", HTMLButtonElement).hidden = area.adenaSend === "hidden";
+  el("send", HTMLButtonElement).classList.toggle("primary", ready && area.adenaSend === "enabled");
+  el("copy-lead", HTMLButtonElement).hidden = !area.gnokeyLeads;
+  el("copy-lead", HTMLButtonElement).classList.toggle("primary", ready && area.gnokeyLeads);
+  for (const id of ["send", "copy-lead", "copy"]) {
+    el(id, HTMLButtonElement).disabled = !ready || (id === "send" && area.adenaSend !== "enabled");
   }
+  // The gnokey details follow a change of lead only, so a visitor who closed
+  // them while typing keeps them closed. They wait for the look for Adena,
+  // so they never open and then close for a visitor who has it.
+  if (adenaState !== "pending" && area.gnokeyLeads !== gnokeyLed) {
+    gnokeyLed = area.gnokeyLeads;
+    el("cli", HTMLDetailsElement).open = area.gnokeyLeads;
+    el("cli-label", HTMLElement).textContent = area.gnokeyLeads ? "Send with gnokey" : "Use gnokey instead";
+  }
+  const text = sendHint(address(), ready, trigger);
   for (const id of ["send-hint", "copy-hint"]) {
     const hint = el(id, HTMLElement);
-    hint.hidden = ready && (id === "copy-hint" || adena !== undefined);
-    const text = !isAddress(address())
-      ? "Set your address in step 1 to continue."
-      : !ready
-        ? "Turn on notifications or live updates for this address in step 1 to continue."
-        : adenaState === "pending"
-          ? "Checking for Adena…"
-          : "Install Adena to send from this page, or use gnokey below.";
+    // When gnokey leads, step 2's own hint already stands for the command.
+    hint.hidden = ready || (id === "copy-hint" && area.gnokeyLeads);
     if (hint.textContent !== text) {
       hint.textContent = text;
     }
@@ -262,19 +341,23 @@ function setPrimary(): void {
 async function refresh(): Promise<void> {
   on = await gnotif.enabled();
   const saved = stored();
-  const blocked = "Notification" in globalThis && Notification.permission === "denied";
+  const { supported, blocked } = pushAccess();
   el("state", HTMLElement).classList.toggle("on", on);
-  el("state-text", HTMLElement).textContent =
-    on && saved !== null
-      ? `On for ${saved.address}`
-      : on
-        ? "On"
-        : blocked
-          ? "Blocked in the browser's site settings"
-          : "Off";
-  el("enable", HTMLButtonElement).textContent =
-    saved?.push === true && !on ? "Turn notifications on again" : "Turn on notifications";
+  el("state-text", HTMLElement).textContent = notificationState({
+    supported,
+    on,
+    blocked,
+    address: saved?.address ?? "",
+  });
+  el("enable", HTMLButtonElement).textContent = pushStopped({ wasOn: saved?.push === true, on, supported, blocked })
+    ? "Turn notifications on again"
+    : "Turn on notifications";
   el("enable", HTMLButtonElement).hidden = on;
+  el("enable", HTMLButtonElement).disabled = !supported || !canEnable(false, trigger);
+  el("push-hint", HTMLElement).hidden = !supported;
+  if (!supported) {
+    say("message", pushHelp(supported));
+  }
   el("disable", HTMLButtonElement).hidden = !on;
   renderAddress();
   setPrimary();
@@ -296,39 +379,59 @@ function renderAddress(): void {
 
 function busy(state: boolean): void {
   working = state;
-  for (const id of ["disable", "connect", "disconnect"]) {
-    el(id, HTMLButtonElement).disabled = state;
+  for (const id of ["enable", "disable", "connect", "disconnect", "send", "copy-lead", "copy"]) {
+    markBusy(el(id, HTMLButtonElement), state);
   }
-  el("enable", HTMLButtonElement).disabled = !canEnable(state, trigger);
   setPrimary();
-}
-
-function noteMismatch(caller: string): void {
-  const listening = listenerMismatch(caller, on, stored());
-  say(
-    "mismatch",
-    listening === undefined
-      ? ""
-      : `Adena sends from ${short(caller)}, but this browser listens for ${short(listening)}. The notification goes to ${short(caller)}.`,
-  );
-}
-
-function notificationBody(msg: string): string {
-  return trigger !== null ? trigger.body.replaceAll("{msg}", msg) : msg;
 }
 
 function renderMessage(): void {
   const msg = message();
-  el("toast-body", HTMLElement).textContent = notificationBody(msg);
-  el("command", HTMLElement).textContent = gnokeyCommand(chain, echo, msg);
+  renderPreview();
+  el("command", HTMLElement).replaceChildren(
+    ...commandWords(gnokeyCommand(chain, echo, msg)).map(({ text, word }) => {
+      if (!word) {
+        return text;
+      }
+      const span = document.createElement("span");
+      span.className = "nowrap";
+      span.textContent = text;
+      return span;
+    }),
+  );
+}
+
+// showAddressError puts step 1's message about the address under the field;
+// "" clears it.
+function showAddressError(text: string): void {
+  el("address-error", HTMLElement).textContent = text;
+  const input = el("address", HTMLInputElement);
+  if (text === "") {
+    input.removeAttribute("aria-invalid");
+  } else {
+    input.setAttribute("aria-invalid", "true");
+  }
+}
+
+// addressReady shows what keeps the typed address from being used, and
+// focuses the field when there is something to fix.
+function addressReady(): boolean {
+  const text = addressMessage(address());
+  showAddressError(text);
+  if (text !== "") {
+    el("address", HTMLInputElement).focus();
+  }
+  return text === "";
 }
 
 async function turnOn(): Promise<void> {
+  if (on || !canEnable(working, trigger) || !addressReady()) {
+    return;
+  }
   try {
     optin();
   } catch (err) {
     say("message", messageOf(err), true);
-    el("address", HTMLInputElement).focus();
     return;
   }
   busy(true);
@@ -343,84 +446,96 @@ async function turnOn(): Promise<void> {
   }
   busy(false);
   await refresh();
+  refocus(el("disable", HTMLButtonElement));
 }
 
-el("enable", HTMLButtonElement).addEventListener("click", () => void turnOn());
+el("setup", HTMLFormElement).addEventListener("submit", (event) => {
+  event.preventDefault();
+  void turnOn();
+});
+// Enter in the address field turns notifications on only while that is step
+// 1's lead action, not while live updates already receive.
+el("address", HTMLInputElement).addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.isComposing && !turnOnIsNext({ on, live, ...pushAccess() })) {
+    event.preventDefault();
+  }
+});
 
 async function turnOff(): Promise<void> {
+  if (working) {
+    return;
+  }
   busy(true);
   try {
     await gnotif.disable();
     remember({ push: false });
-    say("message", "Notifications off.");
+    say("message", "");
   } catch (err) {
     say("message", errorText(err), true);
   }
   busy(false);
   await refresh();
+  refocus(el("enable", HTMLButtonElement));
 }
 
 el("disable", HTMLButtonElement).addEventListener("click", () => void turnOff());
 
 async function connectAdena(): Promise<void> {
-  if (adena === undefined) {
+  if (adena === undefined || working) {
     return;
   }
   const before = el("connect", HTMLButtonElement).textContent;
   busy(true);
   el("connect", HTMLButtonElement).textContent = walletLabel("pending");
-  say("message", "Waiting for Adena…");
+  say("wallet-message", "Waiting for Adena…");
   try {
-    wallet = await connect(adena, chain);
-    el("address", HTMLInputElement).value = wallet;
-    say("message", `Adena connected as ${short(wallet)}.`);
-    say("mismatch", "");
-    await changeAddress();
+    const account = await connect(adena, chain);
+    const refusal = lockedRefusal(on, address(), account);
+    if (refusal === "") {
+      wallet = account;
+      el("address", HTMLInputElement).value = wallet;
+      showAddressError("");
+      say("wallet-message", `Adena connected as ${short(wallet)}.`);
+      await changeAddress();
+    } else {
+      say("wallet-message", refusal, true);
+    }
   } catch (err) {
-    say("message", messageOf(err), true);
+    say("wallet-message", messageOf(err), true);
   }
   el("connect", HTMLButtonElement).textContent = before;
   busy(false);
   renderAddress();
+  // While notifications are on, Disconnect stays hidden: the next action is
+  // step 2's.
+  refocus(el(on ? "msg" : "disconnect", HTMLElement));
 }
 
 el("connect", HTMLButtonElement).addEventListener("click", () => void connectAdena());
 
 el("disconnect", HTMLButtonElement).addEventListener("click", () => {
+  if (working) {
+    return;
+  }
   wallet = "";
-  say("message", "Adena disconnected. Type an address, or connect again.");
+  say("wallet-message", "Adena disconnected. Type an address, or connect again.");
   renderAddress();
+  refocus(el("address", HTMLInputElement));
 });
 
 async function send(): Promise<void> {
-  if (adena === undefined || working || !readyToSend()) {
-    return;
-  }
-  if (el("msg", HTMLInputElement).value.trim() === "") {
-    say("sent", "Write a message first.", true);
-    el("msg", HTMLInputElement).focus();
+  if (adena === undefined || working || !readyToSend() || !adenaSends()) {
     return;
   }
   const before = el("send", HTMLButtonElement).textContent;
   busy(true);
   el("send", HTMLButtonElement).textContent = walletLabel("pending");
-  say("mismatch", "");
   say("sent", "Waiting for Adena…");
   try {
     const msg = message();
-    const { caller, hash } = await sendEcho(adena, chain, echo, msg);
-    noteMismatch(caller);
-    if (live) {
-      addSent(deliveredBody(notificationBody(msg)));
-      pointToLog();
-    } else {
-      say(
-        "sent",
-        on
-          ? `Transaction submitted. Allow a few seconds for the push.${hash === undefined || hash === "" ? "" : ` Transaction ${hash}.`}`
-          : "Sent, but notifications are off in this browser. Turn them on in step 1 to get the next one.",
-      );
-    }
+    const { hash } = await sendEcho(adena, chain, echo, msg, address());
+    addSent(bodyFor(trigger?.body, msg), "adena");
+    say("sent", sentText("adena", hash));
   } catch (err) {
     say("sent", messageOf(err), true);
   }
@@ -428,47 +543,89 @@ async function send(): Promise<void> {
   busy(false);
 }
 
-el("send", HTMLButtonElement).addEventListener("click", () => void send());
+el("compose", HTMLFormElement).addEventListener("submit", (event) => {
+  event.preventDefault();
+  void send();
+});
 
-async function copyCommand(): Promise<void> {
+function showCopied(button: HTMLButtonElement): void {
+  button.dataset["label"] ??= button.textContent;
+  button.textContent = "Copied";
+  setTimeout(() => {
+    button.textContent = button.dataset["label"] ?? button.textContent;
+  }, 1500);
+}
+
+// copyCommand copies the gnokey command and reads "Copied" on button for a
+// moment.
+async function copyCommand(button: HTMLButtonElement): Promise<void> {
   if (working || !readyToSend()) return;
   try {
     await navigator.clipboard.writeText(el("command", HTMLElement).textContent);
-    el("copy", HTMLButtonElement).textContent = "Copied";
-    setTimeout(() => {
-      el("copy", HTMLButtonElement).textContent = "Copy";
-    }, 1500);
   } catch {
     say("sent", "Copying failed. Select the command and copy it yourself.", true);
+    return;
   }
+  showCopied(button);
+  const body = bodyFor(trigger?.body, message());
+  if (!waitsFor(waiting, body)) {
+    addSent(body, "gnokey");
+  }
+  say("sent", sentText("gnokey", undefined));
 }
 
-el("copy", HTMLButtonElement).addEventListener("click", () => void copyCommand());
+for (const id of ["copy", "copy-lead"]) {
+  const button = el(id, HTMLButtonElement);
+  button.addEventListener("click", () => void copyCommand(button));
+}
 
-el("msg", HTMLInputElement).addEventListener("input", renderMessage);
+// A code reveal's Copy copies its code; where the clipboard refuses, it
+// selects the code for the visitor to copy.
+for (const button of document.querySelectorAll<HTMLButtonElement>("button[data-copy]")) {
+  const code = el(button.dataset["copy"] ?? "", HTMLElement);
+  button.addEventListener("click", () => {
+    void navigator.clipboard.writeText(code.textContent).then(
+      () => showCopied(button),
+      () => getSelection()?.selectAllChildren(code),
+    );
+  });
+}
+
+el("msg", HTMLInputElement).addEventListener("input", () => renderMessage());
+// Without Adena, copying the command is step 2's lead action, so Enter runs it.
+el("msg", HTMLInputElement).addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.isComposing || adenaSends()) {
+    return;
+  }
+  event.preventDefault();
+  void copyCommand(el("copy-lead", HTMLButtonElement));
+});
 
 async function switchLive(): Promise<void> {
   if (!el("live", HTMLInputElement).checked) {
     stopLive();
     remember({ live: false });
-    say("message", "Live updates off.");
+    say("live-message", "");
+    return;
+  }
+  if (!addressReady()) {
+    el("live", HTMLInputElement).checked = false;
     return;
   }
   try {
     optin();
   } catch (err) {
     el("live", HTMLInputElement).checked = false;
-    say("message", messageOf(err), true);
-    el("address", HTMLInputElement).focus();
+    say("live-message", messageOf(err), true);
     return;
   }
   try {
     await startLive();
     remember({ live: true });
-    say("message", "Live updates on. Send yourself a message in step 2.");
+    say("live-message", "Live updates on. Send yourself a message in step 2.");
   } catch (err) {
     stopLive();
-    say("message", errorText(err), true);
+    say("live-message", errorText(err), true);
   }
 }
 
@@ -482,18 +639,36 @@ async function changeAddress(): Promise<void> {
   try {
     await setOptin();
   } catch (err) {
-    say("message", errorText(err), true);
+    say("live-message", errorText(err), true);
   }
   setPrimary();
 }
 
-el("address", HTMLInputElement).addEventListener("input", setPrimary);
-el("address", HTMLInputElement).addEventListener("change", () => void changeAddress());
+// A fixed or cleared address drops its error while typing; a new one shows only
+// once the field loses focus or an action needs the address.
+el("address", HTMLInputElement).addEventListener("input", () => {
+  const problem = addressProblem(address());
+  if (problem === undefined || problem === "empty") {
+    showAddressError("");
+  }
+  setPrimary();
+});
+el("address", HTMLInputElement).addEventListener("change", () => {
+  showAddressError(address() === "" ? "" : addressMessage(address()));
+  remember({});
+  void changeAddress();
+});
 
 gnotif.on("notification", addArrival);
-gnotif.on("reconnecting", () => setLiveState("Reconnecting…"));
-gnotif.on("reconnect", () => setLiveState("Live updates on", true));
-gnotif.on("error", (err) => say("message", err.message, true));
+gnotif.on("reconnecting", () => {
+  setLiveState("Reconnecting…");
+  say("live-message", "The live connection dropped. Reconnecting…");
+});
+gnotif.on("reconnect", () => {
+  setLiveState("Live updates on", true);
+  say("live-message", "Live updates on again.");
+});
+gnotif.on("error", (err) => say("live-message", err.message, true));
 
 el("chain-name", HTMLElement).textContent = chain.name;
 el("chain-id", HTMLElement).textContent = chain.id;
@@ -505,35 +680,47 @@ el("code-realm", HTMLElement).textContent = echo;
 void findAdena(globalThis).then((found) => {
   adena = found;
   adenaState = found === undefined ? "absent" : "found";
-  el("cli", HTMLDetailsElement).open = found === undefined;
-  el("cli-label", HTMLElement).textContent = found === undefined ? "Send with gnokey" : "Use gnokey instead";
+  el("send-action", HTMLElement).hidden = false;
   renderAddress();
   setPrimary();
 });
-renderMessage();
-setPrimary();
-
 const saved = stored();
 if (saved !== null) {
   el("address", HTMLInputElement).value = saved.address;
 }
+renderMessage();
+setPrimary();
+
 try {
   [trigger = null] = await gnotif.triggers(echo);
   if (trigger === null) {
-    say("message", `${gnotif.server} lists no trigger for ${echo} yet. Deploy the echo realm first.`, true);
+    say(
+      "page-message",
+      `${gnotif.server} lists no trigger for ${echo} yet. If you run this demo yourself, deploy the echo realm first. Otherwise, try again later.`,
+      true,
+    );
   } else {
-    el("toast-title", HTMLElement).textContent = trigger.title;
     renderMessage();
   }
 } catch (err) {
-  say("message", `Cannot load the echo trigger from ${gnotif.server}: ${messageOf(err)}`, true);
+  say(
+    "page-message",
+    `Cannot load the echo trigger from ${gnotif.server}: ${messageOf(err).replace(/\.+$/, "")}. Reload the page to try again.`,
+    true,
+  );
 }
-el("enable", HTMLButtonElement).disabled = !canEnable(false, trigger);
 try {
   await refresh();
-  if (!on && saved?.push === true) {
-    say("message", "This browser stopped receiving notifications. Turn them on again to resume.");
-  }
+  const { supported, blocked } = pushAccess();
+  say(
+    "message",
+    pushNoteAtLoad({
+      on,
+      supported,
+      triggerLoaded: trigger !== null,
+      stopped: pushStopped({ wasOn: saved?.push === true, on, supported, blocked }),
+    }),
+  );
   if (optinsAtLoad(on, saved?.live === true, trigger)) {
     await setOptin();
   }
@@ -547,6 +734,6 @@ if (saved?.live === true && trigger !== null) {
     await startLive();
   } catch (err) {
     stopLive();
-    say("message", errorText(err), true);
+    say("live-message", errorText(err), true);
   }
 }

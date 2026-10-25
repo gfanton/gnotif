@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { callMessage, gas, gnokeyCommand, shellQuote } from "./echo-tx.ts";
+import { callMessage, commandWords, gas, gnokeyCommand, shellQuote } from "./echo-tx.ts";
 
 const chain = { id: "onyx-1", name: "Gno.land onyx testnet", rpc: "https://rpc.onyx.testnets.gno.land:443" };
 const pkgPath = "gno.land/r/dev/echo/v1";
@@ -45,4 +45,23 @@ test("callMessage is a /vm.m_call to Echo from the caller", () => {
     type: "/vm.m_call",
     value: { caller: "g1caller", send: "", max_deposit: "", pkg_path: pkgPath, func: "Echo", args: ["hi"] },
   });
+});
+
+test("the command breaks only between its words, the key placeholder whole", () => {
+  const command = gnokeyCommand(chain, pkgPath, "Hello,  me");
+  const parts = commandWords(command);
+  assert.equal(parts.map((p) => p.text).join(""), command, "the parts spell the command, spaces included");
+  assert.ok(
+    parts.some((p) => p.word && p.text === "-gas-wanted"),
+    "a flag stays whole",
+  );
+  assert.ok(
+    parts.some((p) => p.word && p.text === "<your key>"),
+    "the placeholder stays whole",
+  );
+  assert.ok(
+    parts.some((p) => !p.word && p.text === "  "),
+    "a run of spaces is kept as typed",
+  );
+  assert.ok(parts.every((p) => p.word === /\S/.test(p.text)));
 });

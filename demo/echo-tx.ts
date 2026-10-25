@@ -18,6 +18,15 @@ export function gnokeyCommand(chain: { id: string; rpc: string }, pkgPath: strin
   );
 }
 
+/**
+ * commandWords splits a command into its words and the spaces between them,
+ * so the page can wrap it only at a space: a browser also breaks after a
+ * hyphen, inside a flag. The key placeholder counts as one word.
+ */
+export function commandWords(command: string): { text: string; word: boolean }[] {
+  return Array.from(command.matchAll(/<your key>|\S+|\s+/g), ([text]) => ({ text, word: /\S/.test(text) }));
+}
+
 /** callMessage is the /vm.m_call message that Adena signs for Echo. */
 export function callMessage(
   caller: string,

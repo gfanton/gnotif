@@ -1,7 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { GnotifNotification } from "gnotif";
-import { answeredSend, blockSummary, clockText, deliveredBody, details, logShown, waitText } from "./live-log.ts";
+import {
+  answeredSend,
+  arrivedText,
+  bannerCheck,
+  blockSummary,
+  bodyFor,
+  deliveredBody,
+  details,
+  lateAfter,
+  lateNote,
+  lateRowNote,
+  logShown,
+  sentText,
+  waitOf,
+  waitText,
+  waitsFor,
+} from "./live-log.ts";
 
 test("an arrival answers the oldest send waiting for its body", () => {
   const waiting = [{ body: "Hello" }, { body: "Bye" }, { body: "Hello" }];
@@ -28,16 +44,8 @@ test("a body over 255 UTF-8 bytes is cut on a character boundary, as gnotifd del
   assert.equal(deliveredBody("🙂".repeat(64)), "🙂".repeat(63)); // 256 bytes
 });
 
-test("the waiting clock reads minutes and whole seconds", () => {
-  assert.equal(clockText(0), "0:00");
-  assert.equal(clockText(4200), "0:04");
-  assert.equal(clockText(59_999), "0:59");
-  assert.equal(clockText(60_000), "1:00");
-  assert.equal(clockText(75_000), "1:15");
-});
-
 test("the summary names the block, with the wait when a send waited for it", () => {
-  assert.equal(blockSummary(181221, 6200), "Block 181221 · Arrived 6 s after sending");
+  assert.equal(blockSummary(181221, 6200), "Block 181221 · Arrived 6\u00a0s after sending");
   assert.equal(blockSummary(181221, undefined), "Block 181221");
 });
 
@@ -94,8 +102,68 @@ test("the log shows while live updates are on, and with them off once a push lis
   assert.equal(logShown(false, 0), false);
 });
 
-test("the wait reads in whole seconds", () => {
-  assert.equal(waitText(6200), "Arrived 6 s after sending");
-  assert.equal(waitText(1000), "Arrived 1 s after sending");
+test("the wait reads in whole seconds, its number never apart from its unit", () => {
+  assert.equal(waitText(6200), "Arrived 6\u00a0s after sending");
+  assert.equal(waitText(1000), "Arrived 1\u00a0s after sending");
   assert.equal(waitText(999), "Arrived within a second of sending");
+});
+
+test("a late send names the check for the way it was sent", () => {
+  assert.equal(
+    lateNote("adena"),
+    "It has not arrived after 60\u00a0s. Check that Adena sends from the address in step 1.",
+  );
+  assert.equal(
+    lateNote("gnokey"),
+    "It has not arrived after 3\u00a0min. If you ran the command, check that it used the key of the address in step 1, and that the address has test GNOT.",
+  );
+});
+
+test("a late row only says how long it waited, since step 2's line holds the checks", () => {
+  assert.equal(lateRowNote("adena"), "Not arrived after 60 s");
+  assert.equal(lateRowNote("gnokey"), "Not arrived after 3 min");
+});
+
+test("a gnokey send waits longer before it reads as late, since the visitor still pastes and signs it", () => {
+  assert.equal(lateAfter("adena"), 60_000);
+  assert.equal(lateAfter("gnokey"), 180_000);
+});
+
+test("only an Adena send has a wait to report, since a gnokey send is timed from the copy", () => {
+  assert.equal(waitOf({ via: "adena", at: 1_000 }, 5_200), 4_200);
+  assert.equal(waitOf({ via: "gnokey", at: 1_000 }, 5_200), undefined);
+});
+
+test("an answered send names the message that arrived, and its wait when known", () => {
+  assert.equal(arrivedText(4200, "Hello"), 'Arrived in 4\u00a0s: "Hello"');
+  assert.equal(arrivedText(400, "Hello"), 'Arrived within a second: "Hello"');
+  assert.equal(arrivedText(undefined, "Hello"), 'Arrived: "Hello"', "a gnokey send has no wait to report");
+});
+
+test("a push arrival comes with the banner check, on its own line", () => {
+  assert.equal(
+    bannerCheck("push"),
+    "No banner? Check this browser's notification settings in your system settings, and that Focus or Do Not Disturb is off.",
+  );
+  assert.equal(bannerCheck("live"), "", "the page showed it; no OS banner was due");
+});
+
+test("a copied command waits once while a send with its body is on time", () => {
+  assert.equal(waitsFor([{ body: "Hello" }], "Hello"), true);
+  assert.equal(waitsFor([{ body: "Hello", late: true }], "Hello"), false);
+  assert.equal(waitsFor([{ body: "Bye" }], "Hello"), false);
+});
+
+test("a send's line names its transaction, and a copied command says what to do next", () => {
+  assert.equal(sentText("adena", "aGFzaDE="), "Sent. Transaction aGFzaDE=.");
+  assert.equal(sentText("adena", undefined), "Sent.");
+  assert.equal(sentText("adena", ""), "Sent.");
+  assert.equal(sentText("gnokey", undefined), "Copied. Run it in a terminal, then watch for your message below.");
+});
+
+test("a message's notification body fills the trigger's template and is cut as gnotifd delivers it", () => {
+  assert.equal(bodyFor("{msg}", "Hello"), "Hello");
+  assert.equal(bodyFor("You said: {msg}", "Hello"), "You said: Hello");
+  assert.equal(bodyFor(undefined, "Hello"), "Hello", "before the trigger loads");
+  assert.equal(bodyFor("{msg}", "🙂".repeat(100)), "🙂".repeat(63), "the preview shows what arrives");
 });
