@@ -25,13 +25,8 @@ const devtestMnemonic = "source bonus chronic canvas draft south burst lottery v
 
 const (
 	pingpongPath = "gno.land/r/dev/pingpong/v0"
-	registryPath = "gno.land/r/dev/gnotif/v0"
+	registryPath = "gno.land/r/dev/gnotif/v1"
 )
-
-// gnodev outside a workspace does not resolve imports from its examples, so
-// the realms' dependencies are loaded from the gno clone explicitly,
-// dependencies before dependents.
-var examplePackages = []string{"avl/v0", "cford32/v0", "seqid/v0", "markdown/sanitize/v0"}
 
 // stack is a local chain: gnodev with the registry loaded and pingpong
 // deployed, and a tx-indexer reading it.
@@ -61,12 +56,15 @@ func newStack(t *testing.T) *stack {
 	require.Contains(t, s.addrs, "player2")
 
 	s.rpc = freeAddr(t)
-	args := []string{"local", "-no-web", "-no-watch", "-home", s.keybase, "-node-rpc-listener", s.rpc}
-	for _, p := range examplePackages {
-		args = append(args, filepath.Join(tools, "gno-src", "examples", "gno.land", "p", "nt", p))
-	}
-	args = append(args, filepath.Join(root, "gno", "r", "gnotif"))
-	s.start("gnodev", []string{"GNOROOT=" + filepath.Join(tools, "gno-src")}, args...)
+	// gnodev outside a workspace does not resolve imports from its examples
+	// for the packages it loads, so -extra-root loads every example package
+	// of the gno clone, the realms' dependencies among them.
+	s.start("gnodev", []string{"GNOROOT=" + filepath.Join(tools, "gno-src")},
+		"local", "-no-web", "-no-watch", "-home", s.keybase, "-node-rpc-listener", s.rpc,
+		"-extra-root", filepath.Join(tools, "gno-src", "examples"),
+		filepath.Join(root, "gno", "p", "gnotif", "trigger"),
+		filepath.Join(root, "gno", "p", "gnotif", "admins"),
+		filepath.Join(root, "gno", "r", "gnotif"))
 	// The RPC answers before gnodev commits its first block, and a
 	// transaction sent then fails its signature check.
 	require.Eventually(t, func() bool { return s.nodeHeight() >= 1 },

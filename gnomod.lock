@@ -8,17 +8,99 @@
 lock = 1
 
 [[module]]
+module = "gno.land/p/bob/pbox/v0"
+source = { dir = "gno/testrealms/pbox" }
+
+[[module]]
+module = "gno.land/p/bob/pevil/v0"
+source = { dir = "gno/testrealms/pevil" }
+
+[[module]]
+module = "gno.land/p/bob/pmint/v0"
+source = { dir = "gno/testrealms/pmint" }
+
+[[module]]
+module = "gno.land/p/bob/probe/v0"
+source = { dir = "gno/testrealms/probe" }
+
+[[module]]
+module = "gno.land/p/dev/gnotif/admins/v0"
+source = { dir = "gno/p/gnotif/admins" }
+
+[[module]]
+module = "gno.land/p/dev/gnotif/trigger/v0"
+source = { dir = "gno/p/gnotif/trigger" }
+
+[[module]]
+module = "gno.land/r/alice/chat/v0"
+source = { dir = "gno/testrealms/chat" }
+
+[[module]]
+module = "gno.land/r/alice/forgot/v0"
+source = { dir = "gno/testrealms/forgot" }
+
+[[module]]
+module = "gno.land/r/alice/forum/v0"
+source = { dir = "gno/testrealms/forum" }
+
+[[module]]
+module = "gno.land/r/alice/leaky/v0"
+source = { dir = "gno/testrealms/leaky" }
+
+[[module]]
+module = "gno.land/r/alice/managed/v0"
+source = { dir = "gno/testrealms/managed" }
+
+[[module]]
+module = "gno.land/r/bob/evil/v0"
+source = { dir = "gno/testrealms/evil" }
+
+[[module]]
+module = "gno.land/r/bob/evil2/v0"
+source = { dir = "gno/testrealms/evil2" }
+
+[[module]]
+module = "gno.land/r/bob/trap/v0"
+source = { dir = "gno/testrealms/trap" }
+
+[[module]]
 module = "gno.land/r/dev/echo/v0"
+source = { commit = "024b7d92b5de4e5c6b2f674a70f90cc9e1b84810", dir = "demo/gno.land/r/echo" }
+hash = "h1:76gYZsCG28ZFqZy8AH4uleNUkHMLD9eBUIloyTjc45U="
+
+[[module]]
+module = "gno.land/r/dev/echo/v1"
 source = { dir = "demo/gno.land/r/echo" }
 
 [[module]]
 module = "gno.land/r/dev/gnotif/v0"
+source = { commit = "024b7d92b5de4e5c6b2f674a70f90cc9e1b84810", dir = "gno/r/gnotif" }
+hash = "h1:hwUNKgiXhQpE+aWHWYr4NZZQVcNAootuXMx63mRHEPQ="
+
+[[module]]
+module = "gno.land/r/dev/gnotif/v1"
 source = { dir = "gno/r/gnotif" }
 
 [[module]]
-module = "gno.land/r/dev/gnotif/v2"
-source = { dir = "e2e/testdata/gnotif-v2" }
+module = "gno.land/r/dev/gnotif/v3"
+source = { dir = "e2e/testdata/gnotif-v3" }
+
+[[module]]
+module = "gno.land/r/dev/managed/v0"
+source = { dir = "e2e/testdata/managed" }
 
 [[module]]
 module = "gno.land/r/dev/pingpong/v0"
 source = { dir = "demo/gno.land/r/pingpong" }
+
+[[module]]
+module = "gno.land/r/g1pm0qlcryf0v0fftfcvahwux3mxt8t0rdnlqkqd/own/v0"
+source = { dir = "gno/testrealms/own" }
+
+[[module]]
+module = "gno.land/r/g1v9kxjcm9ta047h6lta047h6lta047h6lzd40gh/pa/v0"
+source = { dir = "gno/testrealms/pa" }
+
+[[module]]
+module = "gno.land/r/test/setup/v0"
+source = { dir = "gno/testrealms/setup" }

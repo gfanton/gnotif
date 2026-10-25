@@ -7,214 +7,244 @@ package gnotif
 
 import (
 	"chain"
-	"strconv"
+	"chain/runtime"
+	"chain/runtime/unsafe"
 	"strings"
 
-	"gno.land/p/nt/avl/v0"
+	"gno.land/p/dev/gnotif/trigger/v0"
+	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/seqid/v0"
+	"gno.land/r/sys/names"
 )
 
-// Trigger is one declared notification rule. Filter holds comma-separated
-// key=value pairs; Title, Body and Link are templates where {key} stands for
-// the value of the event's attribute key.
-type Trigger struct {
-	ID, Target, Event, Filter, Param, Title, Body, Link string
-	Declarer                                            address
-	Verified                                            bool
+// Subpath is the subpath of a realm's gnotif identity: me := cur.Sub(gnotif.Subpath).
+const Subpath = "gnotif"
+
+// Trigger is an alias, so a dapp imports only the registry.
+type Trigger = trigger.Trigger
+
+// Handle changes the triggers of the realm that opened it. Each method also
+// needs that realm's gnotif identity as its caller, so the pointer alone is
+// useless to any other realm.
+type Handle struct {
+	target   string
+	approver string // the namespace owner who signed the Open
 }
 
-const (
-	targetPrefix   = "gno.land/r/"
-	maxTarget      = 256
-	maxName        = 64
-	maxFilterPairs = 8
-	maxBody        = 255
-	maxLink        = 256
-	maxPerTarget   = 64
-)
-
 var (
-	triggers avl.Tree // id → *Trigger
-	byTarget avl.Tree // target → *avl.Tree of id → *Trigger, verified triggers only
+	triggers bptree.BPTree // id → record.encode()
+	byTarget bptree.BPTree // target → []string of its active ids, oldest first
+	handles  bptree.BPTree // target → its live *Handle
 	lastID   seqid.ID
 )
 
-// Declare stores a trigger and returns its id. Only the target realm itself
-// may declare a trigger for it.
-func Declare(cur realm, target, event, filter, param, title, body, link string) string {
-	validate(target, event, filter, param, title, body, link)
-	caller := cur.Previous()
-	verified := caller.IsCode() && caller.PkgPath() == target
-	if !verified {
-		panic("caller is not the target")
+// Open returns the handle that changes the triggers of the realm whose gnotif
+// identity calls it. It panics while the realm holds a handle its namespace
+// owner has not revoked, and unless that owner signed the transaction and
+// sent it straight to the realm.
+func Open(cur realm) *Handle {
+	me := cur.Previous()
+	target := targetOf(0, me)
+	if handles.Has(target) {
+		panic(target + " already holds a handle: its namespace owner can Revoke it")
 	}
-	var own *avl.Tree
-	if v := byTarget.Get(target); v != nil {
-		own = v.(*avl.Tree)
+	mustOwnerEntered(0, me, target)
+	h := &Handle{target: target, approver: unsafe.OriginCaller().String()}
+	handles.Set(target, h)
+	return h
+}
+
+// Set stores t under name and returns its id. A new name gets a new id. On a
+// name in use, t must watch the same event, filter and param: the id stays,
+// so users who turned the trigger on keep it.
+func (h *Handle) Set(cur realm, name string, t Trigger) string {
+	h.mustHold(cur.Previous().PkgPath())
+	if !validName(name, 1, maxName) {
+		panic("invalid name")
 	}
-	if verified && own != nil && own.Size() >= maxPerTarget {
+	validate(t)
+	r := record{Target: h.target, Name: name, T: t}
+	ids := activeOf(h.target)
+	if id, old, ok := find(ids, name); ok {
+		if old.T == t {
+			return id
+		}
+		if old.T.Event != t.Event || old.T.Filter != t.Filter || old.T.Param != t.Param {
+			panic(name + " watches a different event, filter or param: Remove it, then Set it again")
+		}
+		store(id, r, h.approver)
+		return id
+	}
+	if len(ids) >= maxPerTarget {
 		panic("too many triggers for target")
 	}
-	tr := &Trigger{
-		ID:       lastID.Next().String(),
-		Target:   target,
-		Event:    event,
-		Filter:   filter,
-		Param:    param,
-		Title:    title,
-		Body:     body,
-		Link:     link,
-		Declarer: caller.Address(),
-		Verified: verified,
+	id := "v1-" + lastID.Next().String()
+	store(id, r, h.approver)
+	byTarget.Set(h.target, append(ids, id))
+	return id
+}
+
+// Remove removes the trigger under name, and with it every user's choice to
+// receive it.
+func (h *Handle) Remove(cur realm, name string) {
+	h.mustHold(cur.Previous().PkgPath())
+	if !validName(name, 1, maxName) {
+		panic("invalid name")
 	}
-	triggers.Set(tr.ID, tr)
-	if verified {
-		if own == nil {
-			own = avl.NewTree()
-			byTarget.Set(target, own)
+	id, _, ok := find(activeOf(h.target), name)
+	if !ok {
+		panic(name + " is not a trigger of " + h.target)
+	}
+	removeIDs(h.target, id)
+}
+
+// mustHold panics unless h is its realm's live handle and caller is that
+// realm's gnotif identity.
+func (h *Handle) mustHold(caller string) {
+	if handles.Get(h.target) != h {
+		panic("not the live handle of " + h.target)
+	}
+	if caller != h.target+"#"+Subpath {
+		panic("not the gnotif identity of " + h.target + ": " + caller)
+	}
+}
+
+// Drop removes target's listed active triggers, ids separated by commas.
+// Spaces around an id are ignored. Only target's namespace owner may call it,
+// directly, with their own key. A call that lists an id more than once, or one
+// that is not an active trigger of target, removes nothing. Drop leaves the
+// realm's handle live: Revoke stops the realm from setting them again.
+func Drop(cur realm, target, ids string) {
+	mustOwn(cur, target)
+	live := make(map[string]bool)
+	for _, id := range activeOf(target) {
+		live[id] = true
+	}
+	dropped := strings.Split(ids, ",")
+	for i, id := range dropped {
+		id = strings.TrimSpace(id)
+		dropped[i] = id
+		if !live[id] {
+			panic(id + " is not an active trigger of " + target)
 		}
-		own.Set(tr.ID, tr)
+		live[id] = false
 	}
+	removeIDs(target, dropped...)
+}
+
+// Revoke ends target's handle: its methods panic from then on, and target's
+// triggers stay. The realm can Open a new handle. Only target's namespace
+// owner may call it, directly, with their own key.
+func Revoke(cur realm, target string) {
+	mustOwn(cur, target)
+	if _, removed := handles.Remove(target); !removed {
+		panic(target + " holds no handle")
+	}
+}
+
+// Active lists target's active trigger ids, comma-separated, oldest first.
+func Active(target string) string {
+	return strings.Join(activeOf(target), ",")
+}
+
+func activeOf(target string) []string {
+	ids, _ := byTarget.Get(target).([]string)
+	return ids
+}
+
+// ceiling: decodes up to maxPerTarget records per lookup; index target and
+// name to id before raising maxPerTarget.
+func find(ids []string, name string) (string, record, bool) {
+	for _, id := range ids {
+		if r := decodeRecord(triggers.Get(id)); r.Name == name {
+			return id, r, true
+		}
+	}
+	return "", record{}, false
+}
+
+// targetOf returns the realm whose gnotif identity me is, and panics for any
+// other caller.
+func targetOf(_ int, me realm) string {
+	path := me.PkgPath()
+	host, subpath, _ := chain.SplitPkgSubPath(path)
+	if subpath != Subpath || !validTarget(host) {
+		panic("call with this realm's gnotif identity (me := cur.Sub(gnotif.Subpath), then cross(me)); got " + path)
+	}
+	return host
+}
+
+// mustOwnerEntered panics unless target's namespace owner signed the
+// transaction with its own key and called target's realm directly.
+func mustOwnerEntered(_ int, me realm, target string) {
+	if _, _, _, isSession := runtime.GetSessionInfo(); isSession {
+		panic("signed with a session key: sign with the namespace owner's own key")
+	}
+	signer := unsafe.OriginCaller()
+	if ns := namespaceOf(target); !names.IsAuthorizedAddressForNamespace(signer, ns) {
+		panic(signer.String() + " is not authorized for namespace " + ns)
+	}
+	// The Previous of a gnotif identity is the caller of its host realm.
+	entry := me.Previous()
+	if !entry.IsUserCall() || entry.Address() != signer {
+		panic("the dapp was not entered directly by its namespace owner; entered from " + entry.PkgPath())
+	}
+}
+
+// mustOwn panics unless target's namespace owner called straight into the
+// registry with its own key.
+func mustOwn(cur realm, target string) {
+	caller := cur.Previous()
+	if !caller.IsUserCall() {
+		panic("only the namespace owner may do this, in a call signed with its own key; got " + caller.PkgPath())
+	}
+	if _, _, _, isSession := runtime.GetSessionInfo(); isSession {
+		panic("sign with the namespace owner's own key, not a session key")
+	}
+	if ns := namespaceOf(target); !names.IsAuthorizedAddressForNamespace(caller.Address(), ns) {
+		panic(caller.Address().String() + " is not authorized for namespace " + ns)
+	}
+}
+
+// store writes r under id and emits TriggerDeclared.
+func store(id string, r record, approver string) {
+	triggers.Set(id, r.encode())
 	chain.Emit("TriggerDeclared",
-		"id", tr.ID,
-		"target", tr.Target,
-		"event", tr.Event,
-		"filter", tr.Filter,
-		"param", tr.Param,
-		"title", tr.Title,
-		"body", tr.Body,
-		"link", tr.Link,
-		"declarer", tr.Declarer.String(),
-		"verified", strconv.FormatBool(tr.Verified),
+		"id", id,
+		"target", r.Target,
+		"name", r.Name,
+		"event", r.T.Event,
+		"filter", r.T.Filter,
+		"param", r.T.Param,
+		"title", r.T.Title,
+		"body", r.T.Body,
+		"link", r.T.Link,
+		"declarer", chain.PackageAddress(r.Target).String(),
+		"verified", "true",
+		"approver", approver,
 	)
-	return tr.ID
 }
 
-// Remove deletes a trigger. Only its declarer may remove it.
-func Remove(cur realm, id string) {
-	v := triggers.Get(id)
-	if v == nil {
-		panic("unknown trigger")
+// removeIDs removes the listed active ids of target and emits TriggerRemoved
+// for each.
+func removeIDs(target string, ids ...string) {
+	gone := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		gone[id] = true
 	}
-	tr := v.(*Trigger)
-	if tr.Declarer != cur.Previous().Address() {
-		panic("not the declarer")
-	}
-	triggers.Remove(id)
-	if tr.Verified {
-		own := byTarget.Get(tr.Target).(*avl.Tree)
-		own.Remove(id)
-		if own.Size() == 0 {
-			byTarget.Remove(tr.Target)
+	var left []string
+	for _, id := range activeOf(target) {
+		if !gone[id] {
+			left = append(left, id)
 		}
 	}
-	chain.Emit("TriggerRemoved", "id", id)
-}
-
-func validate(target, event, filter, param, title, body, link string) {
-	switch {
-	case !validTarget(target):
-		panic("invalid target")
-	case !validName(event, 1, maxName):
-		panic("invalid event")
-	case !validFilter(filter):
-		panic("invalid filter")
-	case !validName(param, 0, maxName):
-		panic("invalid param")
-	case !sized(title, 1, maxName):
-		panic("invalid title")
-	case !sized(body, 0, maxBody):
-		panic("invalid body")
-	case !validLink(link):
-		panic("invalid link")
+	if len(left) == 0 {
+		byTarget.Remove(target)
+	} else {
+		byTarget.Set(target, left)
 	}
-}
-
-func sized(s string, lo, hi int) bool {
-	return len(s) >= lo && len(s) <= hi
-}
-
-// validTarget accepts a realm path whose segments each match the chain's
-// Re_name, so a target names a path where a realm can exist.
-func validTarget(target string) bool {
-	if !strings.HasPrefix(target, targetPrefix) || len(target) > maxTarget {
-		return false
+	for _, id := range ids {
+		triggers.Remove(id)
+		chain.Emit("TriggerRemoved", "id", id)
 	}
-	rest := target[len(targetPrefix):]
-	start := 0 // index of the current segment's first byte
-	for i := 0; i <= len(rest); i++ {
-		if i == len(rest) || rest[i] == '/' {
-			if i == start || !isLowerAlnum(rest[i-1]) {
-				return false
-			}
-			start = i + 1
-			continue
-		}
-		c := rest[i]
-		switch {
-		case i == start:
-			if !(c >= 'a' && c <= 'z') {
-				return false
-			}
-		case c == '_' || c == '-':
-			if !isLowerAlnum(rest[i-1]) {
-				return false
-			}
-		case !isLowerAlnum(c):
-			return false
-		}
-	}
-	return true
-}
-
-func isLowerAlnum(c byte) bool {
-	return c >= 'a' && c <= 'z' || c >= '0' && c <= '9'
-}
-
-// validName accepts identifier bytes only, so a name cannot carry spaces or
-// symbols that imitate the verified mark in rendered output.
-func validName(s string, lo, hi int) bool {
-	if !sized(s, lo, hi) {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_') {
-			return false
-		}
-	}
-	return true
-}
-
-func validFilter(filter string) bool {
-	if filter == "" {
-		return true
-	}
-	pairs := strings.Split(filter, ",")
-	if len(pairs) > maxFilterPairs {
-		return false
-	}
-	for _, pair := range pairs {
-		key, value, ok := strings.Cut(pair, "=")
-		if !ok || !validName(key, 1, maxName) || !sized(value, 1, maxName) || strings.Contains(value, "=") {
-			return false
-		}
-	}
-	return true
-}
-
-// validLink accepts only a path, so a click always stays on the dapp's origin.
-// "//host" starts with a slash yet resolves to another host. A URL parser
-// drops tab, LF and CR and reads a backslash as a slash, so "/\t/host" and
-// "/\host" would do the same; control bytes and backslashes are refused.
-func validLink(link string) bool {
-	if !sized(link, 1, maxLink) || !strings.HasPrefix(link, "/") || strings.HasPrefix(link, "//") {
-		return false
-	}
-	for i := 0; i < len(link); i++ {
-		if c := link[i]; c < 0x20 || c == 0x7f || c == '\\' {
-			return false
-		}
-	}
-	return true
 }
