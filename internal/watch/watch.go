@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -367,7 +368,8 @@ func (w *Watcher) warnStale(count int, from, to int64) {
 
 // applyRegistry replays an event of registry version onto b. A version may
 // only touch ids it issued: ids restart in every version, and a declaration
-// replaces the trigger of the same id.
+// of a known id replaces only its title, body and link, so its opt-ins keep
+// matching what the user chose.
 func (w *Watcher) applyRegistry(b *windowBatch, e trigger.Event, version int) {
 	foreign := func(id string) bool {
 		if idVersion(id) == version {
@@ -391,6 +393,11 @@ func (w *Watcher) applyRegistry(b *windowBatch, e trigger.Event, version int) {
 		if foreign(t.ID) {
 			return
 		}
+		if old, ok := b.triggers.byID[t.ID]; ok && !sameMatch(old, t) {
+			w.cfg.Log.Error("skip registry event", "height", e.Height, "tx", e.TxHash,
+				"err", fmt.Sprintf("id %s declared again with another target, event, filter or param", t.ID))
+			return
+		}
 		edit := b.triggers.edit()
 		edit.put(t)
 		b.triggers = edit.done()
@@ -408,7 +415,14 @@ func (w *Watcher) applyRegistry(b *windowBatch, e trigger.Event, version int) {
 		edit.delete(id)
 		b.triggers = edit.done()
 		b.stmts = append(b.stmts, store.DeleteTriggerStatement(id))
+	default:
+		w.cfg.Log.Error("skip registry event", "height", e.Height, "tx", e.TxHash,
+			"err", fmt.Sprintf("unknown event type %s: this gnotifd may be older than registry version %d", e.Type, version))
 	}
+}
+
+func sameMatch(a, b trigger.Trigger) bool {
+	return a.Target == b.Target && a.Event == b.Event && a.Param == b.Param && slices.Equal(a.Filter, b.Filter)
 }
 
 // match appends, for every trigger e matches, the read of the subscribers
