@@ -4,7 +4,7 @@ import { canSend, canEnable, listenerMismatch, optinsAtLoad, optinsFor } from ".
 
 const trigger = {
   id: "7",
-  target: "gno.land/r/dev/echo/v0",
+  target: "gno.land/r/dev/echo/v1",
   event: "Echo",
   filter: "",
   param: "to",

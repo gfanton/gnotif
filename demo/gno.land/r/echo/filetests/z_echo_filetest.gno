@@ -7,7 +7,7 @@ import (
 
 	"gno.land/p/nt/testutils/v0"
 
-	"gno.land/r/dev/echo/v0"
+	"gno.land/r/dev/echo/v1"
 )
 
 // Each message names its own caller, whatever the caller writes.
@@ -33,7 +33,7 @@ func main(cur realm) {
 //         "value": "hello"
 //       }
 //     ],
-//     "pkg_path": "gno.land/r/dev/echo/v0"
+//     "pkg_path": "gno.land/r/dev/echo/v1"
 //   },
 //   {
 //     "type": "Echo",
@@ -47,6 +47,6 @@ func main(cur realm) {
 //         "value": "hi, it's bob"
 //       }
 //     ],
-//     "pkg_path": "gno.land/r/dev/echo/v0"
+//     "pkg_path": "gno.land/r/dev/echo/v1"
 //   }
 // ]

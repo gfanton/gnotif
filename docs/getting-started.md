@@ -17,9 +17,9 @@ func Notify(cur realm, to address, msg string) {
 
 The chain marks every event with the path of the realm that emitted it, so no other realm can emit an event in your realm's name.
 
-## 2. Declare the trigger
+## 2. Set the trigger
 
-A trigger tells gnotif which event to watch and what notification to send. Your realm declares it in the gnotif registry, from its `init` function. `init` runs once, when the realm is deployed, so the deploy declares the trigger, and nobody can run `init` again.
+A trigger tells gnotif which event to watch and what notification to send. Your realm sets it in the gnotif registry, from its `init` function. `init` runs once, when the realm is deployed, so the deploy sets the trigger, and nobody can run `init` again.
 
 Here is the whole realm:
 
@@ -29,11 +29,13 @@ package notify
 import (
 	"chain"
 
-	"gno.land/r/nym-gfanton001/gnotif/v0"
+	"gno.land/r/nym-gfanton001/gnotif/v1"
 )
 
 func init(cur realm) {
-	gnotif.Declare(cross(cur), cur.PkgPath(), "Message", "", "to", "New message", "{msg}", "/")
+	me := cur.Sub(gnotif.Subpath)
+	h := gnotif.Open(cross(me))
+	h.Set(cross(me), "message", gnotif.Trigger{Event: "Message", Param: "to", Title: "New message", Body: "{msg}", Link: "/"})
 }
 
 // Notify sends msg to the browsers that opted in with the address to.
@@ -42,16 +44,16 @@ func Notify(cur realm, to address, msg string) {
 }
 ```
 
-`gno.land/r/nym-gfanton001/gnotif/v0` is the registry that gnotif.xyz reads. The `Declare` call says:
+`gno.land/r/nym-gfanton001/gnotif/v1` is the registry that gnotif.xyz reads. The trigger, named `message` in your realm, says:
 
-- watch the `Message` events of this realm, whose path is `cur.PkgPath()`;
+- watch the `Message` events of this realm;
 - a browser opts in with an address, and hears about the events whose `to` attribute is that address;
 - the notification's title is "New message", and its text is the event's `msg`;
 - a click on the notification opens `/` on your dapp's site.
 
-The empty string after `"Message"` is a filter, which this trigger does not use. To notify every browser that opted in, whatever its address, leave the param empty: `""` in place of `"to"`, and opt in with `value: ""`.
+To notify every browser that opted in, whatever its address, leave out `Param`, and opt in with `value: ""`.
 
-`cross(cur)` makes your realm the caller that the registry sees. The registry accepts a trigger only when its caller is the realm the trigger watches.
+`me` is your realm's gnotif identity, the only caller the registry takes your realm's triggers from. `Open` gives your realm the handle that sets its triggers, once, so open it in `init`. This realm keeps no reference to the handle, so its trigger never changes. To change triggers later, keep the handle: [Change your triggers later](triggers.md#change-your-triggers-later).
 
 With this realm, anyone can send a message to any address, and the text is whatever the caller sends.
 
@@ -135,7 +137,7 @@ gnokey maketx addpkg -pkgpath gno.land/r/<you>/notify -pkgdir . \
   -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 mykey
 ```
 
-`-gas-fee` is what the transaction costs, in ugnot: 60000ugnot is 0.06 GNOT. `-gas-wanted` caps the work it may do. The chain also holds a deposit for the realm's storage, about 1 GNOT, and `-max-deposit` caps it at 10 GNOT.
+`-gas-fee` is what the transaction costs, in ugnot: 60000ugnot is 0.06 GNOT. `-gas-wanted` caps the work it may do. The chain also holds a deposit for the storage of the realm and its trigger, about 0.4 GNOT, and `-max-deposit` caps it at 10 GNOT.
 
 onyx checks a new realm before it goes live, which takes a few seconds. Wait until its page opens on gnoweb, at `https://onyx.testnets.gno.land/r/<you>/notify`. A realm that does not compile never goes live, so if the page never opens, compare your file with step 2.
 

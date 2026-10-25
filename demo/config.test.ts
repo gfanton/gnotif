@@ -15,7 +15,7 @@ function build(network: string): { status: number | null; stderr: string } {
 }
 
 test("configFor returns the local and onyx entries and throws on another name", () => {
-  assert.equal(configFor("local").echo, "gno.land/r/dev/echo/v0");
+  assert.equal(configFor("local").echo, "gno.land/r/dev/echo/v1");
   assert.equal(configFor("onyx").chain.id, "onyx-1");
   assert.throws(() => configFor("mainnet"), /unknown network "mainnet"/);
 });

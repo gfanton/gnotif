@@ -1,11 +1,11 @@
 # Deploying the registry
 
-These steps deploy a gnotif registry to onyx (`onyx-1`), for an operator who runs a gnotif server on their own registry. The repository's realms sit under the placeholder namespace `gno.land/r/dev`, and `make deploy-pkgs` writes copies under yours.
+These steps deploy a gnotif registry to onyx (`onyx-1`), for an operator who runs a gnotif server on their own registry. The repository's packages sit under the placeholder namespace `dev`, in `gno.land/r/dev` and `gno.land/p/dev`, and `make deploy-pkgs` writes copies under yours.
 
 ## Before you start
 
-- **A namespace the deploying key owns.** Deploy the registry under the key's address, `gno.land/r/<address>`. The chain refuses a deploy under anyone else's namespace, and the [verified mark](how-it-works.md#what-the-verified-mark-means) relies on that. A registered name can change hands, and GovDAO controls the deploy gate ([Rules for a new registry version](how-it-works.md#rules-for-a-new-registry-version)).
-- **gnokey and a key that holds test GNOT on onyx**, as in [Getting started](getting-started.md#4-try-it-on-onyx). The deploy command names the key `mykey`: use your key's name. Every deploy is public, with the address that signed it, so use a key made for this rather than a personal one.
+- **A namespace the deploying key owns.** Deploy the registry under the key's address, `gno.land/r/<address>`, and its trigger package under `gno.land/p/<address>`. The chain refuses a deploy under anyone else's namespace, and the [verified mark](how-it-works.md#what-the-verified-mark-means) relies on that. A registered name can change hands, and GovDAO controls the deploy gate ([Rules for a new registry version](how-it-works.md#rules-for-a-new-registry-version)).
+- **gnokey and a key that holds test GNOT on onyx**, as in [Getting started](getting-started.md#4-try-it-on-onyx). The deploy commands name the key `mykey`: use your key's name. Every deploy is public, with the address that signed it, so use a key made for this rather than a personal one.
 
 ## 1. Write the deploy copies
 
@@ -13,7 +13,7 @@ These steps deploy a gnotif registry to onyx (`onyx-1`), for an operator who run
 make deploy-pkgs NS=gno.land/r/<namespace>
 ```
 
-This writes `.tools/deploy/gnotif/v0`, the demo's echo realm in `.tools/deploy/echo/v0` and the pingpong example in `.tools/deploy/pingpong/v0`, without their tests. It rewrites every `gno.land/r/dev` in them to your namespace: the module paths and the realms' imports of the registry. The demo's README [deploys echo](../demo/README.md#deploy-it-to-onyx) once the registry is live.
+This writes the trigger package in `.tools/deploy/trigger/v0`, the admins package in `.tools/deploy/admins/v0`, the registry in `.tools/deploy/gnotif/v1`, the demo's echo realm in `.tools/deploy/echo/v1` and the pingpong example in `.tools/deploy/pingpong/v0`, without their tests. It rewrites every `gno.land/r/dev` in them to your namespace, and every `gno.land/p/dev` to the same namespace under `gno.land/p/`: the module paths and the imports of the registry and its packages. The demo's README [deploys echo](../demo/README.md#deploy-it-to-onyx) once the registry is live.
 
 ## 2. Check the copies for personal data
 
@@ -31,34 +31,54 @@ Lint the realms before deploying them:
 make gno-lint
 ```
 
-It lints the repository's realms with gno v1.5.0, the release the [Makefile](../Makefile) pins as `GNO_REF`, and installs it on the first run. The deploy copies differ from the realms only by namespace.
+It lints the repository's realms with gno v1.6.0-rc.1, the release the [Makefile](../Makefile) pins as `GNO_REF`, and installs it on the first run. The deploy copies differ from the realms only by namespace.
 
-To check that onyx still runs v1.5.0, open https://rpc.onyx.testnets.gno.land/status and read `build_version`. When onyx runs another release, move the pin to it and pass the realm tests with it before deploying.
+To check that onyx still runs v1.6.0-rc.1, open https://rpc.onyx.testnets.gno.land/status and read `build_version`. When onyx runs another release, move the pin to it and pass the realm tests with it before deploying.
 
 ## 4. Deploy the registry
 
-Note the indexer's latest height first. gnotifd takes it as `-start-height`, since the registry emits nothing before its deploy:
+The registry imports its trigger package, which holds the `Trigger` struct, so deploy the package first. gnokey asks for your passphrase:
+
+```sh
+gnokey maketx addpkg -pkgpath gno.land/p/<namespace>/gnotif/trigger/v0 -pkgdir .tools/deploy/trigger/v0 \
+  -gas-wanted 10000000 -gas-fee 20000ugnot -max-deposit 10000000ugnot \
+  -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 mykey
+```
+
+onyx checks a new package before it goes live, which takes a few seconds. Wait until the package's page opens on gnoweb, at `https://onyx.testnets.gno.land/p/<namespace>/gnotif/trigger/v0`.
+
+Deploy the admins package, which a dapp imports to let a list of addresses change its triggers ([Triggers](triggers.md#let-admins-change-your-triggers)). It imports the trigger package:
+
+```sh
+gnokey maketx addpkg -pkgpath gno.land/p/<namespace>/gnotif/admins/v0 -pkgdir .tools/deploy/admins/v0 \
+  -gas-wanted 10000000 -gas-fee 20000ugnot -max-deposit 10000000ugnot \
+  -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 mykey
+```
+
+Wait until its page opens, at `https://onyx.testnets.gno.land/p/<namespace>/gnotif/admins/v0`.
+
+Then note the indexer's latest height. gnotifd takes it as `-start-height`, since the registry emits nothing before its deploy:
 
 ```sh
 curl -s -X POST https://indexer.onyx.testnets.gno.land/graphql/query \
   -H 'Content-Type: application/json' -d '{"query":"{ latestBlockHeight }"}'
 ```
 
-Deploy the registry. gnokey asks for your passphrase:
+Deploy the registry:
 
 ```sh
-gnokey maketx addpkg -pkgpath gno.land/r/<namespace>/gnotif/v0 -pkgdir .tools/deploy/gnotif/v0 \
-  -gas-wanted 40000000 -gas-fee 80000ugnot -max-deposit 20000000ugnot \
+gnokey maketx addpkg -pkgpath gno.land/r/<namespace>/gnotif/v1 -pkgdir .tools/deploy/gnotif/v1 \
+  -gas-wanted 60000000 -gas-fee 120000ugnot -max-deposit 20000000ugnot \
   -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 mykey
 ```
 
-The deploy uses about 20 million gas, and the chain holds about 1.9 GNOT as the registry's storage deposit. [Getting started](getting-started.md#4-try-it-on-onyx) explains the flags.
+The package's deploy uses about 4 million gas and holds about 0.12 GNOT as its storage deposit. The registry's uses about 40 million gas and holds about 2.8 GNOT. [Getting started](getting-started.md#4-try-it-on-onyx) explains the flags.
 
-onyx checks a new realm before it goes live, which takes a few seconds. Wait until the registry's page opens on gnoweb, at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0`. It lists no trigger until a realm declares one. A realm that does not compile never goes live. If the page never opens, lint again and check that the key can pay the storage deposit, then deploy again to the same path with the same key. The new deploy replaces the package that never went live.
+Wait until the registry's page opens on gnoweb, at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v1`. It lists no trigger until a realm sets one. A realm that does not compile never goes live. If the page never opens, lint again and check that the key can pay the storage deposit, then deploy again to the same path with the same key. The new deploy replaces the package that never went live.
 
 ## 5. Point gnotifd at the registry
 
-Start gnotifd on a new database, with `-registry gno.land/r/<namespace>/gnotif/v0` and `-start-height` set to the height from step 4 ([Running gnotifd](running-gnotifd.md#the-indexer-and-the-start-height)). Once a realm declares a verified trigger, `GET /v1/triggers?target=<realm path>` lists it.
+Start gnotifd on a new database, with `-registry gno.land/r/<namespace>/gnotif/v1` and `-start-height` set to the height from step 4 ([Running gnotifd](running-gnotifd.md#the-indexer-and-the-start-height)). Once a realm sets a verified trigger, `GET /v1/triggers?target=<realm path>` lists it.
 
 ## 6. Deploy a later version
 

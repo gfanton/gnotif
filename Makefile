@@ -1,16 +1,17 @@
 SHELL := /bin/sh
-GNO_REF := v1.5.0
+GNO_REF := v1.6.0-rc.1
 CACHE := $(CURDIR)/.cache
 GNO_STORE := $(CACHE)/gno-$(GNO_REF)
 GNO := $(GNO_STORE)/gno
 GNO_DEPS := $(GNO_STORE)/deps.stamp
-GNO_MODS := $(wildcard gno/r/*/gnomod.toml demo/gno.land/r/*/gnomod.toml)
+GNO_MODS := $(wildcard gno/r/*/gnomod.toml gno/p/*/*/gnomod.toml demo/gno.land/r/*/gnomod.toml)
 GNOROOT_DIR := $(shell go env GOMODCACHE)/github.com/gnolang/gno@$(GNO_REF)
 GNO_ENV = GNOROOT=$(GNOROOT_DIR) GNOHOME=$(GNO_STORE)/gnohome
 ONYX_RPC := https://rpc.onyx.testnets.gno.land:443
 GNO_TEST_FLAGS ?=
 TOOLS := .tools
 GNO_CHECKOUT ?= https://github.com/gnolang/gno
+GNO_SRC_STAMP := $(TOOLS)/gno-src-$(GNO_REF).stamp
 TX_INDEXER_VERSION := v1.3.0
 NS ?=
 PNPM_STAMP := node_modules/.modules.yaml
@@ -54,13 +55,17 @@ $(TOOLS)/gnowork.toml:
 	mkdir -p $(@D)
 	touch $@
 
-$(TOOLS)/gno-src: | $(TOOLS)/gnowork.toml
-	git clone --depth 1 --branch $(GNO_REF) $(GNO_CHECKOUT) $@
+# A new GNO_REF has no stamp yet: its release replaces the checkout, and
+# gnodev and gnokey rebuild from it.
+$(GNO_SRC_STAMP): | $(TOOLS)/gnowork.toml
+	rm -rf $(TOOLS)/gno-src $(TOOLS)/gno-src-*.stamp
+	git clone --depth 1 --branch $(GNO_REF) $(GNO_CHECKOUT) $(TOOLS)/gno-src
+	touch $@
 
-$(TOOLS)/gnodev: | $(TOOLS)/gno-src $(TOOLS)/gnowork.toml
+$(TOOLS)/gnodev: $(GNO_SRC_STAMP) | $(TOOLS)/gnowork.toml
 	cd $(TOOLS)/gno-src/contribs/gnodev && go build -o $(abspath $@) .
 
-$(TOOLS)/gnokey: | $(TOOLS)/gno-src $(TOOLS)/gnowork.toml
+$(TOOLS)/gnokey: $(GNO_SRC_STAMP) | $(TOOLS)/gnowork.toml
 	cd $(TOOLS)/gno-src && go build -o $(abspath $@) ./gno.land/cmd/gnokey
 
 $(TOOLS)/tx-indexer: | $(TOOLS)/gnowork.toml
@@ -90,13 +95,14 @@ site-serve: site ## Build and serve the website on http://localhost:3001
 deploy-pkgs: ## Copy the realms to .tools/deploy under NS=gno.land/r/<namespace>, without tests
 	test -n "$(NS)" || { echo "deploy-pkgs: set NS=gno.land/r/<namespace>" >&2; exit 1; }
 	rm -rf $(TOOLS)/deploy
-	mkdir -p $(TOOLS)/deploy/gnotif/v0 $(TOOLS)/deploy/echo/v0 $(TOOLS)/deploy/pingpong/v0
-	cp -R gno/r/gnotif/. $(TOOLS)/deploy/gnotif/v0/
-	cp -R demo/gno.land/r/echo/. $(TOOLS)/deploy/echo/v0/
-	cp -R demo/gno.land/r/pingpong/. $(TOOLS)/deploy/pingpong/v0/
+	for d in gno/p/gnotif/trigger gno/p/gnotif/admins gno/r/gnotif demo/gno.land/r/echo demo/gno.land/r/pingpong; do \
+		v=$$(sed -n 's|^module = ".*/\(v[0-9][0-9]*\)"$$|\1|p' "$$d/gnomod.toml"); \
+		test -n "$$v" || { echo "deploy-pkgs: $$d/gnomod.toml names no version" >&2; exit 1; }; \
+		mkdir -p "$(TOOLS)/deploy/$${d##*/}/$$v" && cp -R "$$d/." "$(TOOLS)/deploy/$${d##*/}/$$v/" || exit 1; \
+	done
 	find $(TOOLS)/deploy \( -name '*_test.gno' -o -name filetests \) -prune -exec rm -rf {} +
 	find $(TOOLS)/deploy -type f | while read -r f; do \
-		sed 's|gno.land/r/dev|$(NS)|g' "$$f" > "$$f.tmp" && mv "$$f.tmp" "$$f" || exit 1; \
+		sed -e 's|gno.land/r/dev|$(NS)|g' -e 's|gno.land/p/dev|$(subst gno.land/r/,gno.land/p/,$(NS))|g' "$$f" > "$$f.tmp" && mv "$$f.tmp" "$$f" || exit 1; \
 	done
 	touch $(TOOLS)/deploy/gnowork.toml
 

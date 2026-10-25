@@ -28,7 +28,7 @@ The API has no accounts. A subscription is known by its push endpoint, which onl
 ```json
 [
   {
-    "id": "0000001",
+    "id": "v1-0000001",
     "target": "gno.land/r/dev/pingpong/v0",
     "event": "TurnPlayed",
     "filter": "",
@@ -89,7 +89,7 @@ The subscription stored at `oldEndpoint` takes the new endpoint and keys, and ke
 ```json
 {
   "endpoint": "https://fcm.googleapis.com/fcm/send/...",
-  "optins": [{"trigger": "0000001", "value": "g1..."}]
+  "optins": [{"trigger": "v1-0000001", "value": "g1..."}]
 }
 ```
 

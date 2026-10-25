@@ -164,23 +164,14 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 		return true
 	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed the verified pingpong trigger")
 
-	// The registry refuses a declaration from anyone but the target realm.
-	out, err := s.tryCallPackage("devtest", registryPath, "Declare", pingpongPath, "TurnPlayed", "", "", "Spoof", "spoofed", "/")
+	// The registry opens a handle only for a realm's gnotif identity; a user's
+	// direct call is not one.
+	out, err := s.tryCallPackage("devtest", registryPath, "Open")
 	require.Error(t, err)
-	assert.Contains(t, out, "caller is not the target")
+	assert.Contains(t, out, "call with this realm's gnotif identity")
 
-	key, err := ecdh.P256().GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	auth := make([]byte, 16)
-	rand.Read(auth)
 	endpoint := push.URL + "/push/1"
-	put(t, base+"/v1/subscription", map[string]any{
-		"endpoint": endpoint,
-		"keys": map[string]string{
-			"p256dh": base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()),
-			"auth":   base64.RawURLEncoding.EncodeToString(auth),
-		},
-	})
+	subscribe(t, base, endpoint)
 	put(t, base+"/v1/subscription/optins", map[string]any{
 		"endpoint": endpoint,
 		"optins":   []map[string]string{{"trigger": triggerID, "value": s.addrs["player2"]}},
@@ -261,6 +252,11 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 	conformance.Env = append(os.Environ(), "GNOTIF_SERVER="+base, "GNOTIF_TARGET="+pingpongPath)
 	report, err := conformance.CombinedOutput()
 	require.NoError(t, err, "conformance suite:\n%s", report)
+
+	// gnodev does not enforce namespaces, so the registry lets no key drop.
+	out, err = s.tryCallPackage("devtest", registryPath, "Drop", pingpongPath, triggerID)
+	require.Error(t, err)
+	assert.Contains(t, out, "r/sys/names is not enabled, so no namespace has an owner")
 }
 
 type listedTrigger struct {
@@ -298,17 +294,16 @@ func TestRegistryVersions(t *testing.T) {
 	s := newStack(t)
 	const (
 		pingpongV1 = "gno.land/r/dev/pingpong/v1"
-		registryV1 = "gno.land/r/dev/gnotif/v1"
 		registryV2 = "gno.land/r/dev/gnotif/v2"
+		registryV3 = "gno.land/r/dev/gnotif/v3"
 	)
-	s.addpkg("devtest", filepath.Join(s.root, "gno", "r", "gnotif"), registryV1,
-		"lastID.Next().String()", `"v1-" + lastID.Next().String()`,
-		registryPath, registryV1)
+	s.addpkg("devtest", filepath.Join(s.root, "gno", "r", "gnotif"), registryV2,
+		registryPath, registryV2)
 	s.addpkg("devtest", filepath.Join(s.root, "demo", "gno.land", "r", "pingpong"), pingpongV1,
-		registryPath, registryV1,
+		registryPath, registryV2,
 		pingpongPath, pingpongV1)
-	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "gnotif-v2"), registryV2)
-	s.callPackage("devtest", registryV2, "Spoof", pingpongPath)
+	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "gnotif-v3"), registryV3)
+	s.callPackage("devtest", registryV3, "Spoof", pingpongPath)
 
 	base, rec := startGnotifd(t, s)
 
@@ -316,14 +311,14 @@ func TestRegistryVersions(t *testing.T) {
 		v0, err0 := listTriggers(base, pingpongPath)
 		v1, err1 := listTriggers(base, pingpongV1)
 		return err0 == nil && err1 == nil &&
-			slices.Equal(v0, []listedTrigger{{ID: "0000001", Title: "Your turn"}}) &&
-			len(v1) == 1 && v1[0].ID == "v1-0000001"
+			slices.Equal(v0, []listedTrigger{{ID: "v1-0000001", Title: "Your turn"}}) &&
+			len(v1) == 1 && v1[0].ID == "v2-0000001"
 	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed both pingpong triggers")
 
 	player2 := s.addrs["player2"]
 	for _, c := range []struct{ endpoint, trigger string }{
-		{rec.server.URL + "/push/v0", "0000001"},
 		{rec.server.URL + "/push/v1", "v1-0000001"},
+		{rec.server.URL + "/push/v2", "v2-0000001"},
 	} {
 		key, err := ecdh.P256().GenerateKey(rand.Reader)
 		require.NoError(t, err)
@@ -351,14 +346,117 @@ func TestRegistryVersions(t *testing.T) {
 	require.Eventually(t, func() bool {
 		paths := rec.paths()
 		slices.Sort(paths)
-		return slices.Equal(paths, []string{"/push/v0", "/push/v1"})
+		return slices.Equal(paths, []string{"/push/v1", "/push/v2"})
 	}, 30*time.Second, 100*time.Millisecond, "expected one push per registry, got %v", rec.paths())
 	assert.Never(t, func() bool { return rec.count() > 2 }, 3*time.Second, 100*time.Millisecond)
 
-	// The v2 realm's events carry v0's id, and gnotifd ignored them.
+	// The v3 realm's events carry v1's id, and gnotifd ignored them.
 	v0, err := listTriggers(base, pingpongPath)
 	require.NoError(t, err)
-	assert.Equal(t, []listedTrigger{{ID: "0000001", Title: "Your turn"}}, v0)
+	assert.Equal(t, []listedTrigger{{ID: "v1-0000001", Title: "Your turn"}}, v0)
+}
+
+// A session key that an admin approved for the realm cannot change the
+// realm's triggers through the admins library; the admin's own key can.
+func TestAdminsRefuseSessionKey(t *testing.T) {
+	s := newStack(t)
+	const managedPath = "gno.land/r/dev/managed/v0"
+	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "managed"), managedPath)
+	s.addSession(managedPath)
+
+	out, err := s.trySessionCall(managedPath, "SetTitle", "Phished")
+	require.Error(t, err, "a session-signed SetTitle went through:\n%s", out)
+	assert.Contains(t, out, "sign with your own key, not a session key")
+
+	s.callPackage("devtest", managedPath, "SetTitle", "First")
+}
+
+// The registry refuses a session key where it needs the namespace owner's own:
+// in the call that opens a realm's handle, and in Drop.
+func TestRegistryRefusesSessionKey(t *testing.T) {
+	s := newStack(t)
+	const latePath = "gno.land/r/dev/late/v0"
+	// managed, with its init renamed, opens its handle only when called.
+	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "managed"), latePath,
+		"gno.land/r/dev/managed/v0", latePath,
+		"package managed", "package late",
+		"func init(cur realm)", "func Activate(cur realm)")
+	s.addSession(latePath, registryPath)
+
+	out, err := s.trySessionCall(latePath, "Activate")
+	require.Error(t, err, "a session-signed Open went through:\n%s", out)
+	assert.Contains(t, out, "signed with a session key: sign with the namespace owner's own key")
+
+	out, err = s.trySessionCall(registryPath, "Drop", pingpongPath, "v1-0000001")
+	require.Error(t, err, "a session-signed Drop went through:\n%s", out)
+	assert.Contains(t, out, "sign with the namespace owner's own key, not a session key")
+
+	s.callPackage("devtest", latePath, "Activate")
+}
+
+// A realm whose admins library holds its handle changes its trigger in
+// transactions after its deploy, and the edit keeps the user's opt-in.
+func TestManagedTriggerAcrossTransactions(t *testing.T) {
+	s := newStack(t)
+	const managedPath = "gno.land/r/dev/managed/v0"
+	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "managed"), managedPath)
+	base, rec := startGnotifd(t, s)
+
+	// listed returns the id of the realm's one trigger when its title is title.
+	listed := func(title string) (string, bool) {
+		ts, err := listTriggers(base, managedPath)
+		if err != nil || len(ts) != 1 || ts[0].Title != title {
+			return "", false
+		}
+		return ts[0].ID, true
+	}
+
+	s.callPackage("devtest", managedPath, "SetTitle", "First")
+	var id string
+	require.Eventually(t, func() bool {
+		var ok bool
+		id, ok = listed("First")
+		return ok
+	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed the managed trigger")
+
+	endpoint := rec.server.URL + "/push/1"
+	subscribe(t, base, endpoint)
+	put(t, base+"/v1/subscription/optins", map[string]any{
+		"endpoint": endpoint,
+		"optins":   []map[string]string{{"trigger": id, "value": s.addrs["devtest"]}},
+	})
+
+	s.callPackage("devtest", managedPath, "SetTitle", "Second")
+	require.Eventually(t, func() bool {
+		edited, ok := listed("Second")
+		return ok && edited == id
+	}, 30*time.Second, 250*time.Millisecond, "gnotifd never listed the edited trigger under the same id")
+
+	s.callPackage("devtest", managedPath, "Ping", "hi")
+	require.Eventually(t, func() bool { return rec.count() == 1 }, 30*time.Second, 100*time.Millisecond, "expected 1 push, got %d", rec.count())
+	assert.Never(t, func() bool { return rec.count() > 1 }, 3*time.Second, 100*time.Millisecond)
+
+	s.callPackage("devtest", managedPath, "Remove")
+	require.Eventually(t, func() bool {
+		ts, err := listTriggers(base, managedPath)
+		return err == nil && len(ts) == 0
+	}, 30*time.Second, 250*time.Millisecond, "gnotifd still lists the removed managed trigger")
+}
+
+// subscribe registers a browser subscription at endpoint, with fresh keys.
+func subscribe(t *testing.T, base, endpoint string) {
+	t.Helper()
+	key, err := ecdh.P256().GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	auth := make([]byte, 16)
+	rand.Read(auth)
+	put(t, base+"/v1/subscription", map[string]any{
+		"endpoint": endpoint,
+		"keys": map[string]string{
+			"p256dh": base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()),
+			"auth":   base64.RawURLEncoding.EncodeToString(auth),
+		},
+	})
 }
 
 func put(t *testing.T, url string, body any) {
