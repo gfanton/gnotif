@@ -301,10 +301,10 @@ func TestRegistryVersions(t *testing.T) {
 		registryV1 = "gno.land/r/dev/gnotif/v1"
 		registryV2 = "gno.land/r/dev/gnotif/v2"
 	)
-	s.addpkg("devtest", filepath.Join(s.root, "gno", "r", "gnotif", "v0"), registryV1,
+	s.addpkg("devtest", filepath.Join(s.root, "gno", "r", "gnotif"), registryV1,
 		"lastID.Next().String()", `"v1-" + lastID.Next().String()`,
 		registryPath, registryV1)
-	s.addpkg("devtest", filepath.Join(s.root, "demo", "gno.land", "r", "pingpong", "v0"), pingpongV1,
+	s.addpkg("devtest", filepath.Join(s.root, "demo", "gno.land", "r", "pingpong"), pingpongV1,
 		registryPath, registryV1,
 		pingpongPath, pingpongV1)
 	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "gnotif-v2"), registryV2)
