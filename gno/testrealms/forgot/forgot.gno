@@ -46,16 +46,18 @@ func Many(cur realm, n int) string {
 	return strings.Join(ids, ",")
 }
 
-// Lend has the G1 bug.
+// Lend has the G1 bug: it lends Y, the attacker, its cur and a /p/ box it
+// allocated.
 func Lend(cur realm) { evil.ViaBox(0, cur, box) }
 
-// HandMe hands its gnotif identity to Y (delegation, or the G3 mistake).
+// HandMe is G3: it hands its gnotif identity to Y, on purpose (delegation) or
+// by mistake.
 func HandMe(cur realm) {
 	me := cur.Sub(gnotif.Subpath)
 	evil.TakeMe(0, me)
 }
 
-// RunPlugin has the G2 bug.
+// RunPlugin has the G2 bug: it runs Y's /p/ plugin with its cur.
 func RunPlugin(cur realm) { evil.Plugin().Setup(0, cur) }
 
 // LendThenActivate reaches the G1 bug before its own Open.

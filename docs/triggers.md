@@ -40,6 +40,8 @@ A realm's namespace is the first element of its path after `gno.land/r/`. Its ow
 
 The registry gives a realm its handle in an `Open` call, and only when the namespace owner signed the transaction with its own key and sent it straight to the realm. The owner's deploy does both, so a realm that opens in `init` holds its handle once it goes live. On a chain that does not enforce namespaces, such as a local gnodev, any key's deploy opens it.
 
+`Open`, [`Drop`](#drop-a-trigger) and [`Revoke`](#revoke-a-handle) each ask `r/sys/names` who owns the namespace. Where namespaces are not enforced, such as on a local gnodev, nobody can drop or revoke. While GovDAO pauses `r/sys/names`, nobody can open, drop or revoke, and live handles keep working. A registered name owns its namespace only while it is the user's current name. A rename or a deletion leaves the old namespace with no owner, and the old name cannot be registered again. Drop and revoke what you need under a name before you rename or delete it.
+
 A realm holds one handle at a time: `Open` panics while it holds one. Open in `init`. A realm that opens from a later function lets other code open first: code that runs as the realm during one of its owner's direct calls, through one of the mistakes in [Keep your gnotif identity to your realm](#keep-your-gnotif-identity-to-your-realm), can take the handle, and the realm's own `Open` then panics until the owner [revokes](#revoke-a-handle) it. The handle keeps working for that code after the call: whenever any caller reaches a mistake that lets it run as the realm again, it can change the realm's triggers, until the owner revokes it.
 
 A realm that keeps no reference to its handle, as the `init` in [Set your triggers](#set-your-triggers) does, never changes its triggers.
@@ -143,7 +145,7 @@ func Reopen(cur realm) {
 }
 ```
 
-A realm that opens only in `init` cannot open again. A new handle takes over the names of the realm's triggers.
+A realm that opens only in `init` cannot open again. Other code can open a handle in its place when it can make the realm's `me` during one of its owner's direct calls. A new handle takes over the names of the realm's triggers.
 
 To take back a handle other code opened, or one whose admins misbehave: revoke it, drop the triggers you do not want, then call the realm's reopen function. Make no other call into the realm in between, since only the owner's direct call into the realm lets other code open first.
 
@@ -155,6 +157,7 @@ A private realm redeployed in place runs `init` again, and its `Open` panics whi
 |---|---|
 | `only the namespace owner may do this, in a call signed with its own key; got <path>` | a realm called it |
 | `sign with the namespace owner's own key, not a session key` | a session key signed the transaction |
+| `r/sys/names is not enabled, so no namespace has an owner` | the chain does not enforce namespaces, such as a local gnodev |
 | `invalid target <target>` | the argument is not a realm path |
 | `<addr> is not authorized for namespace <ns>` | the signer does not own the realm's namespace |
 | `<target> holds no handle` | the realm never opened a handle, or it was revoked |
@@ -173,7 +176,7 @@ The event has to carry that attribute, and its value has to name one thing. A re
 
 A trigger keeps its id while only its title, body or link change. It gets a new id when the realm removes it and sets it again, or when a new version of the realm at a new path, such as `…/v2`, sets it. Opt-ins never move from one trigger to another.
 
-So a page never keeps a trigger id. It asks for the ids with `triggers(target)` each time it loads, and sends its opt-ins with the ids it gets. It picks each trigger by its `event` and `param`, never by its place in the list: a trigger set again moves to the end.
+So a page never keeps a trigger id. It asks for the ids with `triggers(target)` each time it loads, and sends its opt-ins with the ids it gets. It picks each trigger by its `event`, `filter` and `param`, never by its place in the list: a trigger set again moves to the end.
 
 ## Pause notifications
 
@@ -230,6 +233,7 @@ A drop cannot be undone. Check each id on the realm's page first, and add `-simu
 |---|---|
 | `only the namespace owner may do this, in a call signed with its own key; got <path>` | a realm called it |
 | `sign with the namespace owner's own key, not a session key` | a session key signed the transaction |
+| `r/sys/names is not enabled, so no namespace has an owner` | the chain does not enforce namespaces, such as a local gnodev |
 | `invalid target <target>` | the first argument is not a realm path |
 | `<addr> is not authorized for namespace <ns>` | the signer does not own the realm's namespace |
 | `<id> is not an active trigger of <target>` | an id is not one of the realm's triggers, or appears twice |
@@ -255,7 +259,7 @@ A dapp sets a trigger's name, the first argument of `Set`, and six fields, capit
 
 | Field | Meaning | Rule |
 |---|---|---|
-| `name` | the trigger's name in its realm, shown on gnoweb; not in the registry's events | 1 to 64 bytes of `A-Z a-z 0-9 _` |
+| `name` | the trigger's name in its realm, shown on gnoweb and sent in `TriggerDeclared`; gnotifd ignores it | 1 to 64 bytes of `A-Z a-z 0-9 _` |
 | `event` | event type to match | 1 to 64 bytes of `A-Z a-z 0-9 _` |
 | `filter` | fixed `key=value` pairs the event must carry, comma-separated; empty for none | up to 8 pairs; each key 1 to 64 bytes of `A-Z a-z 0-9 _`; each value 1 to 64 bytes without `=` or `,` |
 | `param` | attribute whose value a browser opts in with; empty notifies every browser that opted in | empty, or 1 to 64 bytes of `A-Z a-z 0-9 _` |

@@ -25,9 +25,9 @@ var steps = [3]step{
 		DocsHref: "/docs/getting-started/#1-emit-an-event",
 	},
 	{
-		Label: "Declare",
-		Title: "Declare a trigger in the registry",
-		Text:  "The realm opens its handle once, in <code>init</code>, and sets its trigger, so the deploy declares it and the registry marks it verified.",
+		Label: "Set",
+		Title: "Set a trigger in the registry",
+		Text:  "The realm opens its handle once, in <code>init</code>, and sets its trigger, so its deploy puts the trigger in the registry, marked verified.",
 		Lang:  "go",
 		Code: `import "` + registryPath + `"
 

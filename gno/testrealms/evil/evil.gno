@@ -42,7 +42,7 @@ func UseLent(_ int, rlm realm, try string) {
 	}
 }
 
-// TakeMe receives the victim's gnotif identity.
+// TakeMe is G3: it receives the victim's gnotif identity.
 func TakeMe(_ int, me realm) { report("G3", me) }
 
 // Plugin is G2: a /p/ plugin value whose method the victim runs with its cur.
