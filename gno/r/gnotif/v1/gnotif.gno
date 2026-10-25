@@ -63,26 +63,23 @@ func (h *Handle) Set(cur realm, name string, t Trigger) string {
 		panic("invalid name")
 	}
 	validate(t)
+	r := record{Target: h.target, Name: name, T: t}
 	ids := activeOf(h.target)
-	for _, id := range ids {
-		r := decodeRecord(triggers.Get(id))
-		if r.Name != name {
-			continue
-		}
-		if r.T == t {
+	if id, old, ok := find(ids, name); ok {
+		if old.T == t {
 			return id
 		}
-		if r.T.Event != t.Event || r.T.Filter != t.Filter || r.T.Param != t.Param {
+		if old.T.Event != t.Event || old.T.Filter != t.Filter || old.T.Param != t.Param {
 			panic(name + " watches a different event, filter or param: Remove it, then Set it again")
 		}
-		store(id, record{Target: h.target, Name: name, T: t}, h.approver)
+		store(id, r, h.approver)
 		return id
 	}
 	if len(ids) >= maxPerTarget {
 		panic("too many triggers for target")
 	}
 	id := "v1-" + lastID.Next().String()
-	store(id, record{Target: h.target, Name: name, T: t}, h.approver)
+	store(id, r, h.approver)
 	byTarget.Set(h.target, append(ids, id))
 	return id
 }
@@ -91,13 +88,14 @@ func (h *Handle) Set(cur realm, name string, t Trigger) string {
 // receive it.
 func (h *Handle) Remove(cur realm, name string) {
 	h.mustHold(cur.Previous().PkgPath())
-	for _, id := range activeOf(h.target) {
-		if decodeRecord(triggers.Get(id)).Name == name {
-			removeIDs(h.target, id)
-			return
-		}
+	if !validName(name, 1, maxName) {
+		panic("invalid name")
 	}
-	panic(name + " is not a trigger of " + h.target)
+	id, _, ok := find(activeOf(h.target), name)
+	if !ok {
+		panic(name + " is not a trigger of " + h.target)
+	}
+	removeIDs(h.target, id)
 }
 
 // mustHold panics unless h is its realm's live handle and caller is that
@@ -154,6 +152,15 @@ func activeOf(target string) []string {
 	return ids
 }
 
+func find(ids []string, name string) (string, record, bool) {
+	for _, id := range ids {
+		if r := decodeRecord(triggers.Get(id)); r.Name == name {
+			return id, r, true
+		}
+	}
+	return "", record{}, false
+}
+
 // targetOf returns the realm whose gnotif identity me is, and panics for any
 // other caller.
 func targetOf(_ int, me realm) string {
@@ -197,8 +204,7 @@ func mustOwn(cur realm, target string) {
 	}
 }
 
-// store writes r under id and emits TriggerDeclared. gnotifd replaces a
-// trigger whose id it already holds and keeps its opt-ins.
+// store writes r under id and emits TriggerDeclared.
 func store(id string, r record, approver string) {
 	triggers.Set(id, r.encode())
 	chain.Emit("TriggerDeclared",
@@ -223,15 +229,17 @@ func removeIDs(target string, ids ...string) {
 	for _, id := range ids {
 		gone[id] = true
 	}
-	// left stays a nil []string when no id is left: a zero-length non-nil
-	// slice would keep its last array stored.
 	var left []string
 	for _, id := range activeOf(target) {
 		if !gone[id] {
 			left = append(left, id)
 		}
 	}
-	byTarget.Set(target, left)
+	if len(left) == 0 {
+		byTarget.Remove(target)
+	} else {
+		byTarget.Set(target, left)
+	}
 	for _, id := range ids {
 		triggers.Remove(id)
 		chain.Emit("TriggerRemoved", "id", id)
