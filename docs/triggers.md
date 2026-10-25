@@ -40,9 +40,9 @@ A realm's namespace is the first element of its path after `gno.land/r/`. Its ow
 
 The registry gives a realm its handle in an `Open` call, and only when the namespace owner signed the transaction with its own key and sent it straight to the realm. The owner's deploy does both, so a realm that opens in `init` holds its handle once it goes live. On a chain that does not enforce namespaces, such as a local gnodev, any key's deploy opens it.
 
-A realm holds one handle at a time: `Open` panics while it holds one. Open in `init`. A realm that opens from a later function lets other code open first: code that runs as the realm during one of its owner's direct calls, through one of the mistakes in [Keep your gnotif identity to your realm](#keep-your-gnotif-identity-to-your-realm), can take the handle, and the realm's own `Open` then panics until the owner [revokes](#revoke-a-handle) it.
+A realm holds one handle at a time: `Open` panics while it holds one. Open in `init`. A realm that opens from a later function lets other code open first: code that runs as the realm during one of its owner's direct calls, through one of the mistakes in [Keep your gnotif identity to your realm](#keep-your-gnotif-identity-to-your-realm), can take the handle, and the realm's own `Open` then panics until the owner [revokes](#revoke-a-handle) it. The handle keeps working for that code after the call: whenever any caller reaches a mistake that lets it run as the realm again, it can change the realm's triggers, until the owner revokes it.
 
-A realm that keeps no reference to its handle, as above, never changes its triggers.
+A realm that keeps no reference to its handle, as the `init` in [Set your triggers](#set-your-triggers) does, never changes its triggers.
 
 `Open`, `Set` and `Remove` panic, which reverts the transaction, when:
 
@@ -109,11 +109,18 @@ func SetWelcome(cur realm, title string) string {
 	me := cur.Sub(gnotif.Subpath)
 	return triggers.Set(0, me, "welcome", gnotif.Trigger{Event: "Joined", Param: "who", Title: title, Link: "/"})
 }
+
+// Reopen gives the realm a new handle and a new list of admins, after its
+// owner revoked the old handle.
+func Reopen(cur realm, addrs ...address) {
+	me := cur.Sub(gnotif.Subpath)
+	triggers = admins.New(gnotif.Open(cross(me)), addrs...)
+}
 ```
 
-`admins` takes the caller from `me`: whoever called the function that made it, a user or a realm such as a DAO's executor. It panics with `<address> is not an admin` for anyone else, and with `me is not current: mint it in the crossing function the admin called` for a `me` made in an outer call. It accepts a caller who signed with a session key; check `runtime.GetSessionInfo()` in your function to refuse one.
+`admins` takes the caller from `me`: whoever called the function that made it, a user or a realm such as a DAO's executor. It panics with `<address> is not an admin` for anyone else, and with `me is not current: mint it in the crossing function the admin called` for a `me` made in an outer call. It accepts a caller who signed with a session key; check `runtime.GetSessionInfo()` in your function to refuse one. `admins.New` panics with `at least one admin` on an empty list, and with `invalid admin address <address>` on an address no key can have, such as this example's `g1…` placeholder.
 
-The list of admins is fixed. To change it, the namespace owner [revokes](#revoke-a-handle) the handle, and the realm opens again with a new list.
+The list of admins is fixed. To change it, the namespace owner [revokes](#revoke-a-handle) the handle, then calls `Reopen` with the new list, each address as its own `-args`. `Open` refuses every caller but the owner's direct call, so `Reopen` is safe to leave public.
 
 ## Revoke a handle
 
