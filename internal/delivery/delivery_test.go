@@ -881,7 +881,10 @@ func TestBlockedServiceDoesNotDelayOther(t *testing.T) {
 	h.sender.Send(context.Background(), pushes)
 	require.Eventually(t, func() bool { return other.count() == 1 }, 5*time.Second, 5*time.Millisecond,
 		"the push to the free service waits for the blocked one")
-	assert.Equal(t, 1, h.push.count())
+	// The two services' pushes go out concurrently, so the blocked one's
+	// request can reach it after the free one's.
+	require.Eventually(t, func() bool { return h.push.count() == 1 }, 5*time.Second, 5*time.Millisecond,
+		"the blocked service never got its push")
 }
 
 func TestSubscriptionPushesKeepOrder(t *testing.T) {
