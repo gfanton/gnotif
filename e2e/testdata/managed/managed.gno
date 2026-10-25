@@ -21,6 +21,11 @@ func SetTitle(cur realm, title string) string {
 	return triggers.Set(0, cur.Sub(gnotif.Subpath), "ping", gnotif.Trigger{Event: "Ping", Param: "to", Title: title, Body: "{msg}", Link: "/"})
 }
 
+// Remove removes the Ping trigger.
+func Remove(cur realm) {
+	triggers.Remove(0, cur.Sub(gnotif.Subpath), "ping")
+}
+
 // Ping sends msg to the browsers that opted in with the caller's address.
 func Ping(cur realm, msg string) {
 	chain.Emit("Ping", "to", cur.Previous().Address().String(), "msg", msg)

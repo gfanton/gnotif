@@ -102,7 +102,8 @@ func TestValidTarget(t *testing.T) {
 	long := strings.Repeat("a", 300)
 	rejected := []struct{ name, target string }{
 		{"target outside r", "gno.land/p/demo/x"},
-		{"target too long", "gno.land/r/" + long[:246]},
+		// cur.Sub(Subpath) refuses a path over 249 bytes: with "#gnotif" it would pass 256.
+		{"target of 250 bytes", "gno.land/r/" + long[:239]},
 		{"target imitating the verified mark", "gno.land/r/dev/pingpong/v0 · TurnPlayed · param next · ✓ verified · by g1tw6t…"},
 		{"target with space", "gno.land/r/dev/ping pong"},
 		{"target with middle dot", "gno.land/r/dev/ping·pong"},
@@ -131,7 +132,7 @@ func TestValidTarget(t *testing.T) {
 		{"versioned target", chat},
 		{"target in an address namespace", "gno.land/r/g1tw6tyv67zjyf26nskj6g5z9fhtvv4996w50xwf/pingpong"},
 		{"target with dash", "gno.land/r/dev/ping-pong"},
-		{"target of 256 bytes", "gno.land/r/" + strings.Repeat("a", 245)},
+		{"target of 249 bytes", "gno.land/r/" + strings.Repeat("a", 238)},
 		{"target in a full address namespace", "gno.land/r/g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5/gnotif/v0"},
 		{"target with mixed separators between alphanumerics", "gno.land/r/a-b_c/d"},
 		{"target with a single segment", "gno.land/r/user"},

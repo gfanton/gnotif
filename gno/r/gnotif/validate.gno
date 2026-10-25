@@ -4,7 +4,7 @@ import "strings"
 
 const (
 	targetPrefix   = "gno.land/r/"
-	maxTarget      = 256
+	maxTarget      = 249
 	maxName        = 64
 	maxFilterPairs = 8
 	maxBody        = 255

@@ -158,6 +158,36 @@ func (s *stack) tryCallPackage(key, pkgPath, fn string, args ...string) (string,
 	return s.runGnokey("\n", a...)
 }
 
+// addSession adds the key "session" and makes it a session key of devtest
+// that may call the realms at pkgPaths.
+func (s *stack) addSession(pkgPaths ...string) {
+	t := s.t
+	t.Helper()
+	s.gnokey("\n\n", "add", "session", "-insecure-password-stdin", "-home", s.keybase)
+	pub := regexp.MustCompile(`session \(local\) - addr: g1[0-9a-z]+ pub: (gpub1[0-9a-z]+)`).FindStringSubmatch(s.gnokey("", "list", "-home", s.keybase))
+	require.NotNil(t, pub, "gnokey list shows no public key for the session key")
+	a := []string{"maketx", "session", "create", "-pubkey", pub[1]}
+	for _, p := range pkgPaths {
+		a = append(a, "-allow-paths", "vm/exec:"+p)
+	}
+	a = append(a, "-expires-at", "24h", "-spend-limit", "100000000ugnot",
+		"-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
+		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, "devtest")
+	s.gnokey("\n", a...)
+}
+
+// trySessionCall calls fn of pkgPath for devtest, signed with the key that
+// addSession made, and returns gnokey's output and error.
+func (s *stack) trySessionCall(pkgPath, fn string, args ...string) (string, error) {
+	a := []string{"maketx", "call", "-pkgpath", pkgPath, "-func", fn}
+	for _, arg := range args {
+		a = append(a, "-args", arg)
+	}
+	a = append(a, "-master", "devtest", "-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
+		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, "session")
+	return s.runGnokey("\n", a...)
+}
+
 var (
 	heightLine = regexp.MustCompile(`HEIGHT:\s+(\d+)`)
 	hashLine   = regexp.MustCompile(`TX HASH:\s+(\S+)`)

@@ -18,7 +18,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -254,13 +253,10 @@ func TestTurnNotifiesOpponent(t *testing.T) {
 	report, err := conformance.CombinedOutput()
 	require.NoError(t, err, "conformance suite:\n%s", report)
 
-	// devtest owns every namespace on gnodev, which does not enforce them.
-	// The drop comes last: the conformance suite opts into this trigger.
-	s.callPackage("devtest", registryPath, "Drop", pingpongPath, triggerID)
-	require.Eventually(t, func() bool {
-		ids, err := listed()
-		return err == nil && len(ids) == 0
-	}, 30*time.Second, 250*time.Millisecond, "gnotifd still lists the dropped pingpong trigger")
+	// gnodev does not enforce namespaces, so the registry lets no key drop.
+	out, err = s.tryCallPackage("devtest", registryPath, "Drop", pingpongPath, triggerID)
+	require.Error(t, err)
+	assert.Contains(t, out, "r/sys/names is not enabled, so no namespace has an owner")
 }
 
 type listedTrigger struct {
@@ -302,7 +298,6 @@ func TestRegistryVersions(t *testing.T) {
 		registryV3 = "gno.land/r/dev/gnotif/v3"
 	)
 	s.addpkg("devtest", filepath.Join(s.root, "gno", "r", "gnotif"), registryV2,
-		`"v1-"`, `"v2-"`,
 		registryPath, registryV2)
 	s.addpkg("devtest", filepath.Join(s.root, "demo", "gno.land", "r", "pingpong"), pingpongV1,
 		registryPath, registryV2,
@@ -367,22 +362,36 @@ func TestAdminsRefuseSessionKey(t *testing.T) {
 	s := newStack(t)
 	const managedPath = "gno.land/r/dev/managed/v0"
 	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "managed"), managedPath)
+	s.addSession(managedPath)
 
-	s.gnokey("\n\n", "add", "session", "-insecure-password-stdin", "-home", s.keybase)
-	pub := regexp.MustCompile(`session \(local\) - addr: g1[0-9a-z]+ pub: (gpub1[0-9a-z]+)`).FindStringSubmatch(s.gnokey("", "list", "-home", s.keybase))
-	require.NotNil(t, pub, "gnokey list shows no public key for the session key")
-	s.gnokey("\n", "maketx", "session", "create", "-pubkey", pub[1],
-		"-allow-paths", "vm/exec:"+managedPath, "-expires-at", "24h", "-spend-limit", "100000000ugnot",
-		"-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
-		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, "devtest")
-
-	out, err := s.runGnokey("\n", "maketx", "call", "-pkgpath", managedPath, "-func", "SetTitle", "-args", "Phished",
-		"-master", "devtest", "-gas-fee", "1000000ugnot", "-gas-wanted", "50000000", "-broadcast",
-		"-chainid", "dev", "-remote", s.rpc, "-insecure-password-stdin", "-home", s.keybase, "session")
+	out, err := s.trySessionCall(managedPath, "SetTitle", "Phished")
 	require.Error(t, err, "a session-signed SetTitle went through:\n%s", out)
 	assert.Contains(t, out, "sign with your own key, not a session key")
 
 	s.callPackage("devtest", managedPath, "SetTitle", "First")
+}
+
+// The registry refuses a session key where it needs the namespace owner's own:
+// in the call that opens a realm's handle, and in Drop.
+func TestRegistryRefusesSessionKey(t *testing.T) {
+	s := newStack(t)
+	const latePath = "gno.land/r/dev/late/v0"
+	// managed, with its init renamed, opens its handle only when called.
+	s.addpkg("devtest", filepath.Join(s.root, "e2e", "testdata", "managed"), latePath,
+		"gno.land/r/dev/managed/v0", latePath,
+		"package managed", "package late",
+		"func init(cur realm)", "func Activate(cur realm)")
+	s.addSession(latePath, registryPath)
+
+	out, err := s.trySessionCall(latePath, "Activate")
+	require.Error(t, err, "a session-signed Open went through:\n%s", out)
+	assert.Contains(t, out, "signed with a session key: sign with the namespace owner's own key")
+
+	out, err = s.trySessionCall(registryPath, "Drop", pingpongPath, "v1-0000001")
+	require.Error(t, err, "a session-signed Drop went through:\n%s", out)
+	assert.Contains(t, out, "sign with the namespace owner's own key, not a session key")
+
+	s.callPackage("devtest", latePath, "Activate")
 }
 
 // A realm whose admins library holds its handle changes its trigger in
@@ -426,6 +435,12 @@ func TestManagedTriggerAcrossTransactions(t *testing.T) {
 	s.callPackage("devtest", managedPath, "Ping", "hi")
 	require.Eventually(t, func() bool { return rec.count() == 1 }, 30*time.Second, 100*time.Millisecond, "expected 1 push, got %d", rec.count())
 	assert.Never(t, func() bool { return rec.count() > 1 }, 3*time.Second, 100*time.Millisecond)
+
+	s.callPackage("devtest", managedPath, "Remove")
+	require.Eventually(t, func() bool {
+		ts, err := listTriggers(base, managedPath)
+		return err == nil && len(ts) == 0
+	}, 30*time.Second, 250*time.Millisecond, "gnotifd still lists the removed managed trigger")
 }
 
 // subscribe registers a browser subscription at endpoint, with fresh keys.

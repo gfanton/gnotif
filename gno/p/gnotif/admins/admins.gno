@@ -6,6 +6,7 @@ package admins
 
 import (
 	"chain/runtime"
+	"strings"
 
 	"gno.land/p/dev/gnotif/trigger/v0"
 )
@@ -32,7 +33,8 @@ func New(h Handle, addrs ...address) *Admins {
 		if !addr.IsValid() {
 			panic("invalid admin address " + addr.String())
 		}
-		a.admins[addr] = true
+		// A caller's address is lower case; bech32 also allows upper case.
+		a.admins[address(strings.ToLower(string(addr)))] = true
 	}
 	return a
 }

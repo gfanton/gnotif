@@ -38,10 +38,15 @@ var (
 	lastID   seqid.ID
 )
 
+// idPrefix is the last element of the registry's path and a dash, such as
+// "v1-": gnotifd takes an id only from the registry version it names.
+var idPrefix = selfPath[strings.LastIndex(selfPath, "/")+1:] + "-"
+
 // Open returns the handle that changes the triggers of the realm whose gnotif
 // identity calls it. It panics while the realm holds a handle its namespace
-// owner has not revoked, and unless that owner signed the transaction and
-// sent it straight to the realm.
+// owner has not revoked. It also panics outside the owner's deploy of the
+// realm and outside a call the owner signed and sent straight to the realm.
+// r/sys/names says who the owner is.
 func Open(cur realm) *Handle {
 	me := cur.Previous()
 	target := targetOf(0, me)
@@ -78,7 +83,7 @@ func (h *Handle) Set(cur realm, name string, t Trigger) string {
 	if len(ids) >= maxPerTarget {
 		panic("too many triggers for target")
 	}
-	id := "v1-" + lastID.Next().String()
+	id := idPrefix + lastID.Next().String()
 	store(id, r, h.approver)
 	byTarget.Set(h.target, append(ids, id))
 	return id
@@ -111,9 +116,10 @@ func (h *Handle) mustHold(caller string) {
 
 // Drop removes target's listed active triggers, ids separated by commas.
 // Spaces around an id are ignored. Only target's namespace owner may call it,
-// directly, with their own key. A call that lists an id more than once, or one
-// that is not an active trigger of target, removes nothing. Drop leaves the
-// realm's handle live: Revoke stops the realm from setting them again.
+// directly, with their own key. r/sys/names says who the owner is, and while
+// it is not enabled nobody is. A call that lists an id more than once, or one
+// that is not an active trigger of target, removes nothing. Drop leaves the realm's handle live: Revoke stops the realm
+// from setting them again.
 func Drop(cur realm, target, ids string) {
 	mustOwn(cur, target)
 	live := make(map[string]bool)
@@ -134,7 +140,8 @@ func Drop(cur realm, target, ids string) {
 
 // Revoke ends target's handle: its methods panic from then on, and target's
 // triggers stay. The realm can Open a new handle. Only target's namespace
-// owner may call it, directly, with their own key.
+// owner may call it, directly, with their own key. r/sys/names says who the
+// owner is, and while it is not enabled nobody is.
 func Revoke(cur realm, target string) {
 	mustOwn(cur, target)
 	if _, removed := handles.Remove(target); !removed {
@@ -200,6 +207,10 @@ func mustOwn(cur realm, target string) {
 	}
 	if _, _, _, isSession := runtime.GetSessionInfo(); isSession {
 		panic("sign with the namespace owner's own key, not a session key")
+	}
+	// Before Enable, names authorizes every key for every namespace.
+	if !names.IsEnabled() {
+		panic("r/sys/names is not enabled, so no namespace has an owner")
 	}
 	if ns := namespaceOf(target); !names.IsAuthorizedAddressForNamespace(caller.Address(), ns) {
 		panic(caller.Address().String() + " is not authorized for namespace " + ns)
