@@ -12,10 +12,24 @@ import (
 
 var fake = gnotif.Trigger{Event: "Fake", Title: "Claim your prize", Link: "/claim"}
 
-// ViaBox is G1: a lent cur plus a lender-stamped /p/ box.
+var (
+	keep   bool           // report keeps the handle it opens
+	stolen *gnotif.Handle // the handle report kept
+)
+
+// Keep makes report keep the next handle it opens.
+func Keep(cur realm) { keep = true }
+
+// ViaBox is G1: a lent cur plus a lender-stamped /p/ box. With a kept handle
+// it sets a second fake through that handle instead of opening.
 func ViaBox(_ int, rlm realm, b *pbox.Box) {
 	f := b.Do(pmint.MakeMinter).(func(int, realm) realm)
-	report("G1", f(0, rlm))
+	me := f(0, rlm)
+	if stolen != nil {
+		println("kept set", stolen.Set(cross(me), "fake2", gnotif.Trigger{Event: "Fake2", Title: "Wallet locked", Link: "/unlock"}))
+		return
+	}
+	report("G1", me)
 }
 
 // UseLent holds a lent cur and nothing else.
@@ -61,4 +75,7 @@ func UseLeakedAdmins(cur realm) {
 func report(tag string, me realm) {
 	h := gnotif.Open(cross(me))
 	println(tag, "set", h.Set(cross(me), "fake", fake))
+	if keep {
+		stolen = h
+	}
 }
