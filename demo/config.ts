@@ -21,7 +21,7 @@ const configs = {
   },
   onyx: {
     gnotif: { network: "onyx" },
-    echo: "gno.land/r/nym-gfanton001/echo/v0",
+    echo: "gno.land/r/nym-gfanton001/echo/v1",
     chain: { id: "onyx-1", name: "Gno.land onyx testnet", rpc: "https://rpc.onyx.testnets.gno.land:443" },
     gnoweb: "https://onyx.testnets.gno.land",
   },
