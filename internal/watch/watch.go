@@ -99,9 +99,9 @@ func (w *Watcher) Load(ctx context.Context) error {
 	return nil
 }
 
-// TargetTriggers returns the triggers of one realm in id order, at most
-// store.MaxPerTarget, as of the last committed window. The error is always
-// nil.
+// TargetTriggers returns the triggers of one realm by registry version, then
+// id, at most store.MaxPerTarget from each version, as of the last committed
+// window. The error is always nil.
 func (w *Watcher) TargetTriggers(ctx context.Context, target string) ([]trigger.Trigger, error) {
 	return w.triggers.Load().TargetTriggers(ctx, target)
 }

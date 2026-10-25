@@ -60,9 +60,10 @@ browser may not show an SVG in a notification. Safari on macOS ignores
 ### `triggers(target)`
 
 Resolves the verified triggers of the realm at `target`, a realm path
-such as `gno.land/r/<you>/notify`, in id order, or `[]` when the server
-knows none. [Triggers](../docs/triggers.md#fields) describes their
-fields.
+such as `gno.land/r/<you>/notify`, or `[]` when the server knows none.
+They come oldest registry version first and in id order within each,
+at most 64 from each version. [Triggers](../docs/triggers.md#fields)
+describes their fields.
 
 ```js
 const [message] = await gnotif.triggers("gno.land/r/<you>/notify");

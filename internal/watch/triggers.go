@@ -14,7 +14,7 @@ import (
 // goroutines may read one; a change builds the next snapshot with edit.
 type Triggers struct {
 	byID     map[string]trigger.Trigger
-	byTarget map[string][]trigger.Trigger // in id order
+	byTarget map[string][]trigger.Trigger // by registry version, then id
 }
 
 func newTriggers(byID map[string]trigger.Trigger) *Triggers {
@@ -23,7 +23,9 @@ func newTriggers(byID map[string]trigger.Trigger) *Triggers {
 		byTarget[tr.Target] = append(byTarget[tr.Target], tr)
 	}
 	for _, list := range byTarget {
-		slices.SortFunc(list, func(a, b trigger.Trigger) int { return cmp.Compare(a.ID, b.ID) })
+		slices.SortFunc(list, func(a, b trigger.Trigger) int {
+			return cmp.Or(cmp.Compare(idVersion(a.ID), idVersion(b.ID)), cmp.Compare(a.ID, b.ID))
+		})
 	}
 	return &Triggers{byID: byID, byTarget: byTarget}
 }
@@ -38,7 +40,8 @@ func NewTriggers(ts []trigger.Trigger) *Triggers {
 	return newTriggers(byID)
 }
 
-// Matching returns the triggers on target for event, in id order.
+// Matching returns the triggers on target for event, by registry version,
+// then id.
 func (t *Triggers) Matching(target, event string) []trigger.Trigger {
 	var out []trigger.Trigger
 	for _, tr := range t.byTarget[target] {
@@ -49,11 +52,21 @@ func (t *Triggers) Matching(target, event string) []trigger.Trigger {
 	return out
 }
 
-// TargetTriggers returns the triggers of one realm in id order, at most
-// store.MaxPerTarget. The error is always nil.
+// TargetTriggers returns the triggers of one realm by registry version, then
+// id, at most store.MaxPerTarget from each version. The error is always nil.
 func (t *Triggers) TargetTriggers(_ context.Context, target string) ([]trigger.Trigger, error) {
-	list := t.byTarget[target]
-	return slices.Clone(list[:min(len(list), store.MaxPerTarget)]), nil
+	var out []trigger.Trigger
+	version, n := -1, 0
+	for _, tr := range t.byTarget[target] {
+		if v := idVersion(tr.ID); v != version {
+			version, n = v, 0
+		}
+		if n < store.MaxPerTarget {
+			out = append(out, tr)
+			n++
+		}
+	}
+	return out, nil
 }
 
 // TriggersByID returns the triggers among ids, keyed by id. Unknown ids are
