@@ -6,8 +6,7 @@ package admins
 
 import "gno.land/p/dev/gnotif/trigger/v0"
 
-// Registry is the method set of the registry's *Handle. A pure package cannot
-// import a realm, so it reaches the handle through this interface.
+// Registry is the method set of the registry's *Handle.
 type Registry interface {
 	Set(cur realm, name string, t trigger.Trigger) string
 	Remove(cur realm, name string)
@@ -26,6 +25,9 @@ func New(reg Registry, addrs ...address) *Admins {
 	}
 	a := &Admins{reg: reg, admins: make(map[address]bool, len(addrs))}
 	for _, addr := range addrs {
+		if !addr.IsValid() {
+			panic("invalid admin address " + addr.String())
+		}
 		a.admins[addr] = true
 	}
 	return a

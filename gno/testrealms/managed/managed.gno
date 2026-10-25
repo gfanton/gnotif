@@ -24,6 +24,12 @@ func ActivateWithoutAdmins(cur realm) {
 	triggers = admins.New(gnotif.Open(cross(me)))
 }
 
+// ActivateWith opens the dapp's handle and gives it to addrs.
+func ActivateWith(cur realm, addrs ...address) {
+	me := cur.Sub(gnotif.Subpath)
+	triggers = admins.New(gnotif.Open(cross(me)), addrs...)
+}
+
 func SetTrigger(cur realm, name string, t gnotif.Trigger) string {
 	return triggers.Set(0, cur.Sub(gnotif.Subpath), name, t)
 }
