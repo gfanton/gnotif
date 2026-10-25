@@ -1060,6 +1060,41 @@ func TestRedeclaredTriggerKeepsOptins(t *testing.T) {
 	assert.Equal(t, "Your move", h.sent[1].Notification.Title)
 }
 
+// A registry version could emit a declaration that keeps an id but changes
+// what it matches; the opt-ins on that id must keep what the user chose.
+func TestRedeclareCannotChangeMatching(t *testing.T) {
+	for _, c := range []struct{ key, value string }{
+		{"target", "gno.land/r/demo/other"},
+		{"event", "GameEnded"},
+		{"filter", "game=1"},
+		{"param", "player"},
+	} {
+		t.Run(c.key, func(t *testing.T) {
+			h := newHarness(t, 1)
+			h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
+			h.fake.set(func(f *fakeIndexer) { f.latest = 8 })
+			h.fake.add(3, declaredBy(registryV1, "v1-0000001", game))
+			h.tick(t)
+			h.optIn(t, "E", "v1-0000001", "g1bob")
+			before, err := h.store.Triggers(context.Background())
+			require.NoError(t, err)
+
+			changed := declaredBy(registryV1, "v1-0000001", game)
+			i := slices.IndexFunc(changed.attrs, func(p trigger.Pair) bool { return p.Key == c.key })
+			changed.attrs[i].Value = c.value
+			h.fake.add(6, changed)
+			h.fake.add(7, turn("7", "g1bob"))
+			h.tick(t)
+
+			after, err := h.store.Triggers(context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, before, after)
+			assert.Len(t, h.sent, 1)
+			assert.Contains(t, h.log.String(), "v1-0000001 declared again with another target, event, filter or param")
+		})
+	}
+}
+
 func TestUnknownRegistryEventLogged(t *testing.T) {
 	h := newHarness(t, 1)
 	h.setCursor(t, store.Cursor{HeightDone: 0, Bound: 5})
