@@ -19,8 +19,13 @@ func main(cur realm) {
 	println(reg.Render("target/gno.land/r/alice/chat/v0"))
 	println(reg.Render("trigger/v1-0000002"))
 	println(reg.Render("page/2"))
+	println(reg.Render("page/9223372036854775807"))
 	println(reg.Render("page/0"))
+	println(reg.Render("page/-1"))
+	println(reg.Render("page/x"))
 	println(reg.Render("trigger/v1-9999999"))
+	println(reg.Render("target/"))
+	println(reg.Render("nope"))
 }
 
 // Output:
@@ -56,5 +61,13 @@ func main(cur realm) {
 //
 // No triggers on this page.
 //
+// # gnotif triggers
+//
+// No triggers on this page.
+//
+// Not found.
+// Not found.
+// Not found.
+// Not found.
 // Not found.
 // Not found.

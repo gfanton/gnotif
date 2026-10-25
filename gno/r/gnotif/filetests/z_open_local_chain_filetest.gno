@@ -38,8 +38,6 @@ func enableNames(cur realm) {
 	names.Enable(cross(cur))
 }
 
-func as(a address) { testing.SetRealm(testing.NewUserRealm(a)) }
-
 var (
 	_    = chat.Again
 	_    = forgot.Activate
@@ -50,7 +48,6 @@ var (
 	_    = reg.Active
 	_, _ = alice, bob
 	_    = enableNames
-	_    = as
 )
 
 // Names not enforced: anyone's direct call opens, as anyone can deploy.
