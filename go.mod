@@ -26,4 +26,7 @@ require (
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
+	moul.io/gnopm v0.19.0 // indirect
 )
+
+tool moul.io/gnopm
