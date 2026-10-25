@@ -18,13 +18,17 @@ This folder holds the realms and the page:
 
 ## The echo realm
 
-echo has one function to call, `Echo(cur, msg string)`. It emits `Echo{to, msg}`, where `to` is the caller's address. echo declares its trigger from its `init` function, so deploying it declares the trigger with no other call:
+echo has one function to call, `Echo(cur, msg string)`. It emits `Echo{to, msg}`, where `to` is the caller's address. echo sets its trigger from its `init` function, so deploying it sets the trigger with no other call:
 
 ```go
 func init(cur realm) {
-	gnotif.Declare(cross(cur), cur.PkgPath(), "Echo", "", "to", "Echo", "{msg}", "/")
+	me := cur.Sub(gnotif.Subpath)
+	h := gnotif.Open(cross(me))
+	h.Set(cross(me), "echo", gnotif.Trigger{Event: "Echo", Param: "to", Title: "Echo", Body: "{msg}", Link: "/"})
 }
 ```
+
+`me` is echo's gnotif identity. The registry gives echo its handle only through it, and, where namespaces are enforced, only when the namespace owner deploys echo with its own key. echo keeps no reference to the handle, so its trigger never changes.
 
 A browser opts in with an address, and shows each message that address sends to echo, with "Echo" as the title and the message as the body. A click on the notification opens the demo.
 
@@ -53,26 +57,25 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
 
    ```sh
    .tools/gnodev local -C /tmp -no-watch -home $PWD/.tools/keys \
-     $PWD/gno/r/gnotif \
-     $PWD/.tools/gno-src/examples/gno.land/p/nt/avl/v0 \
-     $PWD/.tools/gno-src/examples/gno.land/p/nt/cford32/v0 \
-     $PWD/.tools/gno-src/examples/gno.land/p/nt/seqid/v0 \
-     $PWD/.tools/gno-src/examples/gno.land/p/nt/markdown/sanitize/v0
+     -extra-root $PWD/.tools/gno-src/examples \
+     $PWD/gno/p/gnotif/trigger \
+     $PWD/gno/r/gnotif
    ```
 
-   gnodev loads the registry and the packages it depends on, gives test GNOT to every key in `.tools/keys`, and serves gnoweb on http://localhost:8888.
+   gnodev loads the registry, its trigger package and every example package of gno, gives test GNOT to every key in `.tools/keys`, and serves gnoweb on http://localhost:8888.
 
    - `-C /tmp` runs gnodev outside the repository. Inside it, gnodev would also load echo into the chain's genesis, and gnotifd cannot read genesis.
    - `-no-watch` keeps gnodev from restarting the chain when a file changes.
+   - `-extra-root` loads every example package of gno, the registry's dependencies among them, such as `gno.land/r/sys/names`. Outside the repository, gnodev does not find them otherwise.
 
 4. Deploy echo with your key. Its `init` declares its trigger in this same transaction:
 
    ```sh
-   .tools/gnokey maketx addpkg -pkgpath gno.land/r/dev/echo/v0 -pkgdir demo/gno.land/r/echo \
+   .tools/gnokey maketx addpkg -pkgpath gno.land/r/dev/echo/v1 -pkgdir demo/gno.land/r/echo \
      -gas-fee 1000000ugnot -gas-wanted 50000000 -home .tools/keys me
    ```
 
-   gnokey asks for the passphrase. The events it prints include `TriggerDeclared`, with `verified` set to `true`.
+   gnokey asks for the passphrase. The events it prints include `TriggerDeclared`, from echo's `Set`, with `verified` set to `true`. gnodev does not enforce namespaces, so any key can deploy echo and set its trigger.
 
 5. Start tx-indexer:
 
@@ -95,7 +98,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
    ```sh
    export $(cat .tools/vapid.env)
    go run ./cmd/gnotifd -indexer http://127.0.0.1:8546/graphql/query \
-     -registry gno.land/r/dev/gnotif/v0 -start-height 1 -max-age 1h \
+     -registry gno.land/r/dev/gnotif/v1 -start-height 1 -max-age 1h \
      -stream-max 100 -vapid-subject <contact> -db .tools/gnotif.db
    ```
 
@@ -106,7 +109,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
    Within a few seconds, gnotifd lists echo's trigger, with `"verified":true`:
 
    ```sh
-   curl -s 'http://127.0.0.1:8080/v1/triggers?target=gno.land/r/dev/echo/v0'
+   curl -s 'http://127.0.0.1:8080/v1/triggers?target=gno.land/r/dev/echo/v1'
    ```
 
 7. Build and serve the demo:
@@ -120,7 +123,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
 8. Under "Send yourself a message", the page shows a gnokey command that sends the message in the field, or "Hello, me" when the field is empty. Run it with `.tools/gnokey` in place of `gnokey`, and `-home .tools/keys me` in place of `<your key>`:
 
    ```sh
-   .tools/gnokey maketx call -pkgpath gno.land/r/dev/echo/v0 -func Echo -args 'Hello, me' \
+   .tools/gnokey maketx call -pkgpath gno.land/r/dev/echo/v1 -func Echo -args 'Hello, me' \
      -gas-wanted 10000000 -gas-fee 20000ugnot -chainid dev -remote http://127.0.0.1:26657 -home .tools/keys me
    ```
 
@@ -138,18 +141,18 @@ Then repeat steps 3 to 6 without the block that makes the VAPID keys, and turn n
 
 ## Deploy it to onyx
 
-1. Deploy a registry and start a gnotifd that reads it, as [Deploying the registry](../docs/deploying-realms.md) shows. Its first step, `make deploy-pkgs NS=gno.land/r/<namespace>`, also writes echo's copy to `.tools/deploy/echo/v0`, importing your registry, and its lint step checks echo too.
+1. Deploy a registry and start a gnotifd that reads it, as [Deploying the registry](../docs/deploying-realms.md) shows. Its first step, `make deploy-pkgs NS=gno.land/r/<namespace>`, also writes echo's copy to `.tools/deploy/echo/v1`, importing your registry, and its lint step checks echo too.
 2. Once the registry's page opens on gnoweb, deploy echo with the same key. gnokey asks for your passphrase:
 
    ```sh
-   gnokey maketx addpkg -pkgpath gno.land/r/<namespace>/echo/v0 -pkgdir .tools/deploy/echo/v0 \
+   gnokey maketx addpkg -pkgpath gno.land/r/<namespace>/echo/v1 -pkgdir .tools/deploy/echo/v1 \
      -gas-wanted 40000000 -gas-fee 80000ugnot -max-deposit 20000000ugnot \
      -chainid onyx-1 -remote https://rpc.onyx.testnets.gno.land:443 mykey
    ```
 
    onyx enables echo a few seconds after its deploy, and runs its `init` then, so the trigger is declared with no other call.
-3. Check that the registry lists the trigger as verified, on gnoweb at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v0:target/gno.land/r/<namespace>/echo/v0`.
-4. Point the page at the deploy in the `onyx` entry of `config.ts`: `gnotif` to `{ server: "<your gnotifd's URL>" }`, `echo` to `gno.land/r/<namespace>/echo/v0`, `chain` to onyx's id, name and RPC, and `gnoweb` to onyx's gnoweb.
+3. Check that the registry lists the trigger as verified, on gnoweb at `https://onyx.testnets.gno.land/r/<namespace>/gnotif/v1:target/gno.land/r/<namespace>/echo/v1`.
+4. Point the page at the deploy in the `onyx` entry of `config.ts`: `gnotif` to `{ server: "<your gnotifd's URL>" }`, `echo` to `gno.land/r/<namespace>/echo/v1`, `chain` to onyx's id, name and RPC, and `gnoweb` to onyx's gnoweb.
 5. Build the page with `DEMO_NETWORK=onyx pnpm build`, which builds the package first and then the page, and serve `demo/dist/` at the root of a site. `pnpm test` rebuilds `demo/dist/` with the `local` entry, so run this build again after it.
 
 ## pingpong, a two-player example
@@ -163,11 +166,13 @@ pingpong is a game where the only move is to pass the turn. It shows what echo d
 | `Play(cur, game string)` | the player whose turn it is | `TurnPlayed{game, next, turn}` |
 | `Leave(cur, game string)` | either player | `GameEnded{game, by}` |
 
-Its `init` declares one trigger, on `TurnPlayed`, whose param `next` is the player who plays next:
+Its `init` sets one trigger, `turn`, on `TurnPlayed`, whose param `next` is the player who plays next:
 
 ```go
 func init(cur realm) {
-	gnotif.Declare(cross(cur), cur.PkgPath(), "TurnPlayed", "", "next", "Your turn", "Game {game}, turn {turn}", "/?game={game}")
+	me := cur.Sub(gnotif.Subpath)
+	h := gnotif.Open(cross(me))
+	h.Set(cross(me), "turn", gnotif.Trigger{Event: "TurnPlayed", Param: "next", Title: "Your turn", Body: "Game {game}, turn {turn}", Link: "/?game={game}"})
 }
 ```
 
