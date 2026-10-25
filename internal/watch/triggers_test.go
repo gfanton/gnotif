@@ -56,6 +56,44 @@ func TestTriggersTargetTriggers(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("many%03d", store.MaxPerTarget-1), got[store.MaxPerTarget-1].ID)
 }
 
+// The registry caps a realm at store.MaxPerTarget triggers in each version,
+// so the listing caps each version, not their sum.
+func TestTriggersTargetTriggersPerVersion(t *testing.T) {
+	ctx := context.Background()
+	seq := func(prefix string, n int) []string {
+		ids := make([]string, n)
+		for i := range ids {
+			ids[i] = fmt.Sprintf("%s%07d", prefix, i+1)
+		}
+		return ids
+	}
+	cases := map[string]struct{ ids, want []string }{
+		"a later version past a full first one": {
+			ids:  append(seq("", store.MaxPerTarget), "v1-0000001"),
+			want: append(seq("", store.MaxPerTarget), "v1-0000001"),
+		},
+		"each version capped": {
+			ids:  append(seq("v1-", store.MaxPerTarget+1), "v2-0000001"),
+			want: append(seq("v1-", store.MaxPerTarget), "v2-0000001"),
+		},
+		"versions in number order": {
+			ids:  []string{"v10-0000001", "v2-0000001", "0000001"},
+			want: []string{"0000001", "v2-0000001", "v10-0000001"},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			ts := make([]trigger.Trigger, len(tc.ids))
+			for i, id := range tc.ids {
+				ts[i] = triggerAt(id, "gno.land/r/a", "E")
+			}
+			got, err := NewTriggers(ts).TargetTriggers(ctx, "gno.land/r/a")
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, triggerIDs(got))
+		})
+	}
+}
+
 func TestTriggersTriggersByID(t *testing.T) {
 	ctx := context.Background()
 	s := NewTriggers([]trigger.Trigger{
