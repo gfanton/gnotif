@@ -1,6 +1,10 @@
 # HTTP API
 
-gnotifd serves its API under `/v1/` at its root. A hosted server can put it under a path: the public onyx server answers at `https://gnotif.xyz/onyx/v1/`. Request and response bodies are JSON. Every `/v1/` answer allows any origin, and `OPTIONS` answers a browser's preflight with 204, so a dapp's page calls the API from its own origin. The API uses no cookies or other credentials. The `gnotif` npm package wraps these calls ([the client's README](../js/README.md)).
+A dapp's page talks to gnotifd over this API to subscribe the browser, choose its triggers and receive live notifications. The `gnotif` npm package wraps these calls ([the client's README](../js/README.md)), so a page that uses it never calls them itself.
+
+gnotifd serves the API under `/v1/` at its root, and a hosted server can put it under a path: the public onyx server answers at `https://gnotif.xyz/onyx/v1/`. Request and response bodies are JSON. Every `/v1/` answer allows any origin, and `OPTIONS` answers a browser's preflight with 204, so a page calls the API from its own origin. The API uses no cookies or other credentials.
+
+The routes:
 
 | Method and path | Body | Answer |
 |---|---|---|
@@ -52,9 +56,9 @@ A realm without verified triggers gets `[]`.
 
 ```json
 {
-  "endpoint": "https://fcm.googleapis.com/fcm/send/...",
+  "endpoint": "https://fcm.googleapis.com/fcm/send/<id>",
   "expirationTime": null,
-  "keys": {"p256dh": "...", "auth": "..."}
+  "keys": {"p256dh": "<p256dh>", "auth": "<auth>"}
 }
 ```
 
@@ -68,15 +72,15 @@ The server checks:
 
 Padding with `=` is accepted on both keys.
 
-### Replace a rotated subscription
+## Replace a rotated subscription
 
 A browser may replace its push subscription with a new endpoint. The service worker then sends the new subscription with the old endpoint as `oldEndpoint`:
 
 ```json
 {
-  "endpoint": "https://fcm.googleapis.com/fcm/send/new...",
-  "keys": {"p256dh": "...", "auth": "..."},
-  "oldEndpoint": "https://fcm.googleapis.com/fcm/send/old..."
+  "endpoint": "https://fcm.googleapis.com/fcm/send/<new id>",
+  "keys": {"p256dh": "<p256dh>", "auth": "<auth>"},
+  "oldEndpoint": "https://fcm.googleapis.com/fcm/send/<old id>"
 }
 ```
 
@@ -88,8 +92,8 @@ The subscription stored at `oldEndpoint` takes the new endpoint and keys, and ke
 
 ```json
 {
-  "endpoint": "https://fcm.googleapis.com/fcm/send/...",
-  "optins": [{"trigger": "v1-0000001", "value": "g1..."}]
+  "endpoint": "https://fcm.googleapis.com/fcm/send/<id>",
+  "optins": [{"trigger": "v1-0000001", "value": "<address>"}]
 }
 ```
 
@@ -105,7 +109,7 @@ The server has no route that reads opt-ins back. A page keeps the set it last se
 `DELETE /v1/subscription` removes the subscription with its opt-ins and queued pushes, and answers 204:
 
 ```json
-{"endpoint": "https://fcm.googleapis.com/fcm/send/..."}
+{"endpoint": "https://fcm.googleapis.com/fcm/send/<id>"}
 ```
 
 ## Live notifications
@@ -125,7 +129,7 @@ Each text frame of at most 8,192 bytes gets exactly one reply.
 | The client sends | The server replies |
 |---|---|
 | exactly `{"type":"ping"}` | exactly `{"type":"pong"}` |
-| `{"type": "optins", "optins": [{"trigger": "0000001", "value": "g1..."}]}` | `{"type": "optins"}`, or `{"type": "error", "error": "<message>"}` |
+| `{"type": "optins", "optins": [{"trigger": "0000001", "value": "<address>"}]}` | `{"type": "optins"}`, or `{"type": "error", "error": "<message>"}` |
 | text that is not a JSON object, or whose `type` or `optins` has the wrong type | `{"type": "error", "error": "invalid JSON message"}` |
 | a JSON object with another `type`, or none | `{"type": "error", "error": "unknown message type"}` |
 
@@ -136,10 +140,10 @@ The ping is recognised by its exact text: the same JSON spaced differently is an
 For every match whose trigger and value are in its set, the connection receives:
 
 ```json
-{"type": "notification", "id": "...", "trigger": "0000001", "value": "g1...",
+{"type": "notification", "id": "<id>", "trigger": "0000001", "value": "<address>",
  "title": "Your turn", "body": "Game 0000001, turn 3", "link": "/?game=0000001",
- "height": 181221, "tx": "...", "time": "2026-10-16T21:46:08.5Z",
- "attrs": [{"key": "game", "value": "0000001"}, {"key": "next", "value": "g1..."}, {"key": "turn", "value": "3"}]}
+ "height": 181221, "tx": "<tx hash>", "time": "2026-10-16T21:46:08.5Z",
+ "attrs": [{"key": "game", "value": "0000001"}, {"key": "next", "value": "<address>"}, {"key": "turn", "value": "3"}]}
 ```
 
 `id` identifies the match: a push in the [full form](#push-payload) for the same match carries the same `id`, so a client that hears both can keep one.
@@ -150,9 +154,11 @@ Frames follow chain order. Each is sent once, after gnotifd has processed its bl
 
 ### Limits and closing
 
-- A client frame over 8,192 bytes closes the connection with code 1009, and a binary frame with 1003.
-- A connection more than 256 frames behind is closed with 1013.
-- gnotifd closes every connection with 1001 when it stops.
+gnotifd closes a live connection:
+
+- with code 1009 on a client frame over 8,192 bytes, and with 1003 on a binary frame;
+- with 1013 when the connection falls more than 256 frames behind;
+- with 1001 when gnotifd stops.
 
 A server may close a connection at any time. The client reconnects and sends its set again.
 
@@ -161,7 +167,7 @@ A server may close a connection at any time. The client reconnects and sends its
 A Web Push carries one JSON message in a single encrypted record, so it is at most 3,993 bytes. It has one of two forms:
 
 - The full form is the [notification frame](#notification-frames) without `type`: `id`, `trigger`, `value`, `title`, `body`, `link`, `height`, `tx`, `time` and `attrs`. A push uses it when the JSON fits.
-- The short form is `{"title": "...", "body": "...", "link": "..."}`. A push uses it when the full form does not fit. A link that would overflow the record becomes `/`.
+- The short form is `{"title": "<title>", "body": "<body>", "link": "<link>"}`. A push uses it when the full form does not fit. A link that would overflow the record becomes `/`.
 
 A push gnotifd sends straight after reading its match has the full form when it fits. A push that comes back from the outbox (retried, held past the memory cap, or written when gnotifd stopped) does not hold its match, so it always has the short form.
 

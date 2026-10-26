@@ -1,6 +1,6 @@
 # Triggers
 
-A trigger tells gnotif servers which event of a realm to watch, who hears about it, and what the notification says. Triggers live in the gnotif registry realm, `gno.land/r/nym-gfanton001/gnotif/v1`, the one gnotif.xyz reads.
+A trigger tells gnotif servers which event of a realm to watch, who hears about it, and what the notification says. Triggers live in the gnotif registry realm, `gno.land/r/nym-gfanton001/gnotif/v1`, the one gnotif.xyz reads, and each realm sets its own.
 
 ## Set your triggers
 
@@ -22,7 +22,7 @@ func init(cur realm) {
 }
 ```
 
-`me` is the realm's gnotif identity, and `h` is the handle the registry gives the realm, once. [Managing triggers](managing-triggers.md) covers both, and how a realm changes its triggers after its deploy. [Use cases](use-cases.md) shows triggers for common notifications.
+`me` is the realm's [gnotif identity](registry.md#the-gnotif-identity), and `h` is the handle the registry gives the realm, once. [Managing triggers](managing-triggers.md) shows how a realm changes its triggers after its deploy, and [Use cases](use-cases.md) shows triggers for common notifications.
 
 ## Fields
 
@@ -62,16 +62,13 @@ An event matches a trigger when:
 
 When `param` is empty, every matching event notifies every browser that opted in to the trigger.
 
+- The chain marks every event with the path of the realm that emitted it, so no other realm can emit an event in your realm's name.
 - gnotif reads only the events of successful transactions.
 - When an attribute key repeats in one event, gnotif uses its first value.
 
-## At most 64 triggers per realm
-
-A realm holds at most 64 triggers in each registry version. `Set` on a new name past that panics with `too many triggers for target`.
-
 ## One trigger for every user or group
 
-A realm holds at most 64 triggers, so a trigger does not name one user, group or game. One trigger with a `param` covers them all: the event names the user or group in that attribute, and each browser opts in with the value it follows, such as its own address or a group's id.
+A realm holds at most 64 triggers in each registry version, and `Set` on a new name past that panics with `too many triggers for target`. So a trigger does not name one user, group or game. One trigger with a `param` covers them all: the event names the user or group in that attribute, and each browser opts in with the value it follows, such as its own address or a group's id.
 
 The event has to carry that attribute, and its value has to name one thing. A reply event without its thread's author cannot notify that author, and a thread number that starts again on every board matches that number on every board.
 

@@ -1,6 +1,8 @@
 # Use cases
 
-Each use case here is one kind of notification: the event a realm emits, the trigger that watches it, and the opt-ins a page sends. A realm sets its triggers from `init`, as in [Getting started](getting-started.md), which also shows how to deploy a realm and try it.
+A use case is one kind of notification: the event a realm emits, the trigger that watches it, and the opt-ins a page sends. Each realm sets its triggers from `init`, as in [Getting started](getting-started.md), which also shows how to deploy a realm and try it.
+
+Pick the one closest to your dapp:
 
 | To notify | The trigger |
 |---|---|
@@ -114,7 +116,7 @@ h.Set(cross(me), "won", gnotif.Trigger{
 
 `Outbid` names the bidder who lost the lead in `was`, and `Won` names the winner in `winner`. Each event names only an address that placed a bid, so no caller can notify an address that never took part ([Who an event can notify](triggers.md#who-an-event-can-notify)).
 
-A page opts in to both with the same address. It picks each trigger by its event, never by its place in the list, since a trigger that is set again moves to the end of it:
+A page opts in to both with the same address, and picks each trigger by its event ([A trigger's id can change](triggers.md#a-triggers-id-can-change)):
 
 ```js
 const triggers = await gnotif.triggers("gno.land/r/<you>/auction");
@@ -139,11 +141,6 @@ await gnotif.connect();
 await redrawFromChain();
 ```
 
-- The page registers its handlers, sets its opt-ins and connects before it reads the chain, so a move that lands during the read is not lost.
-- A notification is a hint, so the handler reads the chain again rather than trusting the notification's fields. `redrawFromChain` is your page's own code.
-- `connect()` sends the opt-ins, address included, to the server, so call it when the person asks for live updates.
-- After a drop, the connection comes back by itself and fires `reconnect`. Nothing sent in between is replayed, so the page reads the chain again then.
-- Without `push: false`, the same opt-in is also pushed once `enable()` has run, and the handler hears each notification once, however it arrives.
-- gnotif.xyz serves live updates. A gnotifd of your own serves them once you set `-stream-max` ([Running gnotifd](running-gnotifd.md#flags)).
+The page reads the board from the chain, in `redrawFromChain`, on every notification and after every reconnect. It registers its handlers, sets its opt-ins and connects before its first read, so a move that lands during that read is not lost. Without `push: false`, the same opt-in is also pushed once `enable()` has run, and the handler hears each notification once, however it arrives.
 
-[Notifications on the page](../js/README.md#notifications-on-the-page) lists what the handler receives and how the connection fails.
+gnotif.xyz serves live updates, and a gnotifd of your own serves them once you set `-stream-max` ([Running gnotifd](running-gnotifd.md#flags)). [Notifications on the page](../js/README.md#notifications-on-the-page) lists what the handler receives and how the connection fails.

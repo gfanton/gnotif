@@ -3,6 +3,7 @@ package main
 import (
 	"html"
 	"image/png"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -86,6 +87,8 @@ func TestBuildDocs(t *testing.T) {
 	assert.Contains(t, redirect, `<a href="/docs/getting-started/">`)
 	assert.Contains(t, readOut(t, out, "docs/getting-started/index.html"), `rel="next" href="/docs/use-cases/"`, "the use cases follow the getting started")
 	assert.Contains(t, readOut(t, out, "docs/triggers/index.html"), `rel="next" href="/docs/managing-triggers/"`, "the advanced pages start where the basics end")
+	assert.Contains(t, readOut(t, out, "docs/managing-triggers/index.html"), `rel="next" href="/docs/registry/"`, "the registry's reference follows the tasks that use it")
+	assert.Equal(t, "protocols", pages[len(pages)-1].Slug, "the contracts for building a part of gnotif come last")
 
 	assert.NotEmpty(t, readOut(t, out, "style.css"))
 	highlightCSS := readOut(t, out, "highlight.css")
@@ -324,6 +327,31 @@ func TestBuildDocsDiagram(t *testing.T) {
 	out := buildSite(t)
 	html := readOut(t, out, "docs/how-it-works/index.html")
 	assert.Contains(t, html, `<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg"`, "How it works opens on its diagram, drawn inline")
+}
+
+func TestBuildDocsLinksFromRealms(t *testing.T) {
+	out := buildSite(t)
+	link := regexp.MustCompile(`https://gnotif\.xyz/docs/([a-z-]+)/#([a-z0-9-]+)`)
+	found := 0
+	for _, dir := range []string{"gno", "demo"} {
+		err := filepath.WalkDir(filepath.Join(repoRoot, dir), func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || filepath.Ext(path) != ".gno" {
+				return err
+			}
+			src, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, m := range link.FindAllStringSubmatch(string(src), -1) {
+				found++
+				page := readOut(t, out, "docs/"+m[1]+"/index.html")
+				assert.Contains(t, page, `id="`+m[2]+`"`, "%s links %s, and a deployed realm's source never changes", path, m[0])
+			}
+			return nil
+		})
+		require.NoError(t, err)
+	}
+	require.Positive(t, found, "the registry links the rules for its next version")
 }
 
 func TestBuildDocsSidebarSections(t *testing.T) {

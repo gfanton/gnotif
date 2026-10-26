@@ -29,11 +29,13 @@ var sections = []section{
 	}},
 	{Title: "Advanced", Pages: []Page{
 		{Title: "Managing triggers", Source: "docs/managing-triggers.md", Slug: "managing-triggers"},
+		{Title: "Registry reference", Source: "docs/registry.md", Slug: "registry"},
 		{Title: "Browser client", Source: "js/README.md", Slug: "browser-client"},
 		{Title: "How gnotif works", Source: "docs/how-it-works.md", Slug: "how-it-works"},
 		{Title: "HTTP API", Source: "docs/http-api.md", Slug: "http-api"},
 		{Title: "Running gnotifd", Source: "docs/running-gnotifd.md", Slug: "running-gnotifd"},
 		{Title: "Deploying the registry", Source: "docs/deploying-realms.md", Slug: "deploying-realms"},
+		{Title: "Protocols", Source: "docs/protocols.md", Slug: "protocols"},
 	}},
 }
 

@@ -1,6 +1,8 @@
 # Running gnotifd
 
-gnotifd is one binary that keeps its state in one SQLite file, or in a [remote store](#remote-store). It needs a tx-indexer for the chain, the package path of the gnotif registry, and a VAPID key pair to sign its pushes. It serves only the HTTP API under `/v1/` at its root ([HTTP API](http-api.md)); to serve it under a path, such as `/onyx/`, strip that path in front of gnotifd. Dapps serve their own pages.
+gnotifd is the gnotif server, the program behind gnotif.xyz: one binary that keeps its state in one SQLite file. It needs a tx-indexer for the chain, the package path of the gnotif registry, and a VAPID key pair to sign its pushes.
+
+gnotifd serves only the [HTTP API](http-api.md), under `/v1/` at its root; to serve it under a path, such as `/onyx/`, strip that path in front of gnotifd. Dapps serve their own pages.
 
 ## Install
 
@@ -37,9 +39,12 @@ Load them into the terminal you start gnotifd from:
 export $(cat vapid.env)
 ```
 
-Keep the pair for the life of the server, keep the private key secret, and keep `vapid.env` outside any source checkout. A push service accepts a push only when it is signed with the key its subscription was made with, so a new pair stops every push until each page calls `enable()` again.
+> [!WARNING]
+> A new key pair stops every push until each page calls `enable()` again, since a push service accepts only pushes signed with the key the subscription was made with. Keep the pair for the life of the server, keep the private key secret, and keep `vapid.env` outside any source checkout.
 
 ## Start gnotifd
+
+Start gnotifd on onyx's public indexer, following the registry from its v0:
 
 ```sh
 gnotifd -indexer https://indexer.onyx.testnets.gno.land/graphql/query \
@@ -55,6 +60,8 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 
 ## Flags
 
+gnotifd takes these flags:
+
 | Flag | Default | Meaning |
 |---|---|---|
 | `-indexer` | required | tx-indexer GraphQL URL |
@@ -62,13 +69,13 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 | `-vapid-subject` | required | email address or https URL where push services can reach the operator |
 | `-start-height` | none | height to read from on the first start, at or before the registry's deploy |
 | `-listen` | `127.0.0.1:8080` | HTTP listen address |
-| `-db` | `gnotif.db` | SQLite database file, or the `http://` or `https://` URL of a [remote store](#remote-store) |
+| `-db` | `gnotif.db` | SQLite database file, or the `http://` or `https://` URL of a [remote store](protocols.md#remote-store) |
 | `-poll` | `5s` | indexer poll interval; must be positive |
 | `-max-age` | `10m` | oldest event that still sends a notification; must not be negative |
 | `-push-hosts` | the four hosts in [the allowlist](#the-push-service-allowlist) | comma-separated push service hosts |
 | `-stream-max` | `0` | most live connections held at once; `0` turns live connections off |
-| `-hub-listen` | none | address of the [external-hub](#attach-an-external-hub) listener |
-| `-publish` | none | URL receiving each window's matches for an [external hub](#attach-an-external-hub) |
+| `-hub-listen` | none | address of the [external hub](protocols.md#external-hub) listener |
+| `-publish` | none | URL receiving each window's matches for an [external hub](protocols.md#external-hub) |
 
 `gnotifd -h` prints the flags with their defaults. Durations take Go's syntax, such as `30s`, `10m` or `1h`. The VAPID keys come only from `GNOTIF_VAPID_PUBLIC_KEY` and `GNOTIF_VAPID_PRIVATE_KEY`, the publish token only from `GNOTIF_PUBLISH_TOKEN`, and every other setting only from flags.
 
@@ -78,13 +85,15 @@ Dapp pages call gnotifd from their own origins, and a page served over https can
 
 `-registry` is the path the registry is deployed at. It ends in `/v<N>`, with no leading zero, such as `gno.land/r/nym-gfanton001/gnotif/v0`. gnotifd builds its triggers from that version's events and from every later version under the same prefix, never from an earlier one. A server set to v0 follows v0 and v1. To stop following an older version, start a new database at the later version.
 
-`-start-height` matters only while the database is empty: the first start reads the chain from that height, and gnotifd refuses to start without it. Later starts resume where the database stopped and ignore the flag. Use a height at or before the deploy of the configured version. Registry v0 was deployed on onyx at height 256563, so the examples use 256562. [Deploying the registry](deploying-realms.md#4-deploy-the-registry) notes the indexer's height right before the deploy for this. A height far below the deploy only costs time ([How gnotif works](how-it-works.md#how-gnotifd-reads-the-chain)).
+`-start-height` matters only while the database is empty: the first start reads the chain from that height, and gnotifd refuses to start without it. Later starts resume where the database stopped and ignore the flag.
+
+Use a height at or before the deploy of the configured version. Registry v0 was deployed on onyx at height 256563, so the examples use 256562. [Deploying the registry](deploying-realms.md#4-deploy-the-registry) notes the indexer's height right before the deploy for this. A height far below the deploy only costs time ([How gnotif works](how-it-works.md#how-gnotifd-reads-the-chain)).
 
 While it catches up, gnotifd skips realm events older than `-max-age`, so a restart after downtime sends no burst of stale notifications. It always applies the registry's events. Against a chain that makes blocks only on transactions, such as a local gnodev, raise `-max-age`, to `1h` for instance: the first block after a quiet spell can carry an old time.
 
 When the indexer reports a height below what gnotifd already stored, gnotifd logs `indexer behind stored bound` on every poll until the indexer catches up, and waits for it. That happens when the indexer re-syncs from scratch, or when several indexers answer behind one URL.
 
-gnotifd skips a transaction it cannot process whole, and logs `skip oversized transaction` as an error, with its height, index and hash. That happens when the indexer's answer for the transaction is too large to read, or, with a [remote store](#remote-store), when committing it takes more than 1,000 statements, about one per event that matches a trigger. Its events are lost, and every other transaction is read. When the lost events declared or removed a trigger, gnotifd's triggers no longer match the registry's.
+gnotifd skips a transaction it cannot process whole, and logs `skip oversized transaction` as an error, with its height, index and hash. That happens when the indexer's answer for the transaction is too large to read, or, with a [remote store](protocols.md#remote-store), when committing it takes more than 1,000 statements, about one per event that matches a trigger. Its events are lost, and every other transaction is read. When the lost events declared or removed a trigger, gnotifd's triggers no longer match the registry's.
 
 ## The push service allowlist
 
@@ -111,37 +120,9 @@ The subscriptions and opt-ins exist only in the database. To start a new databas
 
 gnotifd also refuses a database made by a newer release, with `database was made by a newer gnotifd`. Run the release that made it instead, since a new database drops every subscription. A refused database is left untouched.
 
-## Remote store
+## Remote store and external hub
 
-`-db` takes the `http://` or `https://` URL of a remote store in place of a file. The protocol below is the whole contract: any server that speaks it works.
-
-**Request.** gnotifd sends `POST` to the URL, with a JSON array of statements:
-
-```json
-[{"sql": "SELECT version FROM gnotifd_schema WHERE id = 1", "args": []},
- {"sql": "DELETE FROM subscriptions WHERE endpoint = ?", "args": ["https://..."]}]
-```
-
-`sql` is one SQLite statement, with `?` marks for its `args`. An argument is `null`, a string or a number. gnotifd never sends more than 1,000 statements in one request, so a server need not accept more.
-
-**Answer.** `200` with a JSON array holding one `{"rows": [...], "changes": N}` per statement, in order. `rows` holds one object per row, keyed by column name, and `changes` counts the rows the statement inserted, updated or deleted, and is 0 for a `SELECT` or a schema change. A value is `null`, a string or a number; gnotifd reads a number without a fraction or exponent as an integer.
-
-**Atomic.** The statements of one request run in order as one transaction: all take effect, or none. The server enforces foreign keys, because gnotifd's tables delete their dependent rows with `ON DELETE CASCADE`.
-
-**Errors.** `400` answers a body that is not a JSON array of statements. `500` with `{"error": "<message>"}` answers a failing statement, and the request has no effect. Any other status fails the call, and so does no answer within 40 seconds.
-
-**Access.** The endpoint runs every statement it receives, and gnotifd sends it no credentials. Anyone who can reach it can read, change or drop the subscriptions, keys and opt-ins. Make it reachable only by gnotifd, on a private address or behind network-level access control, and keep its URL private.
-
-**Schema version.** A SQLite file holds the schema version in `PRAGMA user_version`. A remote store holds it in the `gnotifd_schema` table, with one row `id = 1`. gnotifd refuses a store that holds one of its tables but no version, with `database was made by an older gnotifd`. Tables gnotifd does not create do not count.
-
-## Attach an external hub
-
-gnotifd holds live connections itself once `-stream-max` allows them; at its default of 0 it refuses them all. A deployment can instead hold them in an external hub, a separate service, and leave `-stream-max` at 0. gnotifd still builds every frame a client receives, so clients see no difference. Two flags connect the hub, and gnotifd refuses one without the other:
-
-- `-hub-listen <addr>` opens a second listener with one route, `POST /message`. The hub posts each text frame a client sends, at most 8,192 bytes, and receives `{"reply": "<frame>", "keys": ["<key>", "..."]}`. It sends `reply` to the client as is. `keys` is present when the frame replaced the connection's set, and lists that set. Keep this listener off the public network.
-- `-publish <url>` posts each processed window's matches to the hub as `[{"key": "<key>", "frame": "<frame>"}]`, in chain order, and the hub sends each `frame` to the connections whose keys include `key`. With `GNOTIF_PUBLISH_TOKEN` set, each request carries `Authorization: Bearer <token>`. A request that fails or takes over 5 seconds is logged and dropped, and so is a batch that arrives while 64 wait.
-
-The hub answers the transport itself, with the texts of the [HTTP API](http-api.md#live-notifications): the exact pong to the exact ping, the closes for an oversized or a binary frame, and the 503 answer past its own cap. From a checkout, `GNOTIF_SERVER=https://<server> GNOTIF_TARGET=<realm path> make conformance` checks a server's live endpoint, with a hub or without, opting into a verified trigger of that realm.
+Two services can run beside gnotifd. A remote store holds its database, at the URL `-db` names in place of a file. An external hub holds its live connections, attached with `-hub-listen` and `-publish`. [Protocols](protocols.md#remote-store) gives the contract each one speaks. Keep the store and gnotifd's `-hub-listen` listener off the public network: anyone who reaches the store can read, change or drop every subscription.
 
 ## Run the container image
 
@@ -149,6 +130,11 @@ Build the image from a checkout:
 
 ```sh
 docker build -t gnotifd .
+```
+
+Print its flags to check it:
+
+```sh
 docker run --rm gnotifd -h
 ```
 
@@ -167,6 +153,8 @@ docker run -d --name gnotifd -p 127.0.0.1:8080:8080 -v gnotif-data:/data --env-f
 `--env-file` reads the `vapid.env` that `gnotifd keygen` wrote.
 
 ## What version 0 leaves to the operator
+
+gnotifd version 0 has no health endpoint, no abuse limits and no metrics. Cover each yourself:
 
 - **Health:** there is no health endpoint. `GET /v1/vapid` answers while the HTTP server runs, but says nothing about the watch loop: watch the log for `watch tick failed`.
 - **Abuse limits:** gnotifd has no caps per IP and no send budget per declarer. Anyone can register subscriptions and opt-ins, and a subscription stays until its page deletes it or a push to it comes back expired. `-stream-max` caps live connections in total, not per client. Rate-limit `/v1/` at the reverse proxy.

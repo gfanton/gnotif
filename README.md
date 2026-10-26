@@ -8,7 +8,24 @@ The page calls gnotifd only to subscribe and to choose its triggers. The notific
 
 ## Add notifications to a dapp
 
-Your realm declares a trigger and your page opts the browser in. [Getting started](docs/getting-started.md) shows both and tries them on onyx.
+Your realm sets a trigger in the registry, from its `init`. This one notifies the address in each `Message` event's `to`:
+
+```gno
+h.Set(cross(me), "message", gnotif.Trigger{
+	Event: "Message", Param: "to",
+	Title: "New message", Body: "{msg}", Link: "/",
+})
+```
+
+Your page opts the browser in with that address:
+
+```js
+const [message] = await gnotif.triggers("gno.land/r/<you>/notify");
+await gnotif.enable();
+await gnotif.setOptins([{ trigger: message.id, value: address }]);
+```
+
+[Getting started](docs/getting-started.md) builds the whole realm and page, and tries them on onyx.
 
 ## Run gnotifd
 
@@ -16,15 +33,19 @@ gnotif.xyz is a public gnotifd that any dapp can use. To run your own, follow [R
 
 ## Documentation
 
+Each page also reads on the site, at [gnotif.xyz/docs](https://gnotif.xyz/docs/getting-started/).
+
 - [Getting started](docs/getting-started.md): add notifications to a dapp, tried on onyx.
 - [Use cases](docs/use-cases.md): triggers for one player, a board's readers or everyone, and a page that updates live.
 - [Triggers](docs/triggers.md): the fields, templates and matching rules, the limit per realm, and who an event can notify.
-- [Managing triggers](docs/managing-triggers.md): the handle a realm sets its triggers with, admins, and how the namespace owner revokes and drops.
-- [How it works](docs/how-it-works.md): the verified mark, how gnotifd reads the chain, delivery outcomes and the rules for gnotif servers.
+- [Managing triggers](docs/managing-triggers.md): change a realm's triggers after its deploy, let admins change them, pause, revoke and drop.
+- [Registry reference](docs/registry.md): the registry's functions, ids, namespace owners and panics.
+- [How it works](docs/how-it-works.md): the path of a notification, the verified mark, how gnotifd reads the chain, delivery outcomes and the rules for a new registry version.
 - [Browser client](js/README.md): the `gnotif` npm package and its service worker.
 - [HTTP API](docs/http-api.md): the `/v1` endpoints and their errors.
 - [Running gnotifd](docs/running-gnotifd.md): flags, VAPID keys, the push service allowlist, the indexer, backups and the container image.
-- [Deploying the registry](docs/deploying-realms.md): deploy your own registry on onyx, and the rules for a later version.
+- [Deploying the registry](docs/deploying-realms.md): deploy your own registry on onyx.
+- [Protocols](docs/protocols.md): the registry's events, the rules for gnotif servers, and the remote store and hub contracts.
 - [The demo](demo/README.md): echo, live at [demo.gnotif.xyz](https://demo.gnotif.xyz), sends you your own message as a notification. Run it on a local chain or deploy it to onyx. pingpong, a two-player example, sits beside it.
 
 ## Develop
