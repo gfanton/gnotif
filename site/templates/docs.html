@@ -3,18 +3,24 @@
 {{define "content"}}
 <div class="docs">
   <nav class="sidebar" aria-label="Documentation">
-    <ul class="sidebar-list">
-      {{range .Pages}}<li><a{{if eq . $.Page}} aria-current="page"{{end}} href="{{.URL}}">{{.Title}}</a></li>
-      {{end}}
-    </ul>
-    <details class="sidebar-menu">
-      <summary>Documentation</summary>
-      <ul>
-        {{range .Pages}}<li><a{{if eq . $.Page}} aria-current="page"{{end}} href="{{.URL}}">{{.Title}}</a></li>
+    <div class="sidebar-list">
+      {{range $i, $s := .Sections}}<p class="sidebar-title" id="sidebar-{{$i}}">{{$s.Title}}</p>
+      <ul aria-labelledby="sidebar-{{$i}}">
+        {{range $s.Pages}}<li><a{{if eq . $.Page}} aria-current="page"{{end}} href="{{.URL}}">{{.Title}}</a></li>
         {{end}}
       </ul>
+      {{end}}
+    </div>
+    <details class="sidebar-menu">
+      <summary>Documentation</summary>
+      {{range $i, $s := .Sections}}<p class="sidebar-title" id="menu-{{$i}}">{{$s.Title}}</p>
+      <ul aria-labelledby="menu-{{$i}}">
+        {{range $s.Pages}}<li><a{{if eq . $.Page}} aria-current="page"{{end}} href="{{.URL}}">{{.Title}}</a></li>
+        {{end}}
+      </ul>
+      {{end}}
     </details>
-    <p class="sidebar-foot">v0 · onyx-1<br><a href="{{.Site.EditURL}}{{.Page.Source}}">Edit on GitHub</a></p>
+    <p class="sidebar-foot">{{.Site.RegistryVersion}} · onyx-1<br><a href="{{.Site.EditURL}}{{.Page.Source}}">Edit on GitHub</a></p>
   </nav>
   <article class="content">
     {{if .Rendered.Headings}}

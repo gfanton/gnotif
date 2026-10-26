@@ -104,6 +104,95 @@ func TestRenderPageGnoFence(t *testing.T) {
 	assert.Contains(t, body, `<span class="kd">func</span>`, "Gno is highlighted with Go's lexer")
 }
 
+func TestRenderPageAlert(t *testing.T) {
+	for name, tc := range map[string]struct {
+		src, class, title, text string
+	}{
+		"note":                  {"> [!NOTE]\n> Read the chain again.\n", "callout callout-note", "Note", "<p>Read the chain again.</p>"},
+		"warning":               {"> [!WARNING]\n> Anyone can call it.\n", "callout callout-warning", "Warning", "<p>Anyone can call it.</p>"},
+		"marker in a paragraph": {"> [!TIP]\n>\n> Allow notifications.\n", "callout callout-tip", "Tip", "<p>Allow notifications.</p>"},
+		"lowercase marker":      {"> [!note]\n> Read the chain again.\n", "callout callout-note", "Note", "<p>Read the chain again.</p>"},
+		"lazy line":             {"> [!NOTE]\nlazy text\n", "callout callout-note", "Note", "<p>lazy text</p>"},
+		"markup after marker":   {"> [!NOTE]\n> **Bold** x\n", "callout callout-note", "Note", "<p><strong>Bold</strong> x</p>"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := renderSource(t, "# X\n\n"+tc.src)
+			assert.Contains(t, body, `<blockquote class="`+tc.class+`" role="note">`)
+			assert.Contains(t, body, `<p class="callout-title">`+tc.title+`</p>`)
+			assert.Contains(t, body, tc.text, "the marker line leaves the text")
+			assert.NotContains(t, body, "[!")
+		})
+	}
+}
+
+func TestRenderPagePlainQuote(t *testing.T) {
+	for name, src := range map[string]string{
+		"quote":                       "> A plain quote.\n",
+		"unknown marker":              "> [!FOO]\n> Text.\n",
+		"marker and text on one line": "> [!NOTE] Text.\n",
+		"marker alone":                "> [!NOTE]\n",
+		"in a list item":              "- > [!TIP]\n  > Text.\n",
+		"in a quote":                  "> > [!NOTE]\n> > Text.\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := renderSource(t, "# X\n\n"+src)
+			assert.Contains(t, body, "<blockquote>\n", "GitHub renders this as a quote, so the site does too")
+			assert.NotContains(t, body, "callout")
+		})
+	}
+}
+
+// A phone shows a table row as a block that names each cell by its column.
+func TestRenderPageTableLabels(t *testing.T) {
+	body := renderSource(t, "# X\n\n| Flag | Default | Meaning |\n|---|---|---|\n| `-poll` | `5s` | how often |\n| `-db` |\n| a | b | c | d |\n")
+	assert.Contains(t, body, `<td data-label="Flag"><code>-poll</code></td>`)
+	assert.Contains(t, body, `<td data-label="Default"><code>5s</code></td>`)
+	assert.Contains(t, body, `<td data-label="Meaning">how often</td>`)
+	assert.Contains(t, body, `<td data-label="Flag"><code>-db</code></td>`, "a short row is labelled too")
+	assert.Contains(t, body, `<td data-label="Meaning">c</td>`)
+	assert.NotContains(t, body, ">d<", "a row longer than the header loses its extra cells")
+	assert.Contains(t, body, `<th>Default</th>`, "a header cell carries no label")
+}
+
+// The site draws a diagram inline, so it takes the page's fonts and colors;
+// GitHub shows the same file as an image.
+func TestRenderPageDiagram(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "docs"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "docs", "x.md"), []byte("# X\n\n![The path](x.svg)\n\nSee ![it](x.svg) here.\n\n![remote](https://example.com/x.svg)\n\n- ![listed](x.svg)\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "docs", "x.svg"), []byte(`<svg role="img"><title>The path</title></svg>`+"\n"), 0o644))
+
+	r, err := renderPage(root, Page{Title: "X", Source: "docs/x.md", Slug: "x"})
+	require.NoError(t, err)
+	body := string(r.Body)
+	assert.Contains(t, body, `<figure class="diagram"><svg role="img"><title>The path</title></svg>`+"\n</figure>")
+	assert.NotContains(t, body, "<p><figure")
+	assert.Contains(t, body, `<img src="x.svg" alt="it">`, "an image inside a sentence stays an image")
+	assert.Contains(t, body, `<img src="https://example.com/x.svg" alt="remote">`, "a remote image stays an image")
+	assert.Contains(t, body, `<img src="x.svg" alt="listed">`, "an image in a list stays an image")
+	assert.Equal(t, 1, strings.Count(body, "<svg"))
+}
+
+func TestRenderPageDiagramMissing(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "docs"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "docs", "x.md"), []byte("# X\n\n![The path](gone.svg)\n"), 0o644))
+
+	_, err := renderPage(root, Page{Title: "X", Source: "docs/x.md", Slug: "x"})
+	require.ErrorContains(t, err, "gone.svg")
+}
+
+// renderSource renders src as the one page of a scratch repository.
+func renderSource(t *testing.T, src string) string {
+	t.Helper()
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "docs"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "docs", "x.md"), []byte(src), 0o644))
+	r, err := renderPage(root, Page{Title: "X", Source: "docs/x.md", Slug: "x"})
+	require.NoError(t, err)
+	return string(r.Body)
+}
+
 func TestRenderPageNoH1(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "docs"), 0o755))

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"html/template"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/alecthomas/chroma/v2"
@@ -16,7 +18,9 @@ import (
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
+	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 )
@@ -43,6 +47,9 @@ func renderPage(root string, p Page) (Rendered, error) {
 	}
 	md := newMarkdown(p.Source)
 	doc := md.Parser().Parse(text.NewReader(src))
+	if err := inlineDiagrams(doc, root, p.Source); err != nil {
+		return Rendered{}, fmt.Errorf("render %s: %w", p.Source, err)
+	}
 
 	// IDs come from the rendered heading text, as GitHub derives them.
 	ids := newGithubIDs()
@@ -81,10 +88,143 @@ func newMarkdown(source string) goldmark.Markdown {
 				highlighting.WithWrapperRenderer(wrapCodeBlock),
 			),
 		),
+		goldmark.WithRendererOptions(
+			renderer.WithNodeRenderers(util.Prioritized(diagramRenderer{}, 100)),
+		),
 		goldmark.WithParserOptions(
-			parser.WithASTTransformers(util.Prioritized(&linkRewriter{source: source, pages: pages}, 100)),
+			parser.WithASTTransformers(
+				util.Prioritized(&linkRewriter{source: source, pages: pages}, 100),
+				util.Prioritized(alertRewriter{}, 100),
+				util.Prioritized(cellLabeler{}, 100),
+			),
 		),
 	)
+}
+
+// alertMarker matches the line that opens a GitHub alert, such as [!NOTE] or
+// [!note], alone on the first line of a blockquote.
+var alertMarker = regexp.MustCompile(`(?i)^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$`)
+
+// alertRewriter renders a GitHub alert as a callout titled by its kind, so a
+// page reads the same on the site as on GitHub. Any other blockquote stays a
+// quote.
+type alertRewriter struct{}
+
+func (alertRewriter) Transform(doc *ast.Document, reader text.Reader, _ parser.Context) {
+	// GitHub renders an alert only at the top level of a document, never in a
+	// list item or another quote.
+	for n := doc.FirstChild(); n != nil; n = n.NextSibling() {
+		if quote, ok := n.(*ast.Blockquote); ok {
+			toCallout(quote, reader.Source())
+		}
+	}
+}
+
+// toCallout turns quote into a callout when its first line is an alert
+// marker and some text follows it.
+func toCallout(quote *ast.Blockquote, src []byte) {
+	p, ok := quote.FirstChild().(*ast.Paragraph)
+	if !ok {
+		return
+	}
+	marker := p.Lines().At(0)
+	m := alertMarker.FindSubmatch(marker.Value(src))
+	if m == nil || (p.Lines().Len() == 1 && p.NextSibling() == nil) {
+		return
+	}
+	for c := p.FirstChild(); c != nil; {
+		t, ok := c.(*ast.Text)
+		if !ok || t.Segment.Start >= marker.Stop {
+			break
+		}
+		next := c.NextSibling()
+		p.RemoveChild(p, c)
+		c = next
+	}
+	if p.ChildCount() == 0 {
+		quote.RemoveChild(quote, p)
+	}
+	kind := strings.ToLower(string(m[1]))
+	title := ast.NewParagraph()
+	title.SetAttributeString("class", []byte("callout-title"))
+	title.AppendChild(title, ast.NewString([]byte(strings.ToUpper(kind[:1])+kind[1:])))
+	quote.InsertBefore(quote, quote.FirstChild(), title)
+	quote.SetAttributeString("class", []byte("callout callout-"+kind))
+	quote.SetAttributeString("role", []byte("note"))
+}
+
+// cellLabeler names each body cell of a table after its column, so a narrow
+// screen can show a row as a block of named cells.
+type cellLabeler struct{}
+
+func (cellLabeler) Transform(doc *ast.Document, reader text.Reader, _ parser.Context) {
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		table, ok := n.(*east.Table)
+		if !ok || !entering {
+			return ast.WalkContinue, nil
+		}
+		header := table.FirstChild()
+		var labels [][]byte
+		for c := header.FirstChild(); c != nil; c = c.NextSibling() {
+			labels = append(labels, []byte(nodeText(c, reader.Source())))
+		}
+		// goldmark pads or cuts every row to the header's width.
+		for row := header.NextSibling(); row != nil; row = row.NextSibling() {
+			for i, c := 0, row.FirstChild(); c != nil; i, c = i+1, c.NextSibling() {
+				c.SetAttributeString("data-label", labels[i])
+			}
+		}
+		return ast.WalkSkipChildren, nil
+	})
+}
+
+// diagram is an SVG drawn into the page itself, so it takes the page's fonts
+// and colors.
+type diagram struct {
+	ast.BaseBlock
+	svg []byte
+}
+
+var kindDiagram = ast.NewNodeKind("Diagram")
+
+func (d *diagram) Kind() ast.NodeKind { return kindDiagram }
+
+func (d *diagram) Dump(src []byte, level int) { ast.DumpHelper(d, src, level, nil, nil) }
+
+// inlineDiagrams replaces each top-level paragraph that holds nothing but an
+// image of a repository SVG with that SVG. A file it cannot read fails the page.
+func inlineDiagrams(doc ast.Node, root, source string) error {
+	for n := doc.FirstChild(); n != nil; n = n.NextSibling() {
+		img, ok := n.FirstChild().(*ast.Image)
+		if !ok || n.Kind() != ast.KindParagraph || n.ChildCount() != 1 {
+			continue
+		}
+		dest := string(img.Destination)
+		if !strings.HasSuffix(dest, ".svg") || strings.Contains(dest, "://") {
+			continue
+		}
+		svg, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path.Join(path.Dir(source), dest))))
+		if err != nil {
+			return fmt.Errorf("diagram: %w", err)
+		}
+		d := &diagram{svg: svg}
+		doc.ReplaceChild(doc, n, d)
+		n = d
+	}
+	return nil
+}
+
+type diagramRenderer struct{}
+
+func (diagramRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(kindDiagram, func(w util.BufWriter, _ []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if entering {
+			_, _ = w.WriteString(`<figure class="diagram">`)
+			_, _ = w.Write(n.(*diagram).svg)
+			_, _ = w.WriteString("</figure>\n")
+		}
+		return ast.WalkSkipChildren, nil
+	})
 }
 
 // gnoLexer highlights Gno, whose syntax is Go's, with chroma's Go lexer.

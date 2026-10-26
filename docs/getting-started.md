@@ -1,8 +1,13 @@
 # Getting started
 
-This guide adds browser notifications to a gno.land dapp in four steps. Your realm emits an event. A trigger in the gnotif registry says who that event notifies. Your page opts the browser in with the `gnotif` npm package. Then you try it on the onyx testnet, where the public onyx server at `https://gnotif.xyz/onyx` sends the notifications.
+This guide adds browser notifications to a gno.land dapp in four steps. Your realm emits an event. A trigger in the gnotif registry says who that event notifies. Your page opts the browser in with the `gnotif` npm package. Then you try it on the onyx testnet, where the public server at gnotif.xyz sends the notifications.
 
-The example is a small realm with one function, `Notify`, that sends a message to an address. For a complete dapp, see the demo at https://demo.gnotif.xyz.
+You need:
+
+- a page served over https or from `localhost`, in a browser with Web Push, such as Chrome;
+- for step 4, gnokey, the gno.land command-line tool, and a key that holds test GNOT on onyx. [Interacting with Gno.land using gnokey](https://docs.gno.land/users/interact-with-gnokey/) covers installing gnokey, making a key and getting test GNOT from the faucet.
+
+The example is a small realm with one function, `Notify`, that sends a message to an address. The demo at https://demo.gnotif.xyz is a complete dapp.
 
 ## 1. Emit an event
 
@@ -19,9 +24,7 @@ The chain marks every event with the path of the realm that emitted it, so no ot
 
 ## 2. Set the trigger
 
-A trigger tells gnotif which event to watch and what notification to send. Your realm sets it in the gnotif registry, from its `init` function. `init` runs once, when the realm is deployed, so the deploy sets the trigger, and nobody can run `init` again.
-
-Here is the whole realm:
+A trigger tells gnotif which event to watch and what notification to send. Your realm sets it in the gnotif registry from its `init` function, which runs once, when the realm is deployed. Here is the whole realm:
 
 ```gno
 package notify
@@ -35,7 +38,10 @@ import (
 func init(cur realm) {
 	me := cur.Sub(gnotif.Subpath)
 	h := gnotif.Open(cross(me))
-	h.Set(cross(me), "message", gnotif.Trigger{Event: "Message", Param: "to", Title: "New message", Body: "{msg}", Link: "/"})
+	h.Set(cross(me), "message", gnotif.Trigger{
+		Event: "Message", Param: "to",
+		Title: "New message", Body: "{msg}", Link: "/",
+	})
 }
 
 // Notify sends msg to the browsers that opted in with the address to.
@@ -46,18 +52,15 @@ func Notify(cur realm, to address, msg string) {
 
 `gno.land/r/nym-gfanton001/gnotif/v1` is the registry that gnotif.xyz reads. The trigger, named `message` in your realm, says:
 
-- watch the `Message` events of this realm;
-- a browser opts in with an address, and hears about the events whose `to` attribute is that address;
-- the notification's title is "New message", and its text is the event's `msg`;
-- a click on the notification opens `/` on your dapp's site.
+- `Event`: watch the `Message` events of this realm;
+- `Param`: a browser opts in with an address, and hears about the events whose `to` attribute is that address;
+- `Title` and `Body`: the notification's title is "New message", and its text is the event's `msg`;
+- `Link`: a click on the notification opens `/` on your dapp's site.
 
-To notify every browser that opted in, whatever its address, leave out `Param`, and opt in with `value: ""`.
+The first two lines of `init` open your realm's handle in the registry. `me` is your realm's gnotif identity, the only caller the registry takes your realm's triggers from, and `Open` gives your realm the handle that sets them, once. This realm keeps no reference to the handle, so its trigger never changes. [Managing triggers](managing-triggers.md#change-your-triggers-later) shows how to keep it.
 
-`me` is your realm's gnotif identity, the only caller the registry takes your realm's triggers from. `Open` gives your realm the handle that sets its triggers, once, so open it in `init`. This realm keeps no reference to the handle, so its trigger never changes. To change triggers later, keep the handle: [Change your triggers later](triggers.md#change-your-triggers-later).
-
-With this realm, anyone can send a message to any address, and the text is whatever the caller sends.
-
-[Triggers](triggers.md) covers every field, the templates and how events match.
+> [!WARNING]
+> With this realm, anyone can send a message to any address, and the text is whatever the caller sends. A dapp names an address in a watched event only once that address has acted, such as joining a game ([Who an event can notify](triggers.md#who-an-event-can-notify)).
 
 ## 3. Add the client to your page
 
@@ -91,34 +94,20 @@ button.addEventListener("click", async () => {
 });
 ```
 
-- `network: "onyx"` picks the public onyx server. It is the default, and `server` points the client at your own gnotifd instead ([the client's README](../js/README.md)).
+- `network: "onyx"` picks the public onyx server. It is the default.
 - `gno.land/r/<you>/notify` is your realm's path, where `<you>` is the address you deploy it with.
-- `triggers()` asks gnotif.xyz for your realm's triggers. This realm has one, the trigger from step 2. Ask on every page load, because a trigger's id can change ([Triggers](triggers.md#a-triggers-id-can-change)).
+- `triggers()` asks gnotif.xyz for your realm's triggers: here, the one from step 2. Ask on every page load, because a trigger's id can change ([Triggers](triggers.md#a-triggers-id-can-change)).
 - `enable()` asks the browser for permission to show notifications, so call it from a click. `button` is a button on your page.
-- `optins` is the set this browser opts in to, and `setOptins()` sends it. `address` is the address of the person using the page, such as the one their wallet shows.
+- `setOptins()` opts this browser in. `address` is the address of the person using the page, such as the one their wallet shows.
 
-[The client's README](../js/README.md) documents each method, its errors and the `icon` option.
+> [!TIP]
+> An open page can also receive each notification as it happens, with no permission prompt: [Update an open page live](use-cases.md#update-an-open-page-live).
 
-### Live updates on the page
-
-An open page can also receive each notification as it happens, with no permission prompt and no service worker. One handler gets both the live ones and the pushes the service worker passes to the page, once each. Register it, set the opt-ins, connect, and only then read the state from the chain:
-
-```js
-gnotif.on("notification", (n) => refreshFromChain());
-await gnotif.setOptins(optins);
-await gnotif.connect();
-await refreshFromChain();
-```
-
-- `on("notification")` receives the notification's title, body and link, with the event's attributes, the block it is in, and a `source` of `"live"` or `"push"`. A notification is a hint, so the handler reads the chain again. `refreshFromChain` is your page's own code.
-- `setOptins()` replaces the whole set, so pass the same `optins` from the click handler and here. An item without `push` is pushed and heard live. To keep an item on the page only, set `push: false` on it, as in `{ trigger: message.id, value: address, push: false }`: the OS shows nothing for it.
-- `connect()` sends the set to the server, address included, so call it when the person asks for live updates. `disconnect()` closes the live connection only; pushes still reach the handler until the function `on()` returns removes it.
-- After a drop the connection comes back by itself, firing `reconnecting` and then `reconnect`. Nothing sent in between is replayed, so read the page's state from the chain again on `reconnect`.
-- gnotif.xyz serves live updates. A gnotifd of your own serves them once you set `-stream-max` ([Running gnotifd](running-gnotifd.md#flags)).
+[The client's README](../js/README.md) documents each method, its errors, the `icon` option and the `server` option, which points the client at your own gnotifd.
 
 ## 4. Try it on onyx
 
-This step needs gnokey, the gno.land command-line tool, and a key that holds test GNOT on onyx. If you don't have them yet, [Interacting with Gno.land using gnokey](https://docs.gno.land/users/interact-with-gnokey/) covers installing gnokey, making a key and getting test GNOT from the faucet. The commands below name the key `mykey`: use your key's name.
+The commands below name the key `mykey`: use your key's name.
 
 Make a folder named `notify`. Save the realm from step 2 in it as `notify.gno`, and add a file named `gnomod.toml`:
 
@@ -141,9 +130,10 @@ gnokey maketx addpkg -pkgpath gno.land/r/<you>/notify -pkgdir . \
 
 onyx checks a new realm before it goes live, which takes a few seconds. Wait until its page opens on gnoweb, at `https://onyx.testnets.gno.land/r/<you>/notify`. A realm that does not compile never goes live, so if the page never opens, compare your file with step 2.
 
-Serve your page over https or from `localhost`, and use a browser with Web Push, such as Chrome. On macOS, also allow notifications for the browser in System Settings.
-
 Open your page, with your own address as `address`. If the page throws "gnotif.xyz has not read this realm's trigger yet", gnotif.xyz has not read your deploy yet: reload the page a few seconds later. Click the button, and allow notifications when the browser asks.
+
+> [!TIP]
+> On macOS, also allow notifications for the browser in System Settings.
 
 Send yourself a message:
 
@@ -156,4 +146,9 @@ gnokey maketx call -pkgpath gno.land/r/<you>/notify -func Notify \
 
 A few seconds later, the browser shows "New message" with "Hello from onyx", even if your page is closed. A click on it opens your site at `/`.
 
-To run your own gnotif server, see [Running gnotifd](running-gnotifd.md).
+## Next steps
+
+- [Use cases](use-cases.md): triggers that tell a player it is their turn, the readers of a board about a new post, or everyone about a result, and a page that updates live.
+- [Triggers](triggers.md): every field, the templates and how events match.
+- [Managing triggers](managing-triggers.md): change a realm's triggers after its deploy, let admins change them, or stop them.
+- [Running gnotifd](running-gnotifd.md): run your own gnotif server.

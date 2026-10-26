@@ -1,23 +1,26 @@
 # How gnotif works
 
-gnotifd is one process with one database, a SQLite file or a [remote store](running-gnotifd.md#remote-store). A watch loop reads realm events from tx-indexer and hands a push to the sender for every opt-in an event matches. The sender sends from memory, on one routine per push service. An HTTP server takes the browsers' subscriptions and opt-ins, and holds the pages' live connections. The watch loop never waits for a push, so a slow push service never holds back reading the chain. A crash loses the pushes still in memory ([Delivery outcomes](#delivery-outcomes)).
+A notification starts as an event on the gno.land chain and ends in the browser. This page follows it through gnotifd, and gives the rules every gnotif server keeps.
 
-```
-+-- gno.land chain --------------------------------+
-|  dapp realm ---Open, Set---> gnotif registry     |
-+------+----------------------------+--------------+
-       | realm events               | TriggerDeclared, TriggerRemoved
-       v                            v
-+--------------------------------------------------+
-|                    tx-indexer                    |
-+------------------------+-------------------------+
-                         | polled over GraphQL
-                         v
-dapp page --/v1-->    gnotifd --Web Push--> push service
-    ^                                            |
-    | opens the link on click                    |
-    +---- sw.js on the dapp's origin <-----------+
-```
+![How a notification travels from a dapp realm to the browser](how-it-works.svg)
+
+1. A dapp realm sets its triggers in the gnotif registry, which emits each one as an event ([Triggers come from the registry's events](#triggers-come-from-the-registrys-events)).
+2. tx-indexer indexes the chain. gnotifd polls it for every realm event, and matches each event to the triggers and the browsers' opt-ins ([How gnotifd reads the chain](#how-gnotifd-reads-the-chain)).
+3. For each match, gnotifd sends a Web Push through the push service of the browser's vendor ([Delivery outcomes](#delivery-outcomes)).
+4. The dapp's service worker, `sw.js`, shows the push as a notification, and opens its link on a click ([The service worker](#the-service-worker)).
+5. An open page can also receive each match live, over a WebSocket ([Two channels](#two-channels)).
+
+## Inside gnotifd
+
+gnotifd is one process with one database, a SQLite file or a [remote store](running-gnotifd.md#remote-store). It runs three parts:
+
+- a watch loop, which reads realm events from tx-indexer and hands a push to the sender for every opt-in an event matches;
+- the sender, which sends from memory, on one routine per push service;
+- an HTTP server, which takes the browsers' subscriptions and opt-ins, and holds the pages' live connections.
+
+The watch loop never waits for a push, so a slow push service never holds back reading the chain. A crash loses the pushes still in memory ([Delivery outcomes](#delivery-outcomes)).
+
+The database holds the triggers, the subscriptions with their opt-ins, the chain position, and the outbox: the pushes waiting for a retry. [Running gnotifd](running-gnotifd.md#storage-and-backups) covers its backups and when to start a new one.
 
 ## Triggers come from the registry's events
 
@@ -30,17 +33,29 @@ gnotifd never reads the registry's state. It rebuilds its triggers from the even
 
 `name` is the name the realm set the trigger under. `approver` is the namespace owner who signed the transaction that opened the realm's handle. gnotifd reads only the other ten.
 
-gnotifd applies these events only when they come from the registry version given with `-registry` or a later version under the same prefix, such as `…/gnotif/v1` after `…/gnotif/v0`. It never reads an earlier version. An event applies only when its id carries its own version's prefix: `0000001` in v0, `v<N>-…` in version N. It logs any other event, and any event type it does not know, as `skip registry event` and skips it. It stores a trigger only when `verified` is `true`. A `TriggerDeclared` for an id it holds replaces that trigger's title, body and link and keeps its opt-ins: a registry edits a trigger that way. One that changes the trigger's target, event, filter or param is logged as `skip registry event` and skipped. It logs a `TriggerDeclared` it cannot read as an error and skips it. A `TriggerRemoved` deletes the trigger with its opt-ins, but a push the trigger already queued is still sent. Because the trigger set comes from the chain alone, any operator can run a server against the same registry and get the same triggers.
+gnotifd applies a registry event only when:
+
+- it comes from the registry version given with `-registry`, or from a later version under the same prefix, such as `…/gnotif/v1` after `…/gnotif/v0`, but never from an earlier one ([Rules for a new registry version](deploying-realms.md#rules-for-a-new-registry-version));
+- its id carries its own version's prefix: `0000001` in v0, `v<N>-…` in version N.
+
+It logs any other event, and any event type it does not know, as `skip registry event` and skips it. Of the events it applies:
+
+- a `TriggerDeclared` stores its trigger only when `verified` is `true`;
+- a `TriggerDeclared` for an id gnotifd holds replaces that trigger's title, body and link, and keeps its opt-ins, which is how a registry edits a trigger. One that changes the trigger's target, event, filter or param is logged as `skip registry event` and skipped;
+- a `TriggerDeclared` gnotifd cannot read is logged as an error and skipped;
+- a `TriggerRemoved` deletes the trigger with its opt-ins, but a push the trigger already queued is still sent.
+
+The trigger set comes from the chain alone, so any operator can run a server against the same registry and get the same triggers.
 
 [Triggers](triggers.md) covers each field and the [limit of 64 per realm and version](triggers.md#at-most-64-triggers-per-realm).
 
 ## What the verified mark means
 
-The verified mark says that the target realm's authority stands behind the trigger. The registry takes a trigger only from the realm's gnotif identity, `<target>#gnotif`, with the handle the registry gave the realm in a transaction that the owner of the realm's namespace signed with its own key and sent straight to the realm, such as the realm's deploy ([Triggers](triggers.md#open-once-in-init)). So every trigger it stores carries the mark.
+The verified mark says that the target realm's authority stands behind the trigger. The registry takes a trigger only from the realm's gnotif identity, `<target>#gnotif`, with the handle the registry gave the realm in a transaction that the owner of the realm's namespace signed with its own key and sent straight to the realm, such as the realm's deploy ([Managing triggers](managing-triggers.md#open-once-in-init)). So every trigger it stores carries the mark.
 
 The mark rests on the namespace ownership that the chain checks on every deploy, so it is as strong as that check: on a chain that does not enforce namespaces, whoever deploys a realm can set its triggers.
 
-The mark covers whatever code holds the realm's handle and runs with its gnotif identity: the realm's own code, the code it hands both to, such as the [admins package](triggers.md#let-admins-change-your-triggers), and code that opened the handle before the realm did ([Keep your gnotif identity to your realm](triggers.md#keep-your-gnotif-identity-to-your-realm)).
+The mark covers whatever code holds the realm's handle and runs with its gnotif identity: the realm's own code, the code it hands both to, such as the [admins package](managing-triggers.md#let-admins-change-your-triggers), and code that opened the handle before the realm did ([Keep your gnotif identity to your realm](managing-triggers.md#keep-your-gnotif-identity-to-your-realm)).
 
 v0's triggers carry the mark on a weaker check: any realm that a dapp passed its `cur` to could declare triggers in the dapp's name. A server that follows v0 keeps that risk.
 
@@ -60,15 +75,14 @@ gnotifd polls the indexer every `-poll` interval, 5 seconds by default.
 - A window of blocks that holds a registry event or a match is committed in one database call, together with the position. Any other window saves its position every 10 minutes, so a restart can read again what it read in the last 10 minutes.
 - It skips a single transaction too large to read, or too large to commit to a remote store, logs an error, and loses only that transaction's events ([Running gnotifd](running-gnotifd.md#the-indexer-and-the-start-height)).
 
-## Storage
-
-The database holds the triggers, the subscriptions with their opt-ins, the chain position, and the outbox: the pushes waiting for a retry. [Running gnotifd](running-gnotifd.md#storage-and-backups) covers its backups and when to start a new one.
-
 ## Delivery outcomes
 
-The sender gives each push to the routine of its push service: one per `-push-hosts` entry, and one per host for an endpoint that matches no entry. A routine sends its pushes one at a time, in the order it got them, so a slow service delays only its own pushes. The pushes go out from memory, and a push that succeeds writes nothing to the database. At most 10,000 pushes are held in memory, queued or being sent, across all services. A push past that goes to the outbox.
+The sender gives each push to the routine of its push service: one per `-push-hosts` entry, and one per host for an endpoint that matches no entry.
 
-At start and every second, the sender reads the outbox's pushes whose next attempt is due, oldest first, 100 at a time, and gives them to the routines while memory has room.
+- A routine sends its pushes one at a time, in the order it got them, so a slow service delays only its own pushes.
+- The pushes go out from memory, and a push that succeeds writes nothing to the database.
+- At most 10,000 pushes are held in memory, queued or being sent, across all services. A push past that goes to the outbox.
+- The sender reads the outbox at start and every second, takes the pushes whose next attempt is due, oldest first, 100 at a time, and gives them to the routines while memory has room.
 
 A push carries one JSON message, encrypted for the subscription and signed with the VAPID key: the whole notification when it fits one encrypted record, and `{"title", "body", "link"}` otherwise, with `/` as the link when the link would overflow the record ([HTTP API](http-api.md#push-payload)). Push services keep it for up to 24 hours while the browser is offline.
 
@@ -111,20 +125,3 @@ Any server built on the registry, gnotifd or another, must:
 - give a live notification the same title, body and link as the push of the same match;
 - give a live notification an `id`, and the full push of the same match the same `id`;
 - leave the final origin check to the client: the service worker opens a link only when it resolves to the dapp's own origin.
-
-## Rules for a new registry version
-
-The registry is immutable, so a change ships as a new version at `…/gnotif/v<N+1>`. gnotifd follows every later version, so a new version must keep these rules:
-
-1. **Path.** Deploy it at `…/gnotif/v<N+1>`, in the same namespace.
-2. **Not private.** Never set `private = true`. The creator of a private package can redeploy it in place. `init` then runs again with fresh globals, the id counter restarts, and the version reissues its own ids over the stored triggers.
-3. **Ids** take the form `v<N+1>-…`.
-4. **Existing attributes are frozen.** Never remove, rename or change the meaning of a `TriggerDeclared` or `TriggerRemoved` attribute. gnotifd skips a `TriggerDeclared` that lacks one of the ten. A version may emit `TriggerDeclared` again for one of its own ids to change its title, body or link; it never changes that id's target, event, filter or param, and gnotifd skips a declaration that does.
-5. **Attribute hygiene.** Never emit the same key twice, since gnotifd reads the first. Stay within the chain's caps for one event: 64 attribute pairs, and at most 4096 bytes for each type, key and value. v1 uses 12 pairs.
-6. **New attributes** must be safe to ignore: presentation only, such as an icon.
-7. **Narrowing changes go in a new event type.** Anything that narrows matching, such as an extra filter or an expiry, goes in a new event type, which older servers skip. A new event type may only add triggers. Removal stays `TriggerRemoved`, and so does anything else that stops notifications, a pause included: an older server skips an event type it does not know, and would keep sending.
-8. **Emit from the realm package itself.** Call `chain.Emit` directly in the realm. An emit moved into a `/p/` helper carries the helper's path, and servers miss it.
-9. **No other emitters.** Emit registry events only from the registry's own exported functions, and never call a function or interface value a caller supplies.
-10. **`verified` means the target realm's authority stands behind the trigger.** In v0 the caller presented the realm's live `cur`. From v1 the realm's gnotif identity, `<target>#gnotif`, set it with the handle the registry gave the realm in a transaction the target's namespace owner signed and sent straight to the realm. `target` never contains `#`.
-
-gnotifd trusts every later version under the prefix and takes `verified` at face value. That trust rests on the chain's deploy gate, which lets only a namespace's owner deploy under it. GovDAO controls that gate, and the operators of a hardfork are a trust root too. An address namespace, `gno.land/r/<address>/gnotif/v<N>`, removes only the risk of a name changing hands; the GovDAO and hardfork risks remain.
