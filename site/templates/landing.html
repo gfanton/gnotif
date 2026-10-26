@@ -247,18 +247,26 @@
   reducedMotion.addEventListener('change', () => { stopSignal(); schedule(); });
   document.addEventListener('visibilitychange', () => { stopSignal(); schedule(); });
 
-  // How it works plays once, when step 3's dot is in view: a pulse runs the
-  // wire from step 1 and the dot comes on as the pulse reaches it.
+  // How it works carries one light. It waits in step 1 until step 3's dot is
+  // in view, then leaves as a pulse runs the wire, and step 3's dot comes on
+  // as the pulse reaches it.
   const how = document.getElementById('how');
   const stations = [...how.querySelectorAll('.station-dot')];
   const last = stations[stations.length - 1];
   if (reducedMotion.matches) return;
+  const light = document.createElement('i');
+  light.className = 'indicator';
+  stations[0].append(light);
   last.classList.add('unlit');
   new IntersectionObserver((entries, observer) => {
     if (!entries.some(entry => entry.isIntersecting)) return;
     observer.disconnect();
     last.classList.remove('unlit');
-    if (reducedMotion.matches || document.hidden) return;
+    if (reducedMotion.matches || document.hidden) {
+      light.remove();
+      return;
+    }
+    light.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: 'forwards' }).finished.then(() => light.remove());
     const box = how.getBoundingClientRect();
     const first = stations[0].getBoundingClientRect();
     const end = last.getBoundingClientRect();
