@@ -86,8 +86,22 @@ func TestRenderPagePlainFence(t *testing.T) {
 	body := string(r.Body)
 	assert.Contains(t, body, "<pre")
 	assert.Contains(t, body, "plain text")
-	assert.Equal(t, 1, strings.Count(body, "data-lang="), body)
-	assert.Contains(t, body, `data-lang="sh"`)
+	assert.Equal(t, 2, strings.Count(body, `<div class="code">`), body)
+	assert.Contains(t, body, `<div class="code"><div class="code-head"><button type="button" class="copy" hidden>Copy</button></div><pre><code>plain text`, "a block without a language still gets its copy button")
+	assert.Contains(t, body, `<div class="code-head"><span>sh</span><button type="button" class="copy" hidden>Copy</button></div>`)
+}
+
+func TestRenderPageGnoFence(t *testing.T) {
+	root := t.TempDir()
+	src := "# X\n\n```gno\nfunc init(cur realm) {}\n```\n"
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "docs"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "docs", "x.md"), []byte(src), 0o644))
+
+	r, err := renderPage(root, Page{Title: "X", Source: "docs/x.md", Slug: "x"})
+	require.NoError(t, err)
+	body := string(r.Body)
+	assert.Contains(t, body, `<div class="code-head"><span>gno</span>`)
+	assert.Contains(t, body, `<span class="kd">func</span>`, "Gno is highlighted with Go's lexer")
 }
 
 func TestRenderPageNoH1(t *testing.T) {
@@ -118,6 +132,13 @@ func TestHighlight(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(out), `class="chroma"`)
 	assert.Contains(t, string(out), `<span class="k`)
+
+	assert.Contains(t, string(out), `<div class="code-head"><span>js</span><button type="button" class="copy" hidden>Copy</button></div>`)
+
+	out, err = highlight("gno", "func F() {}")
+	require.NoError(t, err)
+	assert.Contains(t, string(out), `<div class="code-head"><span>gno</span>`)
+	assert.Contains(t, string(out), `<span class="kd">func</span>`)
 
 	out, err = highlight("nosuchlang", "x")
 	require.NoError(t, err)

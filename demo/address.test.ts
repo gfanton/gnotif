@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isAddress } from "./address.ts";
+import { addressProblem, isAddress } from "./address.ts";
 
 const valid = [
   "g1zrjyzatudmadgqu39d5wfamhdvf0adwlxkz25d",
@@ -33,5 +33,25 @@ test("rejects malformed addresses", () => {
   };
   for (const [name, s] of Object.entries(cases)) {
     assert.equal(isAddress(s), false, name);
+  }
+});
+
+test("names what keeps a string from being an address", () => {
+  assert.equal(addressProblem(""), "empty");
+  const malformed = {
+    short: "g1abc",
+    "trailing dot": `${a}.`,
+    "leading space": ` ${a}`,
+    uppercase: a.toUpperCase(),
+    "39 characters": a.slice(0, -1),
+    "b in data": `g1b${a.slice(3)}`,
+    "other prefix": "cosmos1zrjyzatudmadgqu39d5wfamhdvf0adwlxkz25d",
+  };
+  for (const [name, s] of Object.entries(malformed)) {
+    assert.equal(addressProblem(s), "format", name);
+  }
+  assert.equal(addressProblem(`${a.slice(0, -1)}q`), "checksum");
+  for (const s of valid) {
+    assert.equal(addressProblem(s), undefined, s);
   }
 });

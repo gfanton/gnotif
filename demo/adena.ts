@@ -55,7 +55,7 @@ const AdenaSchema = v.looseObject({
 export class AdenaError extends Error {
   type: string;
 
-  /** @param type Adena's response type, or WRONG_CHAIN */
+  /** @param type Adena's response type, WRONG_CHAIN or WRONG_ACCOUNT */
   constructor(type: string, message: string) {
     super(message);
     this.name = "AdenaError";
@@ -171,17 +171,26 @@ export async function connect(adena: Adena, chain: { id: string; name: string; r
 
 /**
  * sendEcho connects, then has Adena sign and broadcast Echo(msg) from the
- * active account.
+ * active account. It refuses before signing when that account is not from,
+ * since the notification goes to the caller.
  * @param adena window.adena
  * @param pkgPath the echo realm
+ * @param from the address step 1 listens for
  */
 export async function sendEcho(
   adena: Adena,
   chain: { id: string; name: string; rpc: string },
   pkgPath: string,
   msg: string,
+  from: string,
 ): Promise<{ caller: string; hash: string | undefined }> {
   const caller = await connect(adena, chain);
+  if (caller !== from) {
+    throw new AdenaError(
+      "WRONG_ACCOUNT",
+      `Adena's active account is ${shortAddress(caller)}, but step 1 listens for ${shortAddress(from)}. Switch Adena to that account, then send again.`,
+    );
+  }
   const sent = parsed(
     AnswerSchema,
     await adena.DoContract({

@@ -16,27 +16,25 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="gnotif: realm event in, browser notification out">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<link rel="preload" href="/fonts/ibm-plex-mono-500-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/highlight.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="nav">
-  <p class="brand"><a class="wordmark" href="/" aria-label="gnotif">gnot<span class="i">ı<span class="dot"></span></span>f</a><span class="tag">testnet</span></p>
+  <p class="brand"><a class="wordmark" href="/" aria-label="gnotif">gnot<span class="i">ı<span class="dot"></span></span>f</a><span class="tag">onyx testnet</span></p>
   <nav aria-label="Site">
     <a href="/docs/getting-started/">Docs</a>
     <a href="{{.Site.DemoURL}}">Demo</a>
-    <a href="/docs/http-api/">HTTP API</a>
+    <a href="/docs/triggers/">Triggers</a>
     <a href="{{.Site.RepoURL}}">GitHub</a>
-    <code class="install">npm install gnotif</code>
+    <button type="button" class="install" data-copy="npm install gnotif"><span class="visually-hidden">Copy </span><code>npm install gnotif</code></button>
   </nav>
 </header>
-<main id="main">{{template "content" .}}</main>
+<main id="main">{{template "content" .}}<p class="visually-hidden" role="status" id="copy-status"></p></main>
 <footer class="footer">
-  <span class="wordmark small">gnot<span class="i">ı<span class="dot"></span></span>f</span>
+  <span class="wordmark small" role="img" aria-label="gnotif">gnot<span class="i">ı<span class="dot"></span></span>f</span>
   <nav aria-label="Footer">
     <a href="/docs/getting-started/">Docs</a>
     <a href="{{.Site.DemoURL}}">Demo</a>
@@ -45,6 +43,54 @@
     <a href="{{.Site.BlobURL}}LICENSE">Apache-2.0</a>
   </nav>
 </footer>
+<script>
+(() => {
+  const status = document.getElementById('copy-status');
+
+  // copier returns a click handler that puts text on the clipboard and reads
+  // "Copied" on shown for a moment; without clipboard access it selects
+  // source instead, so the visitor can copy it.
+  function copier(text, source, shown) {
+    const label = shown.textContent;
+    let timer;
+    return async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        getSelection().selectAllChildren(source);
+        return;
+      }
+      shown.textContent = 'Copied';
+      status.textContent = 'Copied';
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        shown.textContent = label;
+        status.textContent = '';
+      }, 1500);
+    };
+  }
+
+  // Each copy button is described by its block's language, so a screen
+  // reader tells the blocks' buttons apart.
+  document.querySelectorAll('.code .copy').forEach((button, n) => {
+    const pre = button.closest('.code').querySelector('pre');
+    const label = button.parentElement.querySelector('span');
+    if (label !== null) {
+      label.id = 'code-label-' + n;
+      button.setAttribute('aria-describedby', label.id);
+    }
+    button.addEventListener('click', copier(pre.textContent, pre, button));
+    button.hidden = false;
+  });
+  const install = document.querySelector('.install');
+  const command = install.querySelector('code');
+  const copyInstall = copier(install.dataset.copy, command, command);
+  install.addEventListener('click', () => {
+    install.style.minWidth = install.offsetWidth + 'px';
+    void copyInstall();
+  });
+})();
+</script>
 </body>
 </html>
 {{end}}

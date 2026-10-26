@@ -8,7 +8,7 @@ The example is a small realm with one function, `Notify`, that sends a message t
 
 A realm emits an event with `chain.Emit`: an event type, then pairs of attribute names and values. `Notify` emits a `Message` event that says who the message is for and what it says:
 
-```go
+```gno
 // Notify sends msg to the browsers that opted in with the address to.
 func Notify(cur realm, to address, msg string) {
 	chain.Emit("Message", "to", to.String(), "msg", msg)
@@ -23,7 +23,7 @@ A trigger tells gnotif which event to watch and what notification to send. Your 
 
 Here is the whole realm:
 
-```go
+```gno
 package notify
 
 import (

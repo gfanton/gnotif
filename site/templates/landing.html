@@ -4,12 +4,22 @@
 <section class="hero">
   <div class="radio-waves" aria-hidden="true"><span></span><span></span></div>
   <div class="hero-inner">
-  <p class="eyebrow">Web Push for gno.land dapps</p>
   <h1><span class="l1">Realm event in.</span> <span class="l2">Browser notification out.</span></h1>
-  <p class="hero-description">Keep your users in the loop, even with the tab closed. Turn realm events into browser notifications with a small client and an on-chain trigger.</p>
-  <div class="signal" aria-label="A realm event becoming a browser notification">
+  <p class="hero-description">Web Push for gno.land dapps: users who opt in get a browser notification when your realm emits an event, even with the tab closed.</p>
+  <div class="hero-actions">
+    <p class="actions">
+      <a href="/docs/getting-started/" class="button primary">Add it to your dapp</a>
+      <a href="{{.Site.DemoURL}}" class="button">Try the demo</a>
+      <a class="hero-more" href="#how">How it works ↓</a>
+    </p>
+    <ul class="facts">
+      <li>No server to run: the public server sends the notifications, on the onyx testnet, version 0.</li>
+      <li>Works in browsers with Web Push, such as Chrome. On iPhone and iPad, only for sites added to the Home Screen.</li>
+    </ul>
+  </div>
+  <div class="signal" role="group" aria-label="A realm event becoming a browser notification">
     <div class="stage">
-      {{range $i, $s := .Scenes}}<div class="scene{{if eq $i 0}} active{{end}}">
+      {{range $i, $s := .Scenes}}<div class="scene{{if eq $i 0}} active{{end}}" role="tabpanel" id="scene-{{$i}}" aria-labelledby="scene-tab-{{$i}}"{{if eq $i 0}} tabindex="0"{{end}}>
         <div class="sig-in">
           <span class="sig-label">{{$s.Label}}</span>
           <pre class="sig-line"><span class="ev">{{$s.Event}}</span> {{$s.Attrs}}</pre>
@@ -18,62 +28,50 @@
         <div class="sig-out">
           <span class="sig-label">notification · {{$s.Who}}</span>
           <div class="toast">
-            <span class="toast-icon"><i class="indicator"></i></span>
+            <span class="toast-icon" aria-hidden="true">{{slice $s.App 0 1}}</span>
             <div class="toast-text"><b>{{$s.Title}}</b><span>{{$s.Body}}</span><small>{{$s.App}} · just now</small></div>
           </div>
         </div>
       </div>
       {{end}}
     </div>
-    <div class="scene-controls" role="group" aria-label="Notification examples">{{range $i, $s := .Scenes}}<button type="button" data-scene="{{$i}}" aria-pressed="{{if eq $i 0}}true{{else}}false{{end}}">{{$s.Event}}</button>{{end}}<button type="button" class="cycle-toggle" aria-label="Pause automatic examples">Pause ⏸</button></div>
-  </div>
-  <div class="hero-actions">
-    <p class="actions">
-      <a href="/docs/getting-started/" class="button primary">Add it to your dapp</a>
-      <a href="{{.Site.DemoURL}}" class="button">Try the demo</a>
-    </p>
-    <a class="hero-more" href="#how">How it works ↓</a>
+    <div class="scene-bar" hidden>
+      <div class="scene-tabs" role="tablist" aria-label="Notification examples">{{range $i, $s := .Scenes}}<button type="button" role="tab" id="scene-tab-{{$i}}" aria-controls="scene-{{$i}}" aria-selected="{{if eq $i 0}}true{{else}}false{{end}}" tabindex="{{if eq $i 0}}0{{else}}-1{{end}}">{{$s.Event}}</button>{{end}}</div>
+      <button type="button" class="cycle-toggle" aria-label="Pause automatic examples">Pause</button>
+    </div>
   </div>
   </div>
-
 </section>
 
 <section class="flow-section" id="how" tabindex="-1" aria-labelledby="how-title">
   <h2 id="how-title">How it works</h2>
-  <p class="lede">Your realm emits an event. gnotif finds the matching trigger and sends a push to the browser that opted in.</p>
-  <ol class="simple-flow">
-    <li><span class="eyebrow">01 / Emit</span><h3>Something happens on chain</h3><p>A message, a new turn, an update. Your realm emits an event.</p></li>
-    <li><span class="eyebrow">02 / Match</span><h3>A trigger picks the recipient</h3><p>A trigger in the gnotif registry says which event to watch and who to notify.</p></li>
-    <li><span class="eyebrow">03 / Notify</span><h3>The browser gets the push</h3><p>Your dapp’s service worker shows it, even when the tab is closed.</p></li>
+  <ol class="path">
+    {{range .Steps}}<li class="station">
+      <span class="station-dot" aria-hidden="true">{{if .Last}}<i class="indicator"></i>{{end}}</span>
+      <div class="station-text">
+        <h3>{{.Step.Title}}</h3>
+        <p>{{.Step.Text}}</p>
+        <a href="{{.Step.DocsHref}}">Step {{.Number}} in Getting started →</a>
+      </div>
+      <div class="station-code">
+        {{range .Code}}{{.}}{{end}}
+      </div>
+    </li>
+    {{end}}
   </ol>
   <details class="architecture"><summary>Explore the delivery path</summary>
     <ol class="flow">{{range .Flow}}<li class="node{{if .Dashed}} dashed{{end}}"><b>{{.Name}}</b><span>{{.Note}}</span></li>{{end}}</ol>
-    <p class="flow-note">The public server at {{.Site.ServerURL}} watches the testnet, so there is no notification server to run. The notification travels through the browser’s push service to the service worker on your dapp’s origin.</p>
+    <p class="flow-note">Dashed: yours, in your dapp. Solid: run by gnotif, the chain and the browser’s vendor.</p>
+    <p class="flow-note">The notification travels through the browser’s push service to the service worker on your dapp’s origin.</p>
   </details>
 </section>
 
-<section class="steps">
-  <h2>Add notifications to a dapp</h2>
-  {{range $i, $s := .Steps}}
-  <div class="step">
-    <div class="step-text">
-      <p class="eyebrow">{{$s.Step.Label}}</p>
-      <h3>{{$s.Step.Title}}</h3>
-      <p>{{$s.Step.Text}}</p>
-      <a href="{{$s.Step.DocsHref}}">Getting started →</a>
-    </div>
-    {{$s.Code}}
-  </div>
-  {{end}}
-</section>
-
-<section class="roles">
-  <div class="role">
-    <p class="eyebrow">Operate</p>
-    <h2>Run your own gnotifd</h2>
-    <p>gnotifd is one binary with one SQLite file. It reads a tx-indexer and signs its pushes with a VAPID key pair. A container image is published for every release.</p>
-    <a href="/docs/running-gnotifd/">Running gnotifd →</a>
-  </div>
+<section class="closing">
+  <p class="actions">
+    <a href="/docs/getting-started/" class="button primary">Add it to your dapp</a>
+    <a href="{{.Site.DemoURL}}" class="button">Try the demo</a>
+  </p>
+  <p class="self-host">Want your own server? gnotifd is one binary with one SQLite file. <a href="/docs/running-gnotifd/">Running gnotifd →</a></p>
 </section>
 
 <script>
@@ -98,23 +96,37 @@
 
   function playSignal() {
     stopSignal();
+    signal.classList.remove('unlit');
     if (reducedMotion.matches || document.hidden) return;
     const scene = hero.querySelector('.scene.active');
     const dot = scene.querySelector('.sig-dot');
+    const line = scene.querySelector('.sig-line');
     const narrow = matchMedia('(max-width: 900px)').matches;
-    animations.push(scene.querySelector('.sig-line').animate([
-      { clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }
-    ], { duration: 650, easing: 'steps(32, end)' }));
-    animations.push(scene.querySelector('.sig-pulse').animate([
-      { opacity: 0, offset: 0 },
+    // A wipe reads as typing on one line; across two it would show the end of
+    // the second before the first is done, so a wrapped line fades in.
+    const wraps = line.offsetHeight > 1.5 * parseFloat(getComputedStyle(line).lineHeight);
+    animations.push(line.animate(wraps
+      ? [{ opacity: 0 }, { opacity: 1 }]
+      : [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }],
+    { duration: 650, easing: wraps ? 'ease-out' : 'steps(32, end)' }));
+    // The pulse starts whole on the wire, reaches the dot's edge at 850 ms, as
+    // the dot comes on, and fades out under it.
+    const pulse = scene.querySelector('.sig-pulse');
+    const wire = scene.querySelector('.sig-wire').getBoundingClientRect();
+    const source = dot.getBoundingClientRect();
+    const along = narrow ? 'top' : 'left';
+    const start = narrow ? pulse.offsetHeight : pulse.offsetWidth;
+    const edge = narrow ? source.top - wire.top : source.left - wire.left;
+    const center = edge + (narrow ? source.height : source.width) / 2;
+    animations.push(pulse.animate([
+      { opacity: 0, [along]: start + 'px' },
       { opacity: 1, offset: 0.1 },
+      { [along]: edge + 'px', offset: 0.7 },
       { opacity: 1, offset: 0.85 },
-      { opacity: 0, offset: 1 }
-    ].map((frame, i) => ({ ...frame, [narrow ? 'top' : 'left']: ['0%', '5%', '45%', '50%'][i] })),
-    { duration: 500, delay: 500 }));
+      { opacity: 0, [along]: center + 'px' }
+    ], { duration: 500, delay: 500 }));
     const toast = hero.querySelector('.scene.active .toast');
     const bounds = hero.getBoundingClientRect();
-    const source = dot.getBoundingClientRect();
     const x = source.left + source.width / 2 - bounds.left;
     const y = source.top + source.height / 2 - bounds.top;
     // Reach the farthest hero corner, with no ring leaking into the next section.
@@ -129,6 +141,12 @@
         { width: diameter + 'px', height: diameter + 'px', opacity: 0 }
       ], { duration: 3600, delay: 900 + index * 450, easing: 'cubic-bezier(0.16, 0.45, 0.35, 1)' }));
     });
+    // The dot stays dark until the pulse reaches it, then comes on.
+    animations.push(dot.querySelector('.indicator').animate([
+      { backgroundColor: 'var(--color-line)' },
+      { backgroundColor: 'var(--color-line)', offset: 0.94 },
+      { backgroundColor: 'var(--color-indicator)' }
+    ], { duration: 900, fill: 'backwards' }));
     animations.push(dot.animate([
       { boxShadow: '0 0 0 0 transparent' },
       { boxShadow: '0 0 24px 4px var(--color-indicator-echo)', offset: 0.25 },
@@ -141,44 +159,131 @@
     ], { duration: 1200, delay: 1000, fill: 'backwards' }));
   }
 
-  const scenes = [...document.querySelectorAll('.scene')];
-  const controls = [...document.querySelectorAll('[data-scene]')];
+  const signal = hero.querySelector('.signal');
+  const bar = hero.querySelector('.scene-bar');
+  const scenes = [...hero.querySelectorAll('.scene')];
+  const tabs = [...hero.querySelectorAll('.scene-tabs button')];
   const toggle = hero.querySelector('.cycle-toggle');
   let current = 0;
   let timer;
+  // paused: the visitor paused the examples or chose one. held: the pointer
+  // is over the signal line, or focus is inside it.
   let paused = false;
+  let held = false;
 
   function schedule() {
     clearTimeout(timer);
     toggle.hidden = reducedMotion.matches;
-    if (paused || reducedMotion.matches || document.hidden) return;
+    if (paused || held || reducedMotion.matches || document.hidden) return;
     timer = setTimeout(() => select((current + 1) % scenes.length), 7000);
+  }
+
+  function pause(value) {
+    paused = value;
+    toggle.textContent = paused ? 'Play' : 'Pause';
+    toggle.setAttribute('aria-label', paused ? 'Play automatic examples' : 'Pause automatic examples');
+    schedule();
+  }
+
+  function hold(value) {
+    held = value;
+    schedule();
   }
 
   function select(index) {
     current = index;
     scenes.forEach((scene, i) => {
       scene.classList.toggle('active', i === index);
-      scene.setAttribute('aria-hidden', String(i !== index));
-      controls[i].setAttribute('aria-pressed', String(i === index));
+      if (i === index) scene.tabIndex = 0;
+      else scene.removeAttribute('tabindex');
+    });
+    tabs.forEach((tab, i) => {
+      tab.setAttribute('aria-selected', String(i === index));
+      tab.tabIndex = i === index ? 0 : -1;
     });
     playSignal();
     schedule();
   }
 
-  controls.forEach((button, index) => button.addEventListener('click', () => select(index)));
-  toggle.addEventListener('click', () => {
-    paused = !paused;
-    toggle.textContent = paused ? 'Play ▷' : 'Pause ⏸';
-    toggle.setAttribute('aria-label', paused ? 'Play automatic examples' : 'Pause automatic examples');
-    schedule();
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => {
+      select(index);
+      pause(true);
+    });
+    tab.addEventListener('keydown', event => {
+      const to = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: tabs.length - 1 }[event.key];
+      if (to === undefined) return;
+      event.preventDefault();
+      const next = (to + tabs.length) % tabs.length;
+      select(next);
+      pause(true);
+      tabs[next].focus();
+    });
   });
-  scenes.forEach((scene, i) => scene.setAttribute('aria-hidden', String(i !== 0)));
-  playSignal();
-  schedule();
-  addEventListener('resize', stopSignal);
+  toggle.addEventListener('click', () => pause(!paused));
+  signal.addEventListener('pointerenter', () => hold(true));
+  signal.addEventListener('pointerleave', () => hold(signal.contains(document.activeElement)));
+  signal.addEventListener('focusin', () => hold(true));
+  signal.addEventListener('focusout', event => hold(signal.matches(':hover') || signal.contains(event.relatedTarget)));
+  bar.hidden = false;
+  toggle.hidden = reducedMotion.matches;
+  if (!reducedMotion.matches) signal.classList.add('unlit');
+  // The first example plays, and the cycle starts, once the signal line is in
+  // view: on a phone it sits below the first screen.
+  new IntersectionObserver((entries, observer) => {
+    if (!entries.some(entry => entry.isIntersecting)) return;
+    observer.disconnect();
+    playSignal();
+    schedule();
+  }, { threshold: 0.5 }).observe(signal);
+  // A phone's toolbar resizes the page as it scrolls; only a new width moves
+  // the dot the rings start from.
+  let width = innerWidth;
+  addEventListener('resize', () => {
+    if (innerWidth === width) return;
+    width = innerWidth;
+    stopSignal();
+  });
   reducedMotion.addEventListener('change', () => { stopSignal(); schedule(); });
   document.addEventListener('visibilitychange', () => { stopSignal(); schedule(); });
+
+  // How it works plays once, when step 3's dot is in view: a pulse runs the
+  // wire from step 1 and the dot comes on as the pulse reaches it.
+  const how = document.getElementById('how');
+  const stations = [...how.querySelectorAll('.station-dot')];
+  const last = stations[stations.length - 1];
+  if (reducedMotion.matches) return;
+  last.classList.add('unlit');
+  new IntersectionObserver((entries, observer) => {
+    if (!entries.some(entry => entry.isIntersecting)) return;
+    observer.disconnect();
+    last.classList.remove('unlit');
+    if (reducedMotion.matches || document.hidden) return;
+    const box = how.getBoundingClientRect();
+    const first = stations[0].getBoundingClientRect();
+    const end = last.getBoundingClientRect();
+    const pulse = document.createElement('span');
+    pulse.className = 'path-pulse';
+    pulse.style.left = first.left + first.width / 2 - box.left + 'px';
+    how.append(pulse);
+    const edge = end.top - box.top;
+    const arrive = 850;
+    pulse.animate([
+      { opacity: 0, top: first.bottom - box.top + pulse.offsetHeight + 'px' },
+      { opacity: 1, offset: 0.1 },
+      { opacity: 1, top: edge + 'px', offset: 0.85 },
+      { opacity: 0, top: edge + end.height / 2 + 'px' }
+    ], { duration: 1000 }).finished.then(() => pulse.remove());
+    last.querySelector('.indicator').animate([
+      { backgroundColor: 'var(--color-line)' },
+      { backgroundColor: 'var(--color-indicator)' }
+    ], { duration: 150, delay: arrive, fill: 'backwards' });
+    last.animate([
+      { boxShadow: '0 0 0 0 transparent' },
+      { boxShadow: '0 0 24px 4px var(--color-indicator-echo)', offset: 0.25 },
+      { boxShadow: '0 0 0 0 transparent' }
+    ], { duration: 1000, delay: arrive });
+  }, { threshold: 1, rootMargin: '0px 0px -10% 0px' }).observe(last);
 })();
 </script>
 {{end}}

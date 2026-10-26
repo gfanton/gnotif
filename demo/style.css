@@ -1,5 +1,110 @@
 
 /* Signal, as gnotif.xyz's style.css defines it: matte near-black canvas, mono display, one amber indicator. */
+
+/* ---- Fonts: IBM Plex, the files gnotif.xyz serves, under the SIL Open Font License in fonts/OFL.txt */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-mono-400-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-mono-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-mono-500-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-mono-500-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-mono-600-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-mono-600-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("./fonts/ibm-plex-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   color-scheme: dark;
   --color-canvas: oklch(0.17 0.008 70);
@@ -8,6 +113,7 @@
   --color-text: oklch(0.94 0.008 80);
   --color-text-muted: oklch(0.66 0.012 75);
   --color-line: oklch(0.30 0.01 70);
+  --color-field-line: oklch(0.52 0.01 75); /* the edge of a field: 3:1 on canvas and surface */
   --color-indicator: oklch(0.78 0.16 70);
   --color-on-indicator: oklch(0.17 0.01 70);
   --color-error: oklch(0.78 0.12 30);
@@ -48,6 +154,7 @@
     --color-text: oklch(0.2 0.012 70);
     --color-text-muted: oklch(0.45 0.014 70);
     --color-line: oklch(0.87 0.01 80);
+    --color-field-line: oklch(0.62 0.01 75);
     --color-indicator: oklch(0.64 0.16 62);
     --color-on-indicator: oklch(0.15 0.01 62);
     --color-error: oklch(0.5 0.17 30);
@@ -65,9 +172,10 @@ body {
   font-size: var(--text-base);
   line-height: 1.55;
 }
-h1, h2 { font-family: var(--font-display); font-weight: 500; line-height: 1.15; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 500; line-height: 1.15; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
 h1 { font-size: var(--text-display); }
-h2 { font-size: var(--text-lg); }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-base); }
 p { margin: 0; text-wrap: pretty; }
 a { color: inherit; text-decoration-color: var(--color-text-muted); text-underline-offset: 0.2em; }
 a:hover { text-decoration-color: var(--color-indicator); }
@@ -78,7 +186,9 @@ code, pre { font-family: var(--font-display); font-size: 0.92em; }
 .skip { position: absolute; left: -999px; top: var(--space-4); padding: var(--space-2) var(--space-3); background: var(--color-surface-raised); border-radius: var(--radius); }
 .skip:focus { left: var(--space-4); }
 
-.eyebrow { font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
+/* A small label naming the object under it. */
+.caption { font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
+.nowrap { white-space: nowrap; }
 .indicator { display: inline-block; width: 0.55em; height: 0.55em; border-radius: 50%; background: var(--color-indicator); vertical-align: 0.05em; }
 .mono { font-family: var(--font-display); overflow-wrap: anywhere; }
 
@@ -87,7 +197,6 @@ code, pre { font-family: var(--font-display); font-size: 0.92em; }
 .wordmark.small { font-size: 1rem; }
 .wordmark .i { position: relative; display: inline-block; }
 .wordmark .dot { position: absolute; left: 50%; top: 0.08em; width: 0.17em; height: 0.17em; border-radius: 50%; background: var(--color-indicator); transform: translateX(-50%); }
-@keyframes ping { 0% { transform: scale(0.3); opacity: 0.9; } 70%, 100% { transform: scale(1.4); opacity: 0; } }
 
 .nav, .footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--gutter); }
 .nav { border-bottom: 1px solid var(--color-line); }
@@ -112,21 +221,25 @@ code, pre { font-family: var(--font-display); font-size: 0.92em; }
 .button.primary { background: var(--color-indicator); color: var(--color-on-indicator); border-color: var(--color-indicator); font-weight: 500; }
 .button.primary:hover { filter: brightness(1.08); }
 .button:disabled { opacity: 0.55; cursor: not-allowed; }
+.button[aria-disabled="true"] { opacity: 0.55; cursor: progress; }
+/* A disabled lead action keeps the shape of a button, not a dimmed amber. */
+.button.primary:disabled { opacity: 1; background: var(--color-surface); color: var(--color-text-muted); border-color: var(--color-line); }
 .button.small { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); letter-spacing: 0.06em; text-transform: uppercase; }
 .button .indicator { margin-right: var(--space-2); }
 
 .field { display: flex; flex-direction: column; gap: var(--space-2); }
 .field label { font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); }
-.field label.check { display: flex; align-items: center; gap: var(--space-2); color: var(--color-text); cursor: pointer; }
+label.check { display: flex; align-items: center; gap: var(--space-2); font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text); cursor: pointer; }
 .check input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--color-indicator); }
 .row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .row input { flex: 1 1 16rem; min-width: 0; }
-input[type="text"] { font: inherit; font-size: var(--text-base); line-height: 1.55; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-canvas); color: var(--color-text); }
+input[type="text"] { font: inherit; font-size: var(--text-base); line-height: 1.55; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-field-line); border-radius: var(--radius); background: var(--color-canvas); color: var(--color-text); }
 input[type="text"].mono { font-family: var(--font-display); font-size: var(--text-sm); }
+input[aria-invalid="true"], input[aria-invalid="true"]:hover { border-color: var(--color-error); }
 input::placeholder { color: var(--color-text-muted); opacity: 1; }
 input:hover { border-color: var(--color-text-muted); }
 input[readonly] { background: var(--color-surface); color: var(--color-text-muted); cursor: default; }
-input[readonly]:hover { border-color: var(--color-line); }
+input[readonly]:hover { border-color: var(--color-field-line); }
 
 /* The connected wallet, in the input's place */
 .wallet { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-surface); font-family: var(--font-display); font-size: var(--text-sm); min-width: 0; }
@@ -144,7 +257,14 @@ input[readonly]:hover { border-color: var(--color-line); }
 
 .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: var(--space-8); align-items: start; }
 .step { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-8); border: 1px solid var(--color-line); border-radius: var(--radius-float); background: var(--color-surface); }
-.step-head { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+/* The step's number before its heading; the list already gives screen
+   readers the position, so the number has no alternative text. */
+.steps { counter-reset: step; }
+.step { counter-increment: step; }
+.step > h2 { display: flex; align-items: baseline; }
+.step > h2::before { content: counter(step); content: counter(step) / ""; flex: none; min-width: 1.5em; color: var(--color-text-muted); }
+.step-form { display: contents; }
+.channel { display: flex; flex-direction: column; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--color-line); }
 .step, .step > *, .reveal { min-width: 0; }
 .compose-step { background: var(--color-canvas); }
 .compose-step .button:disabled { color: var(--color-text-muted); background: var(--color-surface); border-color: var(--color-line); opacity: 0.65; }
@@ -158,37 +278,46 @@ input[readonly]:hover { border-color: var(--color-line); }
 
 .status { font-size: var(--text-sm); color: var(--color-text-muted); max-width: var(--measure); }
 .status:empty { display: none; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .status.error { color: var(--color-error); }
 .status .mono { font-size: var(--text-xs); }
 
 /* ---- Live arrivals */
 .arrivals { display: flex; flex-direction: column; gap: var(--space-2); }
-.arrivals ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-line); border-radius: var(--radius); overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-3); }
+/* The time column fits a clock time from the start, so a row settling from
+   its short waiting clock does not shift every row's text. */
+.arrivals ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-line); border-radius: var(--radius); overflow: hidden; display: grid; grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr); column-gap: var(--space-3); }
 .arrivals ol:empty { display: none; }
 .arrivals ol:not(:empty) + .hint { display: none; }
 .arrival { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); line-height: 1.35; }
-.arrival:not(.pending, .late) { box-shadow: inset 2px 0 var(--color-indicator); animation: arrive 1.6s ease-out; }
-.arrival:is(.pending, .late) { outline: 1px dashed var(--color-text-muted); outline-offset: calc(-1 * var(--space-1)); }
-.arrival.late { outline-color: var(--color-error); }
 .arrival:is(.pending, .late) b { color: var(--color-text-muted); font-weight: 500; }
 .arrival + .arrival { border-top: 1px solid var(--color-line); }
 .arrival time { grid-row: span 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
 .arrival b { font-weight: 600; }
-.arrival span { color: var(--color-text-muted); overflow-wrap: anywhere; }
-.arrival :is(small, .meta) { grid-column: 2; font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
+.arrival > span { color: var(--color-text-muted); overflow-wrap: anywhere; }
+.row-status { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); min-width: 0; }
+.row-status :is(small, .meta) { font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); }
 .arrival small:empty { display: none; }
 .arrival .meta summary { width: fit-content; cursor: pointer; }
 .arrival .meta summary:hover { color: var(--color-text); }
 .arrival .meta dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 var(--space-1); }
 .arrival .meta dd { margin: 0; color: var(--color-text); overflow-wrap: anywhere; }
 .arrival.late small { color: var(--color-error); }
-.arrival time .indicator { position: relative; margin-right: var(--space-2); background: var(--color-text-muted); }
-.pending time .indicator::after { content: ""; position: absolute; inset: -0.35em; border-radius: 50%; border: 1px solid var(--color-text-muted); opacity: 0; animation: ping 2.4s ease-out infinite; }
-@keyframes arrive { from { background: color-mix(in oklch, var(--color-indicator) 22%, transparent); } }
-
-/* ---- The notification, previewed */
-.preview { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-6); border: 1px dashed var(--color-line); border-radius: var(--radius); }
-.preview .eyebrow { letter-spacing: 0.06em; }
+/* A send waits in outline with its dot unlit. Its arrival lights the dot, and
+   the row's edge glows amber once. */
+.arrival b::before { content: ""; display: inline-block; width: 0.55em; height: 0.55em; margin-right: 0.5em; border-radius: 50%; background: var(--color-indicator); vertical-align: 0.05em; }
+.arrival:is(.pending, .late) { outline: 1px dashed var(--color-text-muted); outline-offset: calc(-1 * var(--space-1)); }
+.arrival.pending b::before { background: var(--color-line); }
+.arrival.late { outline-color: var(--color-error); }
+.arrival.late b::before { background: var(--color-error); }
+.arrival:not(.pending, .late) { outline-offset: calc(-1 * var(--space-1)); animation: landed 1.6s ease-out; }
+@keyframes landed { from { outline: 1px solid color-mix(in oklch, var(--color-indicator) 70%, transparent); } to { outline: 1px solid transparent; } }
+@media (prefers-reduced-motion: reduce) { .arrival { animation: none; } }
+/* ---- The notification preview in step 2: what the next send becomes, in
+   outline with its dot unlit, since it has not arrived. */
+.preview { margin: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.preview .toast { border-style: dashed; box-shadow: none; }
+.preview .toast-icon .indicator { background: var(--color-line); }
 .toast { width: 100%; display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); align-items: start; padding: var(--space-3) var(--space-4); background: var(--color-surface-raised); border: 1px solid var(--color-line); border-radius: var(--radius-float); box-shadow: var(--shadow-float); font-family: var(--font-body); font-size: var(--text-sm); line-height: 1.35; }
 .toast-icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: var(--radius); background: var(--color-canvas); }
 .toast-icon .indicator { width: 0.7rem; height: 0.7rem; }
@@ -196,19 +325,35 @@ input[readonly]:hover { border-color: var(--color-line); }
 .toast-text b { font-weight: 600; }
 .toast-text span, .toast-text small { color: var(--color-text-muted); overflow-wrap: anywhere; }
 .toast-text small { font-size: var(--text-xs); }
+@media (prefers-color-scheme: light) { .toast-icon { background: var(--color-surface); } }
 
 /* ---- The gnokey command */
 .code { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius); min-width: 0; }
 .code-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); border-bottom: 1px solid var(--color-line); font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
 .code pre { margin: 0; padding: var(--space-3) var(--space-4); font-size: var(--text-sm); line-height: 1.6; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
 .cli .code, .cli > .hint { margin-top: var(--space-3); }
+/* The command wraps between its words, never inside a token. */
+.cli pre { overflow-wrap: normal; }
+/* Only phones need telling where to run the command. */
+.phone-only { display: none; }
 .cli .action-hint { padding: var(--space-3) var(--space-4) 0; }
 
 /* ---- The code behind a step, collapsed until asked for */
 .reveal summary { width: fit-content; cursor: pointer; font-family: var(--font-display); font-size: var(--text-sm); color: var(--color-text-muted); }
 .reveal summary:hover { color: var(--color-text); }
 .reveal[open] summary { margin-bottom: var(--space-3); }
-.reveal:not(.cli) pre { white-space: pre; overflow-wrap: normal; }
+.reveal:not(.cli) .code { overflow: hidden; }
+/* The code scrolls sideways under its head; a shade at either edge shows
+   that more of it lies past that edge. */
+.reveal:not(.cli) pre { white-space: pre; overflow-wrap: normal;
+  background:
+    linear-gradient(to right, var(--color-surface) 30%, transparent) left / 2.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--color-surface) 30%, transparent) right / 2.5rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in oklch, var(--color-text-muted) 45%, transparent), transparent) left / 0.75rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in oklch, var(--color-text-muted) 45%, transparent), transparent) right / 0.75rem 100% no-repeat scroll,
+    var(--color-surface); }
+/* Code that scrolls takes focus, and .code clips anything outside it. */
+.reveal:not(.cli) pre:focus-visible { outline-offset: -2px; }
 /* Token colors from the github-dark and github chroma styles gnotif.xyz uses. */
 .reveal :is(.k, .kd, .kr, .kt) { color: #ff7b72; }
 .reveal .nf { color: #d2a8ff; font-weight: 600; }
@@ -231,9 +376,19 @@ input[readonly]:hover { border-color: var(--color-line); }
   .row { flex-direction: column; }
   .row input { flex: none; }
   .step { padding: var(--space-6) var(--space-4); }
+  .nav, .chain { padding-block: var(--space-2); }
+  .page { padding-top: var(--space-6); }
+  .lede { font-size: var(--text-base); }
+}
+/* Touch and phone widths: every control keeps a 44px target, whatever its
+   drawn size. */
+@media (pointer: coarse), (max-width: 600px) {
+  .nav nav a, .footer nav a, .button.small { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
+  .nav .wordmark { padding-block: 0.35em; }
+  label.check { min-height: 44px; }
+  .phone-only { display: block; }
+  /* iOS zooms into a field set under 16px when it takes focus. */
+  input[type="text"].mono { font-size: var(--text-base); }
+  .reveal summary, .arrival .meta summary { padding-block: var(--space-3); min-height: 44px; }
 }
 
-/* Reduced motion: nothing moves. Last, so it wins over every animation above. */
-@media (prefers-reduced-motion: reduce) {
-  .arrival:not(.pending, .late), .pending time .indicator::after { animation: none; }
-}

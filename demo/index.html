@@ -17,72 +17,74 @@
 <meta property="og:image:alt" content="gnotif: realm event in, browser notification out">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e0f11'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23f7a224'/%3E%3C/svg%3E" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<link rel="preload" href="./fonts/ibm-plex-mono-500-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="nav">
+<header>
+<div class="nav">
   <p class="brand"><a class="wordmark" href="https://gnotif.xyz" aria-label="gnotif">gnot<span class="i">ı<span class="dot"></span></span>f</a><span class="tag">demo</span></p>
   <nav aria-label="Site">
-    <a href="https://gnotif.xyz/docs/getting-started/">Docs</a>
-    <a id="realm-link" href="#">Realm</a>
+    <a href="https://gnotif.xyz/docs/getting-started/" target="_blank" rel="noopener">Docs ↗</a>
+    <a id="realm-link" href="#" target="_blank" rel="noopener">Realm ↗</a>
   </nav>
-</header>
+</div>
 <p class="chain" role="note">
-  <span>Runs on <b id="chain-name"></b> (chain <code id="chain-id"></code>) with test GNOT only.</span>
-  <a href="https://faucet.gno.land">Get test GNOT →</a>
+  <span>Runs on <b id="chain-name"></b> <span class="nowrap">(chain <code id="chain-id"></code>)</span> with test GNOT only.</span>
 </p>
+</header>
 
 <main id="main" class="page">
   <div class="intro">
-    <p class="eyebrow">The echo playground</p>
     <h1>Send yourself a notification.</h1>
-    <p class="lede">One message, one on-chain event, one browser notification. Set up this browser, then send yourself a message through the echo realm.</p>
+    <p class="lede">One message, one on-chain event, one browser notification. Set up this browser, then send yourself a message through the echo realm, a small gno.land contract that emits each message as an event addressed to its sender.</p>
   </div>
+  <p class="status error" id="page-message" role="alert"></p>
 
   <ol class="steps">
     <li class="step setup-step">
-      <div class="step-head">
-        <p class="eyebrow">Step 1 of 2</p>
-        <h2>Turn on notifications</h2>
-      </div>
+      <h2>Set up this browser</h2>
+      <p class="hint">Turn on notifications, live updates, or both. Either one is enough for step 2.</p>
+      <form id="setup" class="step-form">
       <div class="field">
         <label for="address">Your gno.land address</label>
         <div class="row" id="address-row">
-          <input type="text" id="address" class="mono" placeholder="g1…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="address-hint">
+          <input type="text" id="address" class="mono" placeholder="g1…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="address-error address-hint">
           <button type="button" class="button" id="connect" hidden>Connect Adena</button>
         </div>
+        <p class="status error" id="address-error" aria-live="polite"></p>
         <div class="wallet" id="wallet" hidden>
           <i class="indicator" aria-hidden="true"></i>
           <span>Adena · <span class="mono" id="wallet-address"></span></span>
           <button type="button" class="button small" id="disconnect">Disconnect</button>
         </div>
-        <p class="hint" id="address-hint">The address you will send the message from.<span id="get-adena" hidden> With Adena, connect it to fill this in: <a href="https://www.adena.app" target="_blank" rel="noopener">Get Adena ↗</a></span></p>
+        <p class="hint" id="address-hint">The address you will send the message from.<span id="get-adena" hidden> With Adena, connect it to fill this in: <a href="https://www.adena.app" target="_blank" rel="noopener">Get Adena ↗</a>, then reload this page.</span></p>
         <p class="hint" id="locked-hint" hidden>Notifications are on for this address. Turn them off to change it.</p>
+        <p class="status" id="wallet-message" role="status" aria-live="polite"></p>
       </div>
-      <div class="actions">
-        <button type="button" class="button primary" id="enable" disabled>Turn on notifications</button>
-        <button type="button" class="button" id="disable" hidden>Turn off</button>
+      <div class="channel">
+        <h3 id="push-head">Notifications</h3>
+        <p class="hint" id="push-hint">This browser alerts you when your message arrives, even with the tab closed.</p>
+        <div class="actions">
+          <button type="submit" class="button primary" id="enable" disabled>Turn on notifications</button>
+          <button type="button" class="button" id="disable" hidden>Turn off</button>
+        </div>
+        <p class="status" id="message" role="status" aria-live="polite"></p>
+        <p class="state" id="state"><i class="indicator" aria-hidden="true"></i><span id="state-text">Checking this browser…</span></p>
       </div>
-      <p class="state" id="state"><i class="indicator" aria-hidden="true"></i><span id="state-text">Checking this browser…</span></p>
-      <div class="field">
+      <div class="channel">
+        <h3 id="live-head">Live updates</h3>
+        <p class="hint" id="live-hint">This page shows your message the moment it arrives, the way a dapp updates its own view. No permission prompt, and it works in any browser. While the page is open, it keeps a connection to the gnotif server and sends it your address.</p>
         <label class="check" for="live"><input type="checkbox" id="live" aria-describedby="live-hint"> Live updates on this page</label>
-        <p class="hint" id="live-hint">Keeps a connection to the gnotif server open while this page is open, and sends it your address. Messages then show here as they arrive, with no permission prompt.</p>
+        <p class="status" id="live-message" role="status" aria-live="polite"></p>
+        <p class="state" id="live-state"><i class="indicator" aria-hidden="true"></i><span id="live-state-text">Live updates off</span></p>
       </div>
-      <p class="state" id="live-state"><i class="indicator" aria-hidden="true"></i><span id="live-state-text">Live updates off</span></p>
-      <div class="arrivals" id="arrivals" role="log" aria-labelledby="arrivals-head" hidden>
-        <p class="eyebrow" id="arrivals-head">Arrived on this page</p>
-        <ol id="arrivals-list"></ol>
-        <p class="hint">Nothing has arrived yet.</p>
-      </div>
-      <p class="status" id="message" role="status" aria-live="polite"></p>
+      </form>
       <details class="reveal">
         <summary>See the code</summary>
         <div class="code">
-          <div class="code-head"><span>js · your page</span></div>
+          <div class="code-head"><span id="code-js-label">js · your page</span><button type="button" class="button small" data-copy="code-js" aria-describedby="code-js-label">Copy</button></div>
           <pre><code id="code-js"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">Gnotif</span> <span class="p">}</span> <span class="nx">from</span> <span class="s2">&#34;gnotif&#34;</span><span class="p">;</span>
 </span></span><span class="line"><span class="cl">
 </span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">gnotif</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Gnotif</span><span class="p">({</span> <span class="nx">network</span><span class="o">:</span> <span class="s2">&#34;onyx&#34;</span><span class="p">,</span> <span class="nx">icon</span><span class="o">:</span> <span class="s2">&#34;/icon.png&#34;</span> <span class="p">});</span>
@@ -104,39 +106,46 @@
     </li>
 
     <li class="step compose-step">
-      <div class="step-head">
-        <p class="eyebrow">Step 2 of 2</p>
-        <h2>Send yourself a message</h2>
-      </div>
+      <h2>Send a message</h2>
+      <form id="compose" class="step-form">
       <div class="field">
         <label for="msg">Message</label>
         <input type="text" id="msg" value="Hello, me" placeholder="Write a message" autocomplete="off" maxlength="200">
       </div>
-      <div class="preview">
-        <span class="eyebrow">notification · this browser</span>
-        <div class="toast" role="img" aria-label="Preview of the notification">
-          <span class="toast-icon"><i class="indicator"></i></span>
+      <figure class="preview">
+        <figcaption class="caption">notification · this browser</figcaption>
+        <div class="toast">
+          <span class="toast-icon" aria-hidden="true"><i class="indicator"></i></span>
           <div class="toast-text"><b id="toast-title">Echo</b><span id="toast-body"></span><small><span id="toast-host"></span> · a few seconds after the call</small></div>
         </div>
-      </div>
-      <div class="actions send-action">
-        <button type="button" class="button" id="send" disabled aria-describedby="send-hint">Send with Adena</button>
+      </figure>
+      <p class="hint" id="cost-hint">A send costs about 0.02 test GNOT from this address. <a href="https://faucet.gno.land" target="_blank" rel="noopener">Get test GNOT ↗</a></p>
+      <div class="actions send-action" id="send-action" hidden>
+        <button type="submit" class="button" id="send" disabled aria-describedby="send-hint" hidden>Send with Adena</button>
+        <button type="button" class="button" id="copy-lead" hidden>Copy the gnokey command</button>
         <p class="hint" id="send-hint" role="status">Set your address in step 1 to continue.</p>
       </div>
-      <p class="status" id="mismatch"></p>
+      </form>
       <details class="cli reveal" id="cli"><summary id="cli-label">Send with gnokey</summary>
+      <p class="hint phone-only">On a phone? Run the command on a computer that has your key; this browser gets the notification.</p>
       <div class="code">
         <div class="code-head"><span>sh · gnokey</span><button type="button" class="button small" id="copy" disabled aria-describedby="copy-hint">Copy</button></div>
         <p class="hint action-hint" id="copy-hint">Set your address in step 1 to continue.</p>
         <pre><code id="command"></code></pre>
       </div>
-      <p class="hint">Run it with the key of the address in step 1. The notification goes to whoever sends.</p>
+      <p class="hint">Replace <code>&lt;your key&gt;</code> with the name of your gnokey key for the address in step 1. The notification goes to whoever sends. No gnokey yet? <a href="https://docs.gno.land/users/interact-with-gnokey/" target="_blank" rel="noopener">Install it and make a key ↗</a></p>
       </details>
       <p class="status" id="sent" role="status" aria-live="polite"></p>
+      <p class="status" id="banner-check" role="status"></p>
+      <div class="arrivals" id="arrivals" role="log" aria-labelledby="arrivals-head" hidden>
+        <h3 id="arrivals-head">Your messages</h3>
+        <ol id="arrivals-list"></ol>
+        <p class="hint">Nothing has arrived yet.</p>
+      </div>
       <details class="reveal">
         <summary>See the code</summary>
         <div class="code">
-          <div class="code-head"><span>gno · the echo realm</span></div>
+          <div class="code-head"><span id="code-gno-label">gno · the echo realm</span><button type="button" class="button small" data-copy="code-gno" aria-describedby="code-gno-label">Copy</button></div>
           <pre><code id="code-gno"><span class="line"><span class="cl"><span class="kd">func</span><span class="w"> </span><span class="nf">init</span><span class="p">(</span><span class="nx">cur</span><span class="w"> </span><span class="nx">realm</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="nx">me</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">cur</span><span class="p">.</span><span class="nf">Sub</span><span class="p">(</span><span class="nx">gnotif</span><span class="p">.</span><span class="nx">Subpath</span><span class="p">)</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="nx">h</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">gnotif</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="nf">cross</span><span class="p">(</span><span class="nx">me</span><span class="p">))</span><span class="w">
@@ -150,14 +159,15 @@
       </details>
     </li>
   </ol>
+
 </main>
 
 <footer class="footer">
-  <span class="wordmark small">gnot<span class="i">ı<span class="dot"></span></span>f</span>
+  <span class="wordmark small" role="img" aria-label="gnotif">gnot<span class="i">ı<span class="dot"></span></span>f</span>
   <nav aria-label="Footer">
-    <a href="https://gnotif.xyz">gnotif.xyz</a>
-    <a id="realm-link-foot" href="#">Realm on gnoweb</a>
-    <span class="mono" id="server"></span>
+    <a href="https://gnotif.xyz" target="_blank" rel="noopener">gnotif.xyz ↗</a>
+    <a id="realm-link-foot" href="#" target="_blank" rel="noopener">Realm on gnoweb ↗</a>
+    <span>gnotif server: <span class="mono" id="server"></span></span>
   </nav>
 </footer>
 <script type="module" src="./app.js"></script>

@@ -1,8 +1,8 @@
 # The echo demo
 
-echo sends you your own message as a browser notification: one person, one message, one notification. You turn on notifications for your gno.land address, call the echo realm with a message, and the browser shows it, even with the page closed. The page sends the message with the Adena wallet, or links to Adena's install page when the browser has none, and always gives you a gnokey command to run. Under each step, "See the code" shows the client calls and the realm functions behind it; `snippets.test.ts` checks them against `app.ts` and `echo.gno`. The deployed demo runs at https://demo.gnotif.xyz, on the onyx testnet, with `https://gnotif.xyz/onyx` as its server.
+echo sends you your own message as a browser notification: one person, one message, one notification. You turn on notifications for your gno.land address, call the echo realm with a message, and the browser shows it, even with the page closed. The page sends the message with the Adena wallet once you connect it, or links to Adena's install page when the browser has none, and always gives you a gnokey command to run. An address typed by hand sends with gnokey. Under each step, "See the code" shows the client calls and the realm functions behind it; `snippets.test.ts` checks them against `app.ts` and `echo.gno`. The deployed demo runs at https://demo.gnotif.xyz, on the onyx testnet, with `https://gnotif.xyz/onyx` as its server.
 
-With "Live updates on this page" switched on, the page also holds a connection to the server and lists the five newest arrivals, newest first. A message sent with Adena first shows as a waiting row with a clock; its arrival settles the row and says how many seconds it took, and a row still waiting after 60 s turns red. Each arrival shows its block. Opening it lists the block time, the transaction, the channel that delivered it, the trigger, the event's attributes and the link. Turning live updates off empties the list. A push also lists there, with live updates on or off, since the service worker passes it on to the open page.
+Step 1 sets up the browser for notifications, live updates, or both. Notifications reach the browser even with the tab closed. "Live updates on this page" holds a connection to the server, so the open page shows each message as it arrives. Step 2 previews the notification the message becomes. Under its send line, "Your messages" lists the five newest sends and arrivals, newest first. Every send opens a waiting row, in outline with its dot unlit: a message sent with Adena, or a gnokey command copied from the page. Its arrival lights the dot and settles the row. A send with Adena says how many seconds the message took, and turns red after 60 s without an arrival. A copied command turns red after 3 minutes, since its wait starts at the copy. Each arrival shows its block. Opening it lists the block time, the transaction, the channel that delivered it, the trigger, the event's attributes and the link. A push also lists there, with live updates on or off, since the service worker passes it on to the open page. So turning live updates off keeps the list and its waiting sends while notifications are on, and empties it while they are off.
 
 This folder holds the realms and the page:
 
@@ -10,11 +10,11 @@ This folder holds the realms and the page:
 |---|---|
 | `gno.land/r/echo/` | the echo realm, which the page calls |
 | `gno.land/r/pingpong/` | pingpong, an example of a two-player dapp |
-| `index.html`, `style.css`, `app.ts`, `adena.ts`, `echo-tx.ts`, `optin.ts`, `address.ts`, `address-area.ts`, `settings.ts`, `live-log.ts` | the page, a static dapp that opts the browser in with the `gnotif` client |
+| `index.html`, `style.css`, `app.ts`, `adena.ts`, `echo-tx.ts`, `optin.ts`, `address.ts`, `address-area.ts`, `settings.ts`, `live-log.ts`, `send-area.ts` | the page, a static dapp that opts the browser in with the `gnotif` client |
 | `icon.png` | the image each notification shows, the gnotif mark |
 | `config.ts` | a `local` and an `onyx` entry, each with the gnotif client's options, the echo realm, the chain and the gnoweb that the page uses. `DEMO_NETWORK` picks one at build time, `local` when unset or empty |
-| `build.ts` | bundles `app.ts` with esbuild into `dist/app.js` and copies `index.html`, `style.css`, `icon.png` and the package's `sw.js` beside it |
-| `dist/` | the built page, written by `pnpm build` and `make demo`: `app.js`, `index.html`, `style.css`, `icon.png` and `sw.js` |
+| `build.ts` | bundles `app.ts` with esbuild into `dist/app.js` and copies `index.html`, `style.css`, `icon.png`, the package's `sw.js` and the fonts of `site/static/fonts` beside it |
+| `dist/` | the built page, written by `pnpm build` and `make demo`: `app.js`, `index.html`, `style.css`, `icon.png`, `sw.js` and `fonts/` |
 
 ## The echo realm
 
@@ -56,7 +56,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
 3. Start the chain with the gnotif registry:
 
    ```sh
-   .tools/gnodev local -C /tmp -no-watch -home $PWD/.tools/keys \
+   .tools/gnodev local -C /tmp -no-watch -empty-blocks -home $PWD/.tools/keys \
      -extra-root $PWD/.tools/gno-src/examples \
      $PWD/gno/p/gnotif/trigger \
      $PWD/gno/r/gnotif
@@ -66,6 +66,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
 
    - `-C /tmp` runs gnodev outside the repository. Inside it, gnodev would also load echo into the chain's genesis, and gnotifd cannot read genesis.
    - `-no-watch` keeps gnodev from restarting the chain when a file changes.
+   - `-empty-blocks` makes a block about every second. Without it, gnodev makes blocks only for transactions, and tx-indexer picks up a message's block only once another block follows, so the message waits for the next transaction.
    - `-extra-root` loads every example package of gno, the registry's dependencies among them, such as `gno.land/r/sys/names`. Outside the repository, gnodev does not find them otherwise.
 
 4. Deploy echo with your key. Its `init` declares its trigger in this same transaction:
@@ -120,7 +121,7 @@ Run every command from the repository root. Steps 3, 5, 6 and 7 keep running, so
 
    Open http://localhost:3000, paste the address that `gnokey list` printed, click "Turn on notifications", and allow notifications when the browser asks.
 
-8. Under "Send yourself a message", the page shows a gnokey command that sends the message in the field, or "Hello, me" when the field is empty. Run it with `.tools/gnokey` in place of `gnokey`, and `-home .tools/keys me` in place of `<your key>`:
+8. Under "Send a message", the page shows a gnokey command that sends the message in the field, or "Hello, me" when the field is empty. Run it with `.tools/gnokey` in place of `gnokey`, and `-home .tools/keys me` in place of `<your key>`:
 
    ```sh
    .tools/gnokey maketx call -pkgpath gno.land/r/dev/echo/v1 -func Echo -args 'Hello, me' \
