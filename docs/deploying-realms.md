@@ -1,13 +1,17 @@
 # Deploying the registry
 
-These steps deploy a gnotif registry to onyx (`onyx-1`), for an operator who runs a gnotif server on their own registry. The repository's packages sit under the placeholder namespace `dev`, in `gno.land/r/dev` and `gno.land/p/dev`, and `make deploy-pkgs` writes copies under yours.
+Deploy your own gnotif registry to onyx (`onyx-1`), to run a gnotif server on a registry you control. The repository's packages sit under the placeholder namespace `dev`, in `gno.land/r/dev` and `gno.land/p/dev`, and `make deploy-pkgs` writes copies under yours.
 
 ## Before you start
 
-- **A namespace the deploying key owns.** Deploy the registry under the key's address, `gno.land/r/<address>`, and its trigger package under `gno.land/p/<address>`. The chain refuses a deploy under anyone else's namespace, and the [verified mark](how-it-works.md#what-the-verified-mark-means) relies on that. A registered name can change hands, and GovDAO controls the deploy gate ([Rules for a new registry version](how-it-works.md#rules-for-a-new-registry-version)).
-- **gnokey and a key that holds test GNOT on onyx**, as in [Getting started](getting-started.md#4-try-it-on-onyx). The deploy commands name the key `mykey`: use your key's name. Every deploy is public, with the address that signed it, so use a key made for this rather than a personal one.
+You need two things:
+
+- **A namespace your key owns.** Deploy the registry under the key's address, `gno.land/r/<address>`, and its packages under `gno.land/p/<address>`. The chain refuses a deploy under anyone else's namespace, and the [verified mark](how-it-works.md#what-the-verified-mark-means) relies on that. An address namespace, unlike a registered name, cannot change hands.
+- **gnokey and test GNOT.** A key that holds test GNOT on onyx, as in [Getting started](getting-started.md#4-try-it-on-onyx). The deploy commands name the key `mykey`: use your key's name. Every deploy is public, with the address that signed it, so use a key made for this rather than a personal one.
 
 ## 1. Write the deploy copies
+
+From a checkout, write copies of the packages under your namespace:
 
 ```sh
 make deploy-pkgs NS=gno.land/r/<namespace>
@@ -47,7 +51,7 @@ gnokey maketx addpkg -pkgpath gno.land/p/<namespace>/gnotif/trigger/v0 -pkgdir .
 
 onyx checks a new package before it goes live, which takes a few seconds. Wait until the package's page opens on gnoweb, at `https://onyx.testnets.gno.land/p/<namespace>/gnotif/trigger/v0`.
 
-Deploy the admins package, which a dapp imports to let a list of addresses change its triggers ([Triggers](triggers.md#let-admins-change-your-triggers)). It imports the trigger package:
+Deploy the admins package, which a dapp imports to let a list of addresses change its triggers ([Managing triggers](managing-triggers.md#let-admins-change-your-triggers)). It imports the trigger package:
 
 ```sh
 gnokey maketx addpkg -pkgpath gno.land/p/<namespace>/gnotif/admins/v0 -pkgdir .tools/deploy/admins/v0 \
@@ -82,6 +86,6 @@ Start gnotifd on a new database, with `-registry gno.land/r/<namespace>/gnotif/v
 
 ## 6. Deploy a later version
 
-Deploy a new registry version at `gno.land/r/<namespace>/gnotif/v<N+1>`, in the same namespace and with the [rules for a new registry version](how-it-works.md#rules-for-a-new-registry-version). gnotifd follows it with no change to its flags.
+The registry is immutable, so a change ships as a new version at `gno.land/r/<namespace>/gnotif/v<N+1>`, in the same namespace. gnotifd follows it with no change to its flags. A new version must keep the [rules for a new registry version](how-it-works.md#rules-for-a-new-registry-version).
 
 On onyx and mainnet the package stays parked until an approver enables it. `init` runs in the enable transaction. When you start a new database at this version, a `-start-height` at or before the height of the deploy transaction is safe.

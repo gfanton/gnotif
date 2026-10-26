@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 630" role="img" aria-labelledby="hiw-title hiw-desc" class="hiw">
+  <title id="hiw-title">How a notification travels</title>
+  <desc id="hiw-desc">A dapp realm sets its triggers in the gnotif registry, on the gno.land chain. tx-indexer indexes the chain, and gnotifd polls it and matches each event to the triggers. A match leaves gnotifd by two routes: a Web Push, through the push service to the dapp's service worker, which shows the notification; and a WebSocket to an open dapp page.</desc>
+  <style>
+    .hiw { --hiw-text: oklch(0.94 0.008 80); --hiw-muted: oklch(0.66 0.012 75); --hiw-line: oklch(0.30 0.01 70); --hiw-surface: oklch(0.21 0.009 70); }
+    @media (prefers-color-scheme: light) { .hiw { --hiw-text: oklch(0.2 0.012 70); --hiw-muted: oklch(0.45 0.014 70); --hiw-line: oklch(0.87 0.01 80); --hiw-surface: oklch(0.955 0.008 85); } }
+    .hiw text { font-family: var(--font-display, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12px; fill: var(--color-text-muted, var(--hiw-muted)); }
+    .hiw .hiw-name { font-size: 13px; font-weight: 500; fill: var(--color-text, var(--hiw-text)); }
+    .hiw .hiw-box { fill: none; stroke: var(--color-text-muted, var(--hiw-muted)); vector-effect: non-scaling-stroke; }
+    .hiw .hiw-own { stroke-dasharray: 4 3; }
+    .hiw .hiw-chain { fill: none; stroke: var(--color-line, var(--hiw-line)); vector-effect: non-scaling-stroke; }
+    .hiw .hiw-toast { fill: var(--color-surface, var(--hiw-surface)); stroke: var(--color-line, var(--hiw-line)); vector-effect: non-scaling-stroke; }
+    .hiw .hiw-wire { fill: none; stroke: var(--color-text-muted, var(--hiw-muted)); vector-effect: non-scaling-stroke; }
+    .hiw .hiw-head { fill: var(--color-text-muted, var(--hiw-muted)); }
+  </style>
+  <defs>
+    <marker id="hiw-arrow" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto">
+      <path class="hiw-head" d="M0,0.5 L8,4 L0,7.5 z"/>
+    </marker>
+  </defs>
+
+  <rect class="hiw-chain" x="0.5" y="0.5" width="399" height="105" rx="4"/>
+  <text x="12" y="20">gno.land chain</text>
+
+  <rect class="hiw-box hiw-own" x="12" y="32" width="146" height="56" rx="4"/>
+  <text class="hiw-name" x="24" y="55">dapp realm</text>
+  <text x="24" y="74">emits events</text>
+
+  <path class="hiw-wire" d="M158,66 H242" marker-end="url(#hiw-arrow)"/>
+  <text x="200" y="58" text-anchor="middle">Open, Set</text>
+
+  <rect class="hiw-box" x="242" y="32" width="146" height="56" rx="4"/>
+  <text class="hiw-name" x="254" y="55">gnotif registry</text>
+  <text x="254" y="74">stores triggers</text>
+
+  <path class="hiw-wire" d="M56,88 V164" marker-end="url(#hiw-arrow)"/>
+  <text x="64" y="136">realm events</text>
+  <path class="hiw-wire" d="M254,88 V164" marker-end="url(#hiw-arrow)"/>
+  <text x="262" y="128">TriggerDeclared,</text>
+  <text x="262" y="144">TriggerRemoved</text>
+
+  <rect class="hiw-box" x="12" y="164" width="376" height="52" rx="4"/>
+  <text class="hiw-name" x="24" y="186">tx-indexer</text>
+  <text x="24" y="204">indexes the chain, serves GraphQL</text>
+
+  <path class="hiw-wire" d="M200,216 V268" marker-end="url(#hiw-arrow)"/>
+  <text x="208" y="246">polled every 5 s</text>
+
+  <rect class="hiw-box" x="12" y="268" width="376" height="52" rx="4"/>
+  <text class="hiw-name" x="24" y="290">gnotifd</text>
+  <text x="24" y="308">matches events to triggers</text>
+
+  <path class="hiw-wire" d="M56,320 V376" marker-end="url(#hiw-arrow)"/>
+  <text class="hiw-name" x="64" y="344">push</text>
+  <text x="64" y="360">Web Push</text>
+  <path class="hiw-wire" d="M292,320 V376" marker-end="url(#hiw-arrow)"/>
+  <text class="hiw-name" x="284" y="344" text-anchor="end">live</text>
+  <text x="284" y="360" text-anchor="end">WebSocket</text>
+  <path class="hiw-wire" d="M332,376 V320" marker-end="url(#hiw-arrow)"/>
+  <text x="340" y="344">opt-ins</text>
+  <text x="340" y="360">/v1</text>
+
+  <rect class="hiw-box" x="12" y="376" width="176" height="52" rx="4"/>
+  <text class="hiw-name" x="24" y="398">push service</text>
+  <text x="24" y="416">browser vendor</text>
+
+  <rect class="hiw-box hiw-own" x="212" y="376" width="176" height="52" rx="4"/>
+  <text class="hiw-name" x="224" y="398">dapp page</text>
+  <text x="224" y="416">in the browser</text>
+
+  <path class="hiw-wire" d="M56,428 V472" marker-end="url(#hiw-arrow)"/>
+
+  <rect class="hiw-box hiw-own" x="12" y="472" width="176" height="52" rx="4"/>
+  <text class="hiw-name" x="24" y="494">sw.js</text>
+  <text x="24" y="512">on the dapp's origin</text>
+
+  <path class="hiw-wire" d="M56,524 V560" marker-end="url(#hiw-arrow)"/>
+  <text x="64" y="546">shows</text>
+
+  <rect class="hiw-toast" x="12" y="560" width="176" height="36" rx="8"/>
+  <text class="hiw-name" x="24" y="583">OS notification</text>
+
+  <path class="hiw-wire" d="M188,578 H300 V428" marker-end="url(#hiw-arrow)"/>
+  <text x="308" y="496">click opens</text>
+  <text x="308" y="512">the link</text>
+
+  <path class="hiw-box hiw-own" d="M12,618 H40"/>
+  <text x="48" y="622">shipped by the dapp</text>
+</svg>

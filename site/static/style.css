@@ -344,34 +344,50 @@ main > section + section { border-top: 1px solid var(--color-line); }
 .docs { display: grid; grid-template-columns: 240px minmax(0, 1fr) 200px; gap: var(--space-12); padding: var(--space-8) var(--gutter); max-width: 1280px; margin-inline: auto; align-items: start; }
 .sidebar { display: flex; flex-direction: column; gap: var(--space-4); font-size: var(--text-sm); }
 .sidebar ul, .toc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
-.sidebar li a { display: block; padding: var(--space-2) var(--space-3); border-radius: var(--radius); text-decoration: none; color: var(--color-text-muted); }
+/* A section's pages hang from a line under its title; the current page marks
+   its stretch of that line. */
+.sidebar ul { margin-left: var(--space-3); border-left: 1px solid var(--color-line); }
+.sidebar li a { display: block; margin-left: -1px; padding: var(--space-2) var(--space-3); border-left: 1px solid transparent; border-radius: 0 var(--radius) var(--radius) 0; text-decoration: none; color: var(--color-text-muted); }
 .sidebar li a:hover { color: var(--color-text); }
-.sidebar li a[aria-current="page"] { color: var(--color-text); background: var(--color-surface); }
+.sidebar li a[aria-current="page"] { color: var(--color-text); background: var(--color-surface); border-left-color: var(--color-text); }
 .sidebar-menu { display: none; }
+.sidebar-title { font-family: var(--font-display); font-size: var(--text-xs); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text); padding: 0 var(--space-3); margin-bottom: var(--space-2); }
+.sidebar ul + .sidebar-title { margin-top: var(--space-6); }
 .sidebar-foot { font-family: var(--font-display); font-size: var(--text-xs); color: var(--color-text-muted); padding: 0 var(--space-3); }
 
 .content { min-width: 0; max-width: var(--measure); display: flex; flex-direction: column; gap: var(--space-4); }
 .content h1 { margin-bottom: var(--space-2); }
+/* The paragraph under the title says what the page is for. */
+.content h1 + p { font-size: var(--text-lg); }
 .content h2 { margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--color-line); }
 .content h3 { margin-top: var(--space-4); }
 .content ul, .content ol { display: flex; flex-direction: column; gap: var(--space-1); }
 .content table { border-collapse: collapse; font-size: var(--text-sm); display: block; overflow-x: auto; }
 .content th, .content td { text-align: left; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-line); vertical-align: top; }
-/* A table's first column names the row, so its code stays on one line; the other columns keep room for a few words a line, and a table too wide for the screen scrolls. */
-.content td:first-child code { white-space: nowrap; overflow-wrap: normal; }
+/* A table's first column names the row, so its code breaks only between
+   words; the other columns keep room for a few words a line. */
+.content td:first-child code { overflow-wrap: normal; }
 .content td:not(:first-child) { min-width: 10rem; }
 .content th { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xs); letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-muted); }
-.content blockquote { margin: 0; padding-left: var(--space-4); border-left: 2px solid var(--color-line); color: var(--color-text-muted); }
+.content .diagram { margin: var(--space-4) 0; align-self: center; width: 100%; max-width: 27.5rem; }
+.diagram svg { display: block; width: 100%; height: auto; }
+.content blockquote { margin: 0; padding-left: var(--space-4); border-left: 1px solid var(--color-line); color: var(--color-text-muted); }
+/* A callout sets a caveat beside the steps; its title names its kind, so a
+   warning reads as one without a color of its own. */
+.content .callout { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); color: var(--color-text); }
+.callout-title { font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
+.callout-warning .callout-title, .callout-caution .callout-title { color: var(--color-text); }
 
 .toc { font-size: var(--text-sm); }
-.toc-title { font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: var(--space-3); }
-.toc a { text-decoration: none; color: var(--color-text-muted); display: block; padding: var(--space-1) 0; }
+.toc-title { font-family: var(--font-display); font-size: var(--text-xs); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text); margin-bottom: var(--space-3); }
+.toc ul { border-left: 1px solid var(--color-line); }
+.toc a { text-decoration: none; color: var(--color-text-muted); display: block; padding: var(--space-1) 0 var(--space-1) var(--space-3); }
 .toc a:hover { color: var(--color-text); }
 .toc .level-3 { padding-left: var(--space-4); }
 .toc-rail { position: sticky; top: var(--space-8); }
 .toc-inline { display: none; }
 .toc-inline summary, .sidebar-menu summary { cursor: pointer; font-family: var(--font-display); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius); }
-.toc-inline ul { padding: var(--space-3) var(--space-4) 0; }
+.toc-inline ul { margin: var(--space-3) var(--space-4) 0; }
 
 .pager { display: flex; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--color-line); }
 .pager a { text-decoration: none; display: flex; flex-direction: column; gap: var(--space-1); font-family: var(--font-display); font-size: var(--text-sm); }
@@ -400,7 +416,7 @@ main > section + section { border-top: 1px solid var(--color-line); }
   .docs { grid-template-columns: 1fr; gap: var(--space-6); }
   .sidebar .sidebar-list { display: none; }
   .sidebar-menu { display: block; }
-  .sidebar-menu ul { padding-top: var(--space-3); }
+  .sidebar-menu summary + .sidebar-title { margin-top: var(--space-4); }
   .toc-rail { display: none; }
   .toc-inline { display: block; }
 }
@@ -411,6 +427,16 @@ main > section + section { border-top: 1px solid var(--color-line); }
   .nav { flex-wrap: wrap; }
   .nav nav { gap: var(--space-4); }
   .nav nav a { font-size: var(--text-xs); }
+  /* A table shows each row as a block: its first cell names the row, and
+     every other cell sits under its column's name. */
+  .content table, .content tbody, .content tr, .content td { display: block; }
+  .content thead { display: none; }
+  .content tbody { border-top: 1px solid var(--color-line); }
+  .content tr { display: flex; flex-direction: column; gap: var(--space-2); padding-block: var(--space-3); border-bottom: 1px solid var(--color-line); }
+  .content td { padding: 0; border: 0; min-width: 0; }
+  .content td:empty { display: none; }
+  .content td:first-child code { overflow-wrap: anywhere; }
+  .content td + td::before { content: attr(data-label); display: block; font-family: var(--font-display); font-weight: 500; font-size: var(--text-xs); letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-muted); }
 }
 /* Touch and phone widths: every control keeps a 44px target, whatever its
    drawn size. */

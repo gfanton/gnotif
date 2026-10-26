@@ -3,6 +3,7 @@ package main
 import (
 	"html"
 	"image/png"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,22 +31,36 @@ func readOut(t *testing.T, out string, rel string) string {
 
 func TestBuildDocs(t *testing.T) {
 	out := buildSite(t)
+	version := registryPath[strings.LastIndex(registryPath, "/")+1:]
+	require.Regexp(t, `^v[0-9]+$`, version, "the registry path ends in its version")
 
 	for i, p := range pages {
 		t.Run(p.Slug, func(t *testing.T) {
 			html := readOut(t, out, "docs/"+p.Slug+"/index.html")
 			assert.Contains(t, html, "<title>"+p.Title)
 
-			start := strings.Index(html, `<ul class="sidebar-list">`)
+			start := strings.Index(html, `<div class="sidebar-list">`)
 			require.Greater(t, start, -1)
-			sidebar := html[start : start+strings.Index(html[start:], "</ul>")]
+			sidebar := html[start : start+strings.Index(html[start:], "</div>")]
 			last := 0
-			for _, q := range pages {
-				at := strings.Index(sidebar, ">"+q.Title+"</a>")
-				require.Greater(t, at, last, "sidebar lists %q after the one before it", q.Title)
+			for _, s := range sections {
+				at := strings.Index(sidebar, `">`+s.Title+"</p>")
+				require.Greater(t, at, last, "sidebar titles %q after the section before it", s.Title)
 				last = at
+				for _, q := range s.Pages {
+					at := strings.Index(sidebar, ">"+q.Title+"</a>")
+					require.Greater(t, at, last, "sidebar lists %q under %q, after the one before it", q.Title, s.Title)
+					last = at
+				}
+			}
+			menuStart := strings.Index(html, `<details class="sidebar-menu">`)
+			require.Greater(t, menuStart, -1)
+			menu := html[menuStart : menuStart+strings.Index(html[menuStart:], "</details>")]
+			for _, s := range sections {
+				assert.Contains(t, menu, `">`+s.Title+"</p>", "the phone menu titles its sections too")
 			}
 			assert.Contains(t, html, `aria-current="page" href="`+p.URL()+`"`)
+			assert.Contains(t, html, `<p class="sidebar-foot">`+version+" · onyx-1<br>", "the sidebar names the public server's registry version")
 			assert.NotContains(t, html, `href="`+serverURL, "the server's base URL serves no page, so the docs never link it")
 
 			r, err := renderPage(repoRoot, p)
@@ -70,7 +85,10 @@ func TestBuildDocs(t *testing.T) {
 	redirect := readOut(t, out, "docs/index.html")
 	assert.Contains(t, redirect, `<meta http-equiv="refresh" content="0; url=/docs/getting-started/">`)
 	assert.Contains(t, redirect, `<a href="/docs/getting-started/">`)
-	assert.Contains(t, readOut(t, out, "docs/getting-started/index.html"), `rel="next" href="/docs/triggers/"`, "the triggers reference follows the getting started")
+	assert.Contains(t, readOut(t, out, "docs/getting-started/index.html"), `rel="next" href="/docs/use-cases/"`, "the use cases follow the getting started")
+	assert.Contains(t, readOut(t, out, "docs/triggers/index.html"), `rel="next" href="/docs/managing-triggers/"`, "the advanced pages start where the basics end")
+	assert.Contains(t, readOut(t, out, "docs/managing-triggers/index.html"), `rel="next" href="/docs/registry/"`, "the registry's reference follows the tasks that use it")
+	assert.Equal(t, "protocols", pages[len(pages)-1].Slug, "the contracts for building a part of gnotif come last")
 
 	assert.NotEmpty(t, readOut(t, out, "style.css"))
 	highlightCSS := readOut(t, out, "highlight.css")
@@ -237,7 +255,7 @@ func TestBuildLandingPath(t *testing.T) {
 
 func TestBuildCodeBlocks(t *testing.T) {
 	out := buildSite(t)
-	for _, rel := range []string{"index.html", "docs/getting-started/index.html", "docs/triggers/index.html", "docs/how-it-works/index.html"} {
+	for _, rel := range []string{"index.html", "docs/getting-started/index.html", "docs/triggers/index.html", "docs/use-cases/index.html"} {
 		page := readOut(t, out, rel)
 		blocks := strings.Count(page, `<div class="code">`)
 		require.Positive(t, blocks, rel)
@@ -298,11 +316,54 @@ func stripTags(page string) string {
 func TestBuildDocsSidebarListOutsideMenu(t *testing.T) {
 	out := buildSite(t)
 	html := readOut(t, out, "docs/getting-started/index.html")
-	list := strings.Index(html, `<ul class="sidebar-list">`)
+	list := strings.Index(html, `<div class="sidebar-list">`)
 	menu := strings.Index(html, `<details class="sidebar-menu">`)
 	require.Greater(t, list, -1, "a page list that no <details> can hide")
 	require.Greater(t, menu, -1)
 	assert.Less(t, list, menu, "the always-visible list comes before the phone menu")
+}
+
+func TestBuildDocsDiagram(t *testing.T) {
+	out := buildSite(t)
+	html := readOut(t, out, "docs/how-it-works/index.html")
+	assert.Contains(t, html, `<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg"`, "How it works opens on its diagram, drawn inline")
+}
+
+func TestBuildDocsLinksFromRealms(t *testing.T) {
+	out := buildSite(t)
+	link := regexp.MustCompile(`https://gnotif\.xyz/docs/([a-z-]+)/#([a-z0-9-]+)`)
+	found := 0
+	for _, dir := range []string{"gno", "demo"} {
+		err := filepath.WalkDir(filepath.Join(repoRoot, dir), func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || filepath.Ext(path) != ".gno" {
+				return err
+			}
+			src, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, m := range link.FindAllStringSubmatch(string(src), -1) {
+				found++
+				page := readOut(t, out, "docs/"+m[1]+"/index.html")
+				assert.Contains(t, page, `id="`+m[2]+`"`, "%s links %s, and a deployed realm's source never changes", path, m[0])
+			}
+			return nil
+		})
+		require.NoError(t, err)
+	}
+	require.Positive(t, found, "the registry links the rules for its next version")
+}
+
+func TestBuildDocsSidebarSections(t *testing.T) {
+	out := buildSite(t)
+	html := readOut(t, out, "docs/getting-started/index.html")
+	for i, s := range sections {
+		for _, prefix := range []string{"sidebar", "menu"} {
+			id := prefix + "-" + strconv.Itoa(i)
+			assert.Contains(t, html, `<p class="sidebar-title" id="`+id+`">`+s.Title+"</p>")
+			assert.Contains(t, html, `<ul aria-labelledby="`+id+`">`, "a screen reader names each list by its section")
+		}
+	}
 }
 
 func TestBuildLinkPreview(t *testing.T) {

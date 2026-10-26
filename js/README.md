@@ -1,9 +1,12 @@
 # gnotif
 
 Browser client for a gnotif server, which sends Web Push notifications for
-gno.land realm events.
+gno.land realm events. A dapp's page uses it to opt the browser in to its
+realm's notifications, and to receive them while the page is open.
 
 ## Install
+
+Install it from npm:
 
 ```sh
 npm install gnotif
@@ -23,20 +26,29 @@ assets by module path. Copy it again after each upgrade.
 
 ## Use
 
+Create one client for the page:
+
 ```js
 import { Gnotif, GnotifError } from "gnotif";
 
 const gnotif = new Gnotif({ network: "onyx", serviceWorker: "/sw.js", icon: "/icon.png" });
 ```
 
-`network` names the gno.land network and its hosted server: `"onyx"`,
-served by `https://gnotif.xyz/onyx`, is the default and the only value.
-`server` points the client at another gnotif server, such as your
-own gnotifd; `network` is then only a label. `gnotif.network` and
-`gnotif.server` read both back. `serviceWorker` is the URL
-of the copy on the dapp's origin and defaults to `/sw.js`. A dapp served
-under a path, such as `/app/`, serves its copy from that path and passes
-`/app/sw.js`.
+Its options, all optional:
+
+- `network` names the gno.land network and its hosted server: `"onyx"`,
+  served by `https://gnotif.xyz/onyx`, is the default and the only value.
+- `server` points the client at another gnotif server, such as your own
+  gnotifd; `network` is then only a label. `gnotif.network` and
+  `gnotif.server` read both back.
+- `serviceWorker` is the URL of the copy on the dapp's origin, `/sw.js` by
+  default. A dapp served under a path, such as `/app/`, serves its copy
+  from that path and passes `/app/sw.js`.
+- `icon` is the URL of an image every notification shows, such as the
+  dapp's logo; a relative URL resolves against the page. Use a PNG: a
+  browser may not show an SVG in a notification. Safari on macOS ignores
+  `icon` and shows its own. A browser subscribed before the dapp set
+  `icon` gets it only after `enable()` runs again.
 
 A dapp reaches the browser in two ways, each optional: push, which
 shows OS notifications even with the tab closed, and live updates,
@@ -50,12 +62,6 @@ which reach the open page. Both use the one opt-in set from
 
 An opt-in's value is often the user's address, so turn either channel
 on when the user asks for it.
-
-`icon` is the URL of an image every notification shows, such as the
-dapp's logo; a relative URL resolves against the page. Use a PNG: a
-browser may not show an SVG in a notification. Safari on macOS ignores
-`icon` and shows its own. A browser subscribed before the dapp set
-`icon` gets it only after `enable()` runs again.
 
 ### `triggers(target)`
 
@@ -100,15 +106,18 @@ It throws a `GnotifError` with code:
 Keeps `optins`, a list of `{ trigger, value, push }`, as the set both
 channels use. `value` is `""` for a trigger without a param.
 `push: false` keeps an item off push, so the page hears it live only;
-push stays on when `push` is absent. It sends every item to the live
-connection when one is open, and the items that are not `push: false`
-to the server for push when the browser holds a push subscription. It
-resolves once each has accepted its part. With neither, it only keeps
-the set, for a later `enable()` or `connect()`. The server never sees
-`push`. It throws a `GnotifError` with code `server` when the server
-refuses the set: for push, status 400 for an opt-in that breaks a rule
-and 404 when the server does not know the subscription, which
-`enable()` registers again.
+push stays on when `push` is absent. The server never sees `push`.
+
+It sends every item to the live connection when one is open, and the
+items that are not `push: false` to the server for push when the browser
+holds a push subscription. It resolves once each has accepted its part.
+With neither, it only keeps the set, for a later `enable()` or
+`connect()`.
+
+It throws a `GnotifError` with code `server` when the server refuses the
+set: for push, status 400 for an opt-in that breaks a rule and 404 when
+the server does not know the subscription, which `enable()` registers
+again.
 
 The server cannot read opt-ins back, so keep the set you last sent.
 

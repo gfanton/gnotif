@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -18,21 +19,22 @@ var assets embed.FS
 
 // siteView is what every template sees about the site itself.
 type siteView struct {
-	SiteURL string
-	DemoURL string
-	RepoURL string
-	BlobURL string
-	EditURL string
-	NpmURL  string
+	SiteURL         string
+	DemoURL         string
+	RepoURL         string
+	BlobURL         string
+	EditURL         string
+	NpmURL          string
+	RegistryVersion string
 }
 
-var site = siteView{SiteURL: siteURL, DemoURL: demoURL, RepoURL: repoURL, BlobURL: repoBlobURL, EditURL: repoEditURL, NpmURL: npmURL}
+var site = siteView{SiteURL: siteURL, DemoURL: demoURL, RepoURL: repoURL, BlobURL: repoBlobURL, EditURL: repoEditURL, NpmURL: npmURL, RegistryVersion: path.Base(registryPath)}
 
 // docsView is the data of one documentation page.
 type docsView struct {
 	Site     siteView
 	Page     Page
-	Pages    []Page
+	Sections []section
 	Rendered Rendered
 	Prev     *Page
 	Next     *Page
@@ -51,7 +53,7 @@ func build(root, out string) error {
 		if err != nil {
 			return err
 		}
-		v := docsView{Site: site, Page: p, Pages: pages, Rendered: r}
+		v := docsView{Site: site, Page: p, Sections: sections, Rendered: r}
 		if i > 0 {
 			v.Prev = &pages[i-1]
 		}
