@@ -65,6 +65,7 @@ func newHarness(t *testing.T, extra ...trigger.Trigger) *harness {
 	require.NoError(t, err)
 	h := NewHandler(Config{
 		Store: st, Triggers: watch.NewTriggers(triggers),
+		Registry: "gno.land/r/demo/gnotif/v1", Progress: position{HeightDone: 41, Bound: 45},
 		PublicKey: "PK", PushHosts: DefaultPushHosts, Log: slog.New(slog.DiscardHandler),
 	})
 	return &harness{store: st, handler: h}
@@ -92,6 +93,10 @@ func (h *harness) subscribers(t *testing.T, triggerID, value string) []int64 {
 	return ids
 }
 
+type position store.Cursor
+
+func (p position) Position() store.Cursor { return store.Cursor(p) }
+
 func subscription(endpoint, p256dh, auth string) string {
 	b, _ := json.Marshal(map[string]any{"endpoint": endpoint, "keys": map[string]string{"p256dh": p256dh, "auth": auth}})
 	return string(b)
@@ -111,6 +116,16 @@ func TestVapid(t *testing.T) {
 	rec := h.do(t, http.MethodGet, "/v1/vapid", "")
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"publicKey":"PK"}`, rec.Body.String())
+}
+
+func TestStatus(t *testing.T) {
+	h := newHarness(t)
+	rec := h.do(t, http.MethodGet, "/v1/", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"registry":"gno.land/r/demo/gnotif/v1","height":41,"indexerHeight":45}`, rec.Body.String())
+
+	rec = h.do(t, http.MethodGet, "/v1/unknown", "")
+	assert.NotEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestTriggers(t *testing.T) {
