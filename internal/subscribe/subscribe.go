@@ -30,14 +30,27 @@ type Triggers interface {
 	TriggersByID(ctx context.Context, ids []string) (map[string]trigger.Trigger, error)
 }
 
+// Progress reports how far the server has read the chain.
+type Progress interface {
+	Position() store.Cursor
+}
+
 // Config holds the handler's dependencies.
 type Config struct {
 	Store     *store.Store
 	Triggers  Triggers
+	Registry  string // the first registry version followed
+	Progress  Progress
 	PublicKey string // VAPID public key browsers subscribe with
 	PushHosts []string
 	Stream    http.Handler // serves GET /v1/stream; nil serves no live connections
 	Log       *slog.Logger
+}
+
+type statusJSON struct {
+	Registry      string `json:"registry"`
+	Height        int64  `json:"height"`
+	IndexerHeight int64  `json:"indexerHeight"`
 }
 
 type triggerJSON struct {
@@ -78,6 +91,7 @@ type handler struct {
 func NewHandler(cfg Config) http.Handler {
 	h := &handler{cfg: cfg}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/{$}", h.status)
 	mux.HandleFunc("GET /v1/vapid", h.vapid)
 	mux.HandleFunc("GET /v1/triggers", h.triggers)
 	mux.HandleFunc("PUT /v1/subscription", h.putSubscription)
@@ -95,6 +109,11 @@ func NewHandler(cfg Config) http.Handler {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		mux.ServeHTTP(w, r)
 	})
+}
+
+func (h *handler) status(w http.ResponseWriter, _ *http.Request) {
+	pos := h.cfg.Progress.Position()
+	writeJSON(w, http.StatusOK, statusJSON{Registry: h.cfg.Registry, Height: pos.HeightDone, IndexerHeight: pos.Bound})
 }
 
 func (h *handler) vapid(w http.ResponseWriter, _ *http.Request) {

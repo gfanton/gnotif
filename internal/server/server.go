@@ -131,6 +131,8 @@ func Run(ctx context.Context, cfg Config) error {
 	mux.Handle("/v1/", subscribe.NewHandler(subscribe.Config{
 		Store:     st,
 		Triggers:  watcher,
+		Registry:  cfg.Registry,
+		Progress:  watcher,
 		PublicKey: cfg.VAPID.Public,
 		PushHosts: cfg.PushHosts,
 		Stream:    hub,

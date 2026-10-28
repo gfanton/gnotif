@@ -8,6 +8,7 @@ The routes:
 
 | Method and path | Body | Answer |
 |---|---|---|
+| `GET /v1/` | | 200, the server's [status](#read-the-servers-status) |
 | `GET /v1/vapid` | | 200, the server's VAPID public key |
 | `GET /v1/triggers?target=<realm path>` | | 200, the realm's verified triggers |
 | `PUT /v1/subscription` | a push subscription, with an optional `oldEndpoint` | 204 |
@@ -16,6 +17,20 @@ The routes:
 | `GET /v1/stream` | a WebSocket upgrade | 101, a [live connection](#live-notifications) |
 
 The API has no accounts. A subscription is known by its push endpoint, which only the browser, its push service and the gnotif server know, and knowing the endpoint is enough to change or delete it.
+
+## Read the server's status
+
+`GET /v1/` answers the registry the server follows and how far it has read the chain, such as:
+
+```json
+{"registry": "gno.land/r/nym-gfanton001/gnotif/v0", "height": 712340, "indexerHeight": 712345}
+```
+
+- `registry` is the first registry version the server follows. It follows every later version too.
+- `height` is the last block the server has read whole. An event in a later block may not have been sent yet.
+- `indexerHeight` is the chain height the indexer reported on the server's last poll.
+
+On gnotif.xyz, `https://gnotif.xyz/onyx` redirects to `/onyx/v1/`, which is this status.
 
 ## Get the VAPID key
 

@@ -545,6 +545,22 @@ func TestQuietPositionStoredEveryStoreEvery(t *testing.T) {
 	assert.Equal(t, store.Cursor{HeightDone: 20, Bound: 20}, h.cursor(t))
 }
 
+func TestPositionRunsAheadOfStoredCursor(t *testing.T) {
+	h := newHarness(t, 1)
+	h.w.cfg.StoreEvery = 10 * time.Minute
+	h.setCursor(t, store.Cursor{HeightDone: 9, Bound: 12})
+	require.NoError(t, h.w.Load(context.Background()))
+	assert.Equal(t, store.Cursor{HeightDone: 9, Bound: 12}, h.w.Position())
+
+	h.fake.set(func(f *fakeIndexer) { f.latest = 12 })
+	h.tick(t)
+	h.fake.set(func(f *fakeIndexer) { f.latest = 20 })
+	h.tick(t)
+	h.tick(t)
+	assert.Equal(t, store.Cursor{HeightDone: 20, Bound: 20}, h.w.Position())
+	assert.Equal(t, store.Cursor{HeightDone: 12, Bound: 12}, h.cursor(t))
+}
+
 // A quiet poll makes no store call; the cursor store, once the stored cursor
 // is StoreEvery old, is the only one.
 func TestQuietPollMakesNoStoreCall(t *testing.T) {

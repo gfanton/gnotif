@@ -59,14 +59,14 @@ type Config struct {
 }
 
 // Watcher runs the poll loop. Load, Tick and Run are not safe for concurrent
-// use; TargetTriggers and TriggersByID are, once Load has returned.
+// use; TargetTriggers, TriggersByID and Position are, once Load has returned.
 type Watcher struct {
 	cfg    Config
 	window int64
 	// loaded is false until Load succeeds, and again after a failed batch
 	// leaves the stored cursor and triggers unknown.
 	loaded   bool
-	cur      store.Cursor // the position read up to, stored or not
+	cur      atomic.Pointer[store.Cursor] // the position read up to, stored or not
 	storedAt time.Time
 	triggers atomic.Pointer[Triggers]
 }
@@ -94,9 +94,16 @@ func (w *Watcher) Load(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	w.cur, w.loaded = cur, true
+	w.cur.Store(&cur)
+	w.loaded = true
 	w.triggers.Store(NewTriggers(ts))
 	return nil
+}
+
+// Position returns the position read up to, stored or not: HeightDone is the
+// last block read whole, Bound the indexer's height on the last poll.
+func (w *Watcher) Position() store.Cursor {
+	return *w.cur.Load()
 }
 
 // TargetTriggers returns the triggers of one realm by registry version, then
@@ -148,7 +155,7 @@ func (w *Watcher) tick(ctx context.Context) error {
 			return err
 		}
 	}
-	cur := w.cur
+	cur := *w.cur.Load()
 	// Every other path below moves to a cursor without NextTx, so a block left
 	// half read is finished first.
 	if cur.NextTx > 0 {
@@ -275,7 +282,7 @@ func (w *Watcher) advance(ctx context.Context, next store.Cursor, events []trigg
 		}
 	}
 	w.triggers.Store(b.triggers)
-	w.cur = next
+	w.cur.Store(&next)
 	if stored {
 		w.storedAt = w.cfg.Now()
 	}
